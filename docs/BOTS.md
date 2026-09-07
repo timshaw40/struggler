@@ -47,9 +47,10 @@ class Player(Protocol):
 
 There is no registry: `src/main.py`'s `build_player(kind, *, seed=0)` is a
 plain `if`/`elif` over kind names (`"human"`, `"first"`, `"random"`,
-`"greedy"`, `"llm"`), each branch constructing the corresponding `Player`
+`"greedy"`, `"mcts"`, `"llm"`), each branch constructing the corresponding `Player`
 directly (`HumanPlayer`, `FirstLegalPlayer`/`RandomPlayer` from
-`bots/naive.py`, `GreedyPlayer` from `bots/greedy.py`, `LLMPlayer` from
+`bots/naive.py`, `GreedyPlayer` from `bots/greedy.py`, `MCTSPlayer` from
+`bots/mcts.py`, `LLMPlayer` from
 `bots/llm/player.py` — the `"llm"` branch also picks a provider client via
 `STRUGGLER_LLM_PROVIDER`/`STRUGGLER_LLM_MODEL`, and passes through
 `plan_turns` from `--no-turn-plan`). Adding a new bot means
@@ -223,7 +224,7 @@ restarting.
 
 ## Roadmap
 
-Four tiers, in the order they're worth building — each one a strictly
+Five tiers, in the order they're worth building — each one a strictly
 bigger investment than the last, and each fully usable on its own once
 built:
 
@@ -254,7 +255,12 @@ built:
    turn-level plan it plays to, are in "LLM bot: the board reading and the
    turn plan" below. This tier needed exactly one thing from the engine:
    `Observation.space_race_attempts` (see below).
-4. **Self-play reinforcement learning** (future, most promising long-term,
+4. **Search: MCTS** (built — `bots/mcts.py`): Monte Carlo Tree Search over
+   the current decision, with `GreedyPlayer` as the rollout / opponent
+   policy. No training data, no GPU, no LLM calls. This is the first bot
+   that looks ahead; it should sit in "stronger than greedy" territory, not
+   expert-claim territory. See "MCTS bot" below.
+5. **Self-play reinforcement learning** (future, most promising long-term,
    most expensive to build): train a model by having it play itself
    repeatedly via `play_game`, using `Engine.winner` as the terminal reward.
    The most future-relevant reason `GreedyPlayer` is built as weighted
@@ -265,7 +271,61 @@ built:
    a learned value function outright, without redesigning how a `Player`
    plugs into the engine. `Engine.serialize()`/`deserialize()` (mandate #5)
    are what make self-play cheap: cloning state for search/training doesn't
-   need a bespoke copy path.
+   need a bespoke copy path. MCTS is the stepping-stone: the same clone
+   path, with a learned value function instead of greedy rollouts.
+
+## MCTS bot
+
+`MCTSPlayer` (`bots/mcts.py`) implements the same `Player` protocol as the
+other bots. `runner.play_game` calls `bind_engine` once so search can
+`serialize()`/`deserialize()` clones; it never `step()`s the live engine.
+
+Each `choose_action` runs root UCT over `pending_decision.options`: untried
+actions first, then UCB1. Every simulation determinizes hidden cards, plays
+the chosen root action on a clone, then rolls out with `GreedyPlayer` for
+**both** seats (including the DEFCON self-kill penalty) until the game ends
+or `rollout_depth` steps. Terminal reward is 1 / 0.5 / 0 (win / draw /
+loss); a depth-cap uses `tanh(board_value / 20)` mapped to `[0, 1]`. Chance
+decisions use the clone's pre-drawn `options[0]`, same as `play_game`.
+The live engine's RNG is never touched; search uses `random.Random(seed)`
+and reseeds each clone from that.
+
+### Imperfect-information approximation
+
+`observe()` does not include the opponent's hand or the draw pile. Each
+sim fills those slots (and a still-secret opponent headline) from the
+unknown pool: cards that have entered by the current turn, minus this
+side's hand, discard, removed pile, and in-flight cards already named by
+frozen fields (own headline, resolving headlines, Our Man in Tehran's
+queue). Search reads **lengths** of hidden fields, not their card ids.
+
+This is a standard determinize-then-search approximation, not a solver of
+imperfect-information games. Physical mode (`hidden_pool`) is untested.
+
+### Knobs
+
+| Knob | Default | Constructor | Env (via `build_player`) |
+| --- | --- | --- | --- |
+| simulations per decision | 16 | `sims=` | `STRUGGLER_MCTS_SIMS` |
+| greedy rollout cap | 16 | `rollout_depth=` | `STRUGGLER_MCTS_ROLLOUT_DEPTH` |
+| UCB1 exploration constant | 1.4 | `uct_c=` | `STRUGGLER_MCTS_UCT_C` |
+
+Raise `sims` for stronger (slower) play. Eval uses a lower default (`--sims 8`)
+so a batch of games finishes in minutes, not hours.
+
+### How to run
+
+```sh
+python src/main.py --us human --ussr mcts --seed 1
+python src/main.py --us greedy --ussr mcts --seed 1
+STRUGGLER_MCTS_SIMS=32 python src/main.py --ussr mcts
+
+python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
+python scripts/eval_mcts_vs_greedy.py --games 10 --no-events
+```
+
+`eval_mcts_vs_greedy.py` plays MCTS vs greedy in both seats, then prints
+wins/losses/draws, win rate, and wall time.
 
 ## LLM bot: the board reading and the turn plan
 
