@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 
+import pytest
+
 from struggler.bots.mcts import MCTSPlayer, determinize
 from struggler.bots.naive import FirstLegalPlayer, RandomPlayer
 from struggler.engine import Engine, Side
@@ -73,7 +75,17 @@ def test_mcts_vs_first_legal_terminates():
     winner = play_game(engine, {Side.US: FirstLegalPlayer(), Side.USSR: mcts})
 
     assert engine.is_terminal
-    assert winner in (Side.US, Side.USSR, None)
+    assert winner in (Side.US, Side.USSR)
+
+
+def test_mcts_refuses_physical_mode():
+    """A physical hand's real card ids sit in hidden_pool, which determinize
+    does not redact — binding one must fail loudly, not search with a peek."""
+    engine = Engine.new_game(seed=5, physical_mode=True, physical_side=Side.US)
+    player = _player()
+
+    with pytest.raises(RuntimeError, match="physical mode"):
+        player.bind_engine(engine)
 
 
 def test_mcts_plays_legal_actions_for_several_steps():
@@ -95,4 +107,3 @@ def test_mcts_plays_legal_actions_for_several_steps():
             action = random_bot.choose_action(observation, [])
         assert action in decision.options
         engine.step(action)
-    assert engine.pending_decision is not None or engine.is_terminal

@@ -31,6 +31,12 @@ class Player(Protocol):
   picker's `history` can't leak the first pick. Bots are free to ignore it;
   it exists so a player *can* condition on what just happened without
   re-deriving it from `Observation` alone.
+- One optional second method, `bind_engine(engine)`: if a `Player` defines
+  it, `runner.play_game` calls it once before the game starts, handing the
+  live `Engine` to bots that need more than an `Observation` — today that
+  is `MCTSPlayer`, whose search clones the game via
+  `serialize()`/`deserialize()`. The `Protocol` still requires only
+  `choose_action`; every other bot is untouched.
 - `Side.CHANCE` decisions (coup/realignment/space-race rolls, ...) never
   reach a `Player` at all in an ordinary game — `struggler.runner.play_game`
   resolves them directly from the pre-drawn single option `Decision.options`
@@ -300,7 +306,10 @@ frozen fields (own headline, resolving headlines, Our Man in Tehran's
 queue). Search reads **lengths** of hidden fields, not their card ids.
 
 This is a standard determinize-then-search approximation, not a solver of
-imperfect-information games. Physical mode (`hidden_pool`) is untested.
+imperfect-information games. Physical mode is refused outright (`bind_engine`
+raises): a physical hand's real card ids sit in `hidden_pool`, which the bot
+does not redact, so searching there would peek — use greedy as the physical
+opponent instead.
 
 ### Knobs
 

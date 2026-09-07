@@ -22,7 +22,8 @@ Search therefore never copies opponent-hand or draw-pile *identities* from the
 live serialize dict. It does not claim expert strength: this is lookahead on
 top of greedy, not a trained policy.
 
-Physical mode is untested (`hidden_pool` is not resampled).
+Physical mode is refused at bind time: a physical hand's real ids sit in
+`hidden_pool`, which this bot does not redact, so searching there would peek.
 """
 
 from __future__ import annotations
@@ -57,8 +58,6 @@ def _frozen_ids(data: dict, me: str) -> list[str]:
     headline = data.get("headline") or {}
     if headline.get(me):
         frozen.append(headline[me])
-    if data.get("headline_resolving") and headline.get("US") and headline.get("USSR"):
-        frozen.extend(cid for cid in headline.values() if cid)
     for pair in data.get("headline_pending") or []:
         frozen.append(pair[1])
     frozen.extend(data.get("our_man_queue") or [])
@@ -86,8 +85,9 @@ def determinize(data: dict, me: str, rng: random.Random) -> dict:
     rng.shuffle(pool)
 
     need = n_hand + n_draw + (1 if secret_hl else 0)
-    # ponytail: if the pool is short (physical hidden_pool, accounting drift),
-    # recycle; illegal clones then score 0.5 in the rollout try/except.
+    # ponytail: the pool can come up short on mid-resolution accounting drift;
+    # recycle rather than crash, illegal clones then score 0.5 in the rollout
+    # try/except.
     if len(pool) < need:
         pool = (pool * (need // max(len(pool), 1) + 1))[:need]
 
@@ -127,6 +127,13 @@ class MCTSPlayer:
         self._engine: Engine | None = None
 
     def bind_engine(self, engine: Engine) -> None:
+        if engine.physical_mode:
+            raise RuntimeError(
+                "MCTSPlayer does not support physical mode: the physical hand's "
+                "real card ids live in hidden_pool, which determinize does not "
+                "redact, so search there would peek. Use greedy for the physical "
+                "opponent."
+            )
         self._engine = engine
 
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
@@ -143,15 +150,16 @@ class MCTSPlayer:
         self._rng.shuffle(untried)
         snapshot = self._engine.serialize()
 
-        for n in range(max(1, self.sims)):
+        for sim in range(max(1, self.sims)):
             if untried:
                 idx = untried.pop()
             else:
-                parent = n
+                # sim counts the searches already finished, i.e. this node's
+                # visit total: exactly what UCB1's parent term wants.
                 idx = max(
                     range(len(options)),
                     key=lambda i: totals[i] / visits[i]
-                    + self.uct_c * math.sqrt(math.log(parent) / visits[i]),
+                    + self.uct_c * math.sqrt(math.log(sim) / visits[i]),
                 )
             totals[idx] += self._rollout(snapshot, observation.side, options[idx])
             visits[idx] += 1
