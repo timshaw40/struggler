@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from struggler.engine.cards import load_cards
+from struggler.engine.core import Engine
 from struggler.engine.human import _format_action, _format_event, _print_board, _print_history
 from struggler.engine.player import Event, Player
 from struggler.engine.types import Action, DecisionKind, Observation
@@ -184,6 +185,11 @@ class BotHeadlineAnnouncer:
 
     def __init__(self, inner: Player) -> None:
         self._inner = inner
+
+    def bind_engine(self, engine: Engine) -> None:
+        bind = getattr(self._inner, "bind_engine", None)
+        if callable(bind):
+            bind(engine)
 
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
         action = self._inner.choose_action(observation, history)

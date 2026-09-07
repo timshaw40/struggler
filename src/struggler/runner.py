@@ -41,6 +41,10 @@ def play_game(
     log_writer = (
         GameLogWriter(log_path, engine, initial_actions=initial_actions) if log_path is not None else None
     )
+    for player in players.values():
+        bind = getattr(player, "bind_engine", None)
+        if callable(bind):
+            bind(engine)
     while not engine.is_terminal:
         decision = engine.pending_decision
         if decision.actor is Side.CHANCE and Side.CHANCE not in players:
