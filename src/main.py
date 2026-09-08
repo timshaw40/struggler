@@ -5,6 +5,7 @@ Examples:
     python src/main.py --us greedy --ussr random --seed 1  # bot vs bot
     python src/main.py --ussr greedy                       # human (US) vs bot (USSR)
     python src/main.py --ussr llm
+    python src/main.py --us greedy --ussr mcts --seed 1
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from datetime import datetime
 from struggler.bots.greedy import GreedyPlayer
 from struggler.bots.llm.client import LLMClient
 from struggler.bots.llm.player import LLMPlayer
+from struggler.bots.mcts import MCTSPlayer
 from struggler.bots.naive import FirstLegalPlayer, RandomPlayer
 from struggler.engine import Engine, Side
 from struggler.engine.human import HumanPlayer
@@ -70,6 +72,13 @@ def build_player(
         return RandomPlayer(seed=seed)
     if kind == "greedy":
         return GreedyPlayer()
+    if kind == "mcts":
+        return MCTSPlayer(
+            seed=seed,
+            sims=int(os.environ.get("STRUGGLER_MCTS_SIMS", "16")),
+            rollout_depth=int(os.environ.get("STRUGGLER_MCTS_ROLLOUT_DEPTH", "16")),
+            uct_c=float(os.environ.get("STRUGGLER_MCTS_UCT_C", "1.4")),
+        )
     if kind == "llm":
         client = build_llm_client()
         plan_provider = os.environ.get("STRUGGLER_LLM_PROVIDER", DEFAULT_LLM_PROVIDER)
@@ -92,7 +101,7 @@ def build_player(
             log_path=log_path,
             resume=resume,
         )
-    raise ValueError(f"unknown player kind: {kind!r} (expected human/first/random/greedy/llm)")
+    raise ValueError(f"unknown player kind: {kind!r} (expected human/first/random/greedy/mcts/llm)")
 
 
 def main() -> None:

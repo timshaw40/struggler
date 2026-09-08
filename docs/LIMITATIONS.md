@@ -80,3 +80,13 @@ routed to the operator is described in [BOTS.md](BOTS.md).
   asks the model to avoid this; the mechanism itself does not enforce it.
 - **The OpenAI adapter's exact SDK call shape is unverified** against a
   live API. The Anthropic adapter's is current.
+- **`MCTSPlayer` cannot play physical mode.** `bind_engine` refuses it: a
+  physical hand's real card ids live in `hidden_pool`, which the bot's
+  determinize step does not redact, so searching a physical game would read
+  identities nobody is supposed to know. Use `--us greedy --ussr mcts`
+  ordering (`--physical <side>` with greedy) instead.
+- **`MCTSPlayer` swallows rollout errors as neutral 0.5.** A determinized
+  clone can be internally inconsistent (the unknown pool can come up short
+  on mid-resolution accounting drift, and the fill recycles ids rather than
+  crashing); such clones score 0.5. The tradeoff: a genuine engine bug
+  surfaced mid-search is masked as a bland score instead of failing loudly.

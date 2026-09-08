@@ -46,6 +46,7 @@ You can just use the provided main to run any game.
 python src/main.py                                  # human vs human
 python src/main.py --us greedy --ussr greedy --seed 1  # bot vs bot
 python src/main.py --ussr llm                       # human (US) vs llm bot (USSR)
+python src/main.py --us human --ussr mcts --seed 1  # human (US) vs MCTS bot (USSR)
 python src/main.py --physical us --ussr llm         # bot vs a real physical board
 ```
 The options for the players are:
@@ -53,6 +54,7 @@ The options for the players are:
 - first
 - random
 - greedy
+- mcts
 - llm
 
 But you can create your own implementation using the engine like this:
@@ -92,7 +94,7 @@ implement `choose_action(observation, history) -> Action`, returning one
 action drawn from `observation.pending_decision.options`, then add one
 branch to `build_player` in [src/main.py](src/main.py) mapping a new kind
 name (for `--us`/`--ussr`) to it.  See [docs/BOTS.md](docs/BOTS.md) for the full `Player` contract and how the existing bots (`first`, `random`, `greedy`,
-`llm`) are built.
+`mcts`, `llm`) are built.
 
 ## Status
 
@@ -113,7 +115,10 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 
 ```sh
 pytest
+python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
 ```
+
+See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approximation. The MCTS bot is lookahead on top of greedy — stronger-than-greedy territory, not an expert claim.
 
 ## License
 
