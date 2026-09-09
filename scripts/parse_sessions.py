@@ -266,8 +266,12 @@ class WGRParser:
         if self.cur is not None:
             if self.cur["kind"] == "setup":
                 # Setup records carry [country, count] pairs only; the board
-                # tracking below is what validates the parse.
-                pass
+                # tracking below is what validates the parse. Only the LAST
+                # value per country+side is asserted: extra-influence lines
+                # legitimately move the same country within the setup.
+                self.cur["post"] = [
+                    e for e in self.cur["post"] if not (e[0] == country and e[1] == side)
+                ]
             elif delta is not None and delta < 0:
                 self.cur["removals"].append([country, side, -delta])
             elif delta is not None and delta > 0:
