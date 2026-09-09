@@ -194,3 +194,20 @@ def test_weight_fitter_scores_and_improves(parse_sessions, fit_weights) -> None:
     assert history[0][1] == base_score
     for value in params.values():
         assert value > 0
+
+def test_selfplay_pair_cancels_side(parse_sessions) -> None:
+    """Identical weights on a paired seed must split 1-1: the seat swap is
+    the only difference, so any other result means the pair is biased."""
+    spec = importlib.util.spec_from_file_location(
+        "tsp", ROOT / "scripts" / "tune_selfplay.py"
+    )
+    import importlib.util as _ilu
+    tsp = _ilu.module_from_spec(spec)
+    _ilu.sys.modules["tsp"] = tsp
+    spec.loader.exec_module(tsp)
+    w = tsp.GreedyWeights()
+    wins, total = tsp._play_pair((50_000, w, w))
+    assert (wins, total) == (1, 2)
+    jittered = tsp.perturb(w, tsp.random.Random(1), 0.3)
+    assert jittered.defcon_self_kill_penalty == w.defcon_self_kill_penalty
+    assert all(getattr(jittered, f) > 0 for f in tsp.TUNABLE)
