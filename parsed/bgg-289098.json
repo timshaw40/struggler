@@ -429,9 +429,12 @@
    "turn": 1,
    "side": "USSR",
    "card": "Duck_and_Cover",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Iran",
+    "roll": 5
+   },
    "realignments": [],
    "placements": [
     [
@@ -637,7 +640,7 @@
    "turn": 1,
    "side": "US",
    "card": "De_Gaulle_Leads_France",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -724,7 +727,7 @@
    "turn": 2,
    "side": "US",
    "card": "Olympic_Games",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -736,6 +739,7 @@
    "post": [],
    "vp_after": 2,
    "raw": [],
+   "_resolved": true,
    "contests": [
     {
      "US": 4,
@@ -748,7 +752,7 @@
    "turn": 2,
    "side": "USSR",
    "card": "Independent_Reds",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -925,7 +929,7 @@
    "turn": 2,
    "side": "US",
    "card": "Fidel",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -961,7 +965,7 @@
    "turn": 2,
    "side": "USSR",
    "card": "Five_Year_Plan",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1066,7 +1070,7 @@
    "turn": 2,
    "side": "US",
    "card": "Blockade",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1099,7 +1103,7 @@
    "turn": 2,
    "side": "USSR",
    "card": "Containment",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1140,7 +1144,7 @@
    "turn": 2,
    "side": "US",
    "card": "Korean_War",
-   "mode": "ops",
+   "mode": "un_intervention",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1199,24 +1203,6 @@
    "turn": 3,
    "side": "USSR",
    "card": "Romanian_Abdication",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 3,
-   "side": "US",
-   "card": "Red_Scare_Purge",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -1233,6 +1219,25 @@
      3
     ]
    ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 3,
+   "side": "US",
+   "card": "Red_Scare_Purge",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
    "vp_after": null,
    "raw": [],
    "_resolved": true
@@ -1724,6 +1729,48 @@
    "ops_type": null,
    "coup": null,
    "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true,
+   "exchanged": "Warsaw_Pact_Formed"
+  },
+  {
+   "kind": "headline",
+   "turn": 4,
+   "side": "US",
+   "card": "CIA_Created",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nigeria",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Warsaw_Pact_Formed",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
    "placements": [
     [
      "Poland",
@@ -1763,30 +1810,7 @@
     ]
    ],
    "vp_after": null,
-   "raw": [],
-   "_resolved": true
-  },
-  {
-   "kind": "headline",
-   "turn": 4,
-   "side": "US",
-   "card": "CIA_Created",
-   "mode": "ops",
-   "ops_type": "coup",
-   "coup": {
-    "country": "Nigeria",
-    "roll": 1
-   },
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "_resolved": true
+   "raw": []
   },
   {
    "kind": "play",
@@ -2807,7 +2831,7 @@
    "turn": 5,
    "side": "USSR",
    "card": "Nuclear_Subs",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2893,24 +2917,6 @@
    "turn": 6,
    "side": "USSR",
    "card": "South_African_Unrest",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "OAS_Founded",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -2924,16 +2930,6 @@
     [
      "South_Africa",
      "USSR",
-     1
-    ],
-    [
-     "Brazil",
-     "US",
-     1
-    ],
-    [
-     "Chile",
-     "US",
      1
     ]
    ],
@@ -2951,7 +2947,38 @@
      "South_Africa",
      "USSR",
      1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "OAS_Founded",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Brazil",
+     "US",
+     1
     ],
+    [
+     "Chile",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
     [
      "Brazil",
      "US",
@@ -3017,7 +3044,7 @@
    "turn": 6,
    "side": "US",
    "card": "Cultural_Revolution",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3245,7 +3272,7 @@
    "turn": 6,
    "side": "US",
    "card": "Lone_Gunman",
-   "mode": "event",
+   "mode": "un_intervention",
    "ops_type": "realignment",
    "coup": null,
    "realignments": [
@@ -3325,7 +3352,7 @@
    "turn": 6,
    "side": "USSR",
    "card": "Panama_Canal_Returned",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3386,7 +3413,7 @@
    "turn": 6,
    "side": "US",
    "card": "Brezhnev_Doctrine",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3427,7 +3454,7 @@
    "turn": 6,
    "side": "USSR",
    "card": "John_Paul_II_Elected_Pope",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3518,24 +3545,6 @@
    "turn": 7,
    "side": "USSR",
    "card": "Willy_Brandt",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 7,
-   "side": "US",
-   "card": "Red_Scare_Purge",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3563,13 +3572,35 @@
    "_resolved": true
   },
   {
+   "kind": "headline",
+   "turn": 7,
+   "side": "US",
+   "card": "Red_Scare_Purge",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
    "kind": "play",
    "turn": 7,
    "side": "USSR",
    "card": "Camp_David_Accords",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Zaire",
+    "roll": 2
+   },
    "realignments": [],
    "placements": [
     [
@@ -3670,7 +3701,7 @@
    "turn": 7,
    "side": "USSR",
    "card": "Defectors",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3840,7 +3871,7 @@
    "turn": 7,
    "side": "USSR",
    "card": "Shuttle_Diplomacy",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3871,9 +3902,12 @@
    "turn": 7,
    "side": "US",
    "card": "Liberation_Theology",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Guatemala",
+    "roll": 6
+   },
    "realignments": [],
    "placements": [
     [
@@ -4114,9 +4148,28 @@
    "space": null,
    "event_first": null,
    "post": [],
-   "vp_after": 12,
+   "vp_after": null,
    "raw": [],
-   "_resolved": true
+   "_resolved": true,
+   "exchanged": "An_Evil_Empire"
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "An_Evil_Empire",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 12,
+   "raw": []
   },
   {
    "kind": "play",
@@ -4154,7 +4207,7 @@
    "turn": 8,
    "side": "US",
    "card": "We_Will_Bury_You",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -4328,7 +4381,7 @@
    "turn": 8,
    "side": "USSR",
    "card": "Sadat_Expels_Soviets",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -4389,9 +4442,5 @@
    "ar": 4
   }
  ],
- "warnings": [
-  "turn 0 line 0: continuity: West_Germany/US 2+3 != 3",
-  "turn 0 line 0: continuity: Italy/US 1+2 != 2",
-  "turn 7 line 0: continuity: West_Germany/USSR 3+1 != 1"
- ]
+ "warnings": []
 }

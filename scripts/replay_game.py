@@ -340,6 +340,22 @@ class Replay:
             return dec.options[0]
 
         if kind is DecisionKind.EVENT_CHOICE:
+            if dec.context.get("event") == "Independent_Reds":
+                # "Add US influence to equal the USSR's": if the USSR has
+                # none anywhere eligible, the log rightly records nothing.
+                if all(
+                    self.engine.board.influence[o.payload["choice"]]["USSR"] == 0
+                    for o in dec.options
+                ):
+                    return dec.options[0]
+            if dec.context.get("event") == "Missile_Envy_physical_pick":
+                # The operator names the card handed over: the log records it.
+                for j in range(max(0, self.ri - 3), self.ri + 1):
+                    rec = self.actions[j]
+                    if rec.get("exchanged"):
+                        for a in dec.options:
+                            if a.payload.get("choice") == rec["exchanged"]:
+                                return a
             if dec.context.get("event") == "Cambridge_Five_query":
                 # "Does the US hold <scoring card>?" — the log never records
                 # the reveal, but a card the US later plays was certainly
@@ -357,6 +373,12 @@ class Replay:
             rec = self._record_for_event(dec.context.get("event"))
             if rec is not None:
                 self.ri = self.actions.index(rec)
+            choices_avail = {a.payload.get("choice") for a in dec.options}
+            if rec and choices_avail == {"participate", "boycott"} and rec.get("contests"):
+                # Olympic Games: the log's contest dice imply participation.
+                for a in dec.options:
+                    if a.payload.get("choice") == "participate":
+                        return a
             if rec is not None:
                 # Choice by country: De-Stalinization-style events ask "which
                 # country" where the log recorded it as a placement/removal.

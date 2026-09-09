@@ -1021,14 +1021,16 @@ class Engine:
             modes.append("space_race")
         # UN Intervention: if this is an opponent's (implemented, eligible) event
         # card and the player is holding UN Intervention, they may play the card
-        # for Ops with its event cancelled (discarding UN Intervention).
+        # for Ops with its event cancelled (discarding UN Intervention). In
+        # recorded replay the hand is hidden, so the log's declared combo is
+        # trusted outright (the driver declares UN Intervention when answered).
         if (
             self.events_enabled
             and cid != RULES["un_intervention_id"]
             and self._is_opponent_event(side, card)
             and self._has_event(cid)
             and EVENTS[cid].eligible(self, side)
-            and self._holds_un_intervention(side, cid)
+            and (self.replay_mode or self._holds_un_intervention(side, cid))
         ):
             modes.append("un_intervention")
         return tuple(modes)

@@ -145,8 +145,8 @@ today's engine and every board snapshot in the log must be reproduced.
 The archive text is user-supplied and gitignored; the parsed records
 (factual game data) are committed.
 
-Current corpus: 8 games, 856 clean-prefix expert decisions, fitted
-greedy agreement 41.0% (the pre-fit hand-set values score 38.3% on the
+Current corpus: 8 games, 888 clean-prefix expert decisions, fitted
+greedy agreement 40.8% (the pre-fit hand-set values score 38.3% on the
 same states). Known limits live in the per-game replay status and the
 PR discussion: rules-version gaps (a 2007 pre-Deluxe log's Five-Year
 Plan and UN-Intervention conventions differ from ours) and two Playdek

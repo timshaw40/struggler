@@ -173,9 +173,16 @@ RE_HEADLINE_CARD = re.compile(
     r"(Soviet|American) Headline Card:\s*(#.*?)(?:\s*\((USSR|USA)\))?\s*$"
 )
 RE_HEADLINE_EVENT = re.compile(r"(Soviet|American|USA|USSR) Headline Event:\s*(#.*)$")
+RE_UN_INT_CANCEL = re.compile(
+    r"They also play UN Intervention to cancel the (?:American|Soviet) event")
+RE_ME_EXCHANGE = re.compile(
+    r"The (?:American|Soviet|USA|USSR) exchanges? the following card for the (?:Missile Envy|.+?):\s*$")
 RE_PLAY = re.compile(
     r"The (Soviets|Americans|American|Soviet player|US player|USSR player) "
-    r"play(?:s)? the following card (.+?):\s*$"
+    r"(?:play(?:s)? the following card (?P<i1>.+?)"
+    r"|use(?:s)? (?P<uc>.+?) card (?P<i2>for a coup attempt|to place influence"
+    r"|as an Event|for Ops|for an attempt on the Space Race track))"
+    r":?\s*$"
 )
 RE_CARD = re.compile(r"#\d+.*")
 RE_INF = re.compile(
@@ -261,6 +268,7 @@ class GameParserBase:
         self.warnings: list[str] = []
         self.vp: int | None = None
         self.li = 0  # line index within the thread slice (diagnostics)
+        self.exchanging: dict | None = None  # Missile-Envy hand-over target
         self.turn = 0
         self.ar: int | None = None
         self.pending_side: str | None = None
@@ -394,6 +402,20 @@ class WGRParser(GameParserBase):
                     self.warn(f"unresolved card: {m.group(2)!r}")
                 self.mode = "event"
                 continue
+            m = RE_UN_INT_CANCEL.search(line)
+            if m and self.cur is not None:
+                # "They also play UN Intervention to cancel the American
+                # event": the play is our engine's un_intervention combo
+                # (the card is used purely for its Ops, the event cancelled).
+                self.cur["mode"] = "un_intervention"
+                continue
+            m = RE_ME_EXCHANGE.search(line)
+            if m and self.cur is not None:
+                # Missile Envy: "The American exchanges the following card
+                # for the Missile Envy:" — the given card follows on the
+                # next line; the engine asks the operator to name it.
+                self.exchanging = self.cur
+                continue
             m = RE_HEADLINE_EVENT.search(line)
             if m:
                 # the headline EVENT resolution of the card picked above
@@ -404,7 +426,7 @@ class WGRParser(GameParserBase):
             m = RE_PLAY.search(line)
             if m:
                 side = _norm_player(m.group(1))
-                intro = m.group(2)
+                intro = m.group("i1") or m.group("i2")
                 # Headline resolution re-states the card ("The Soviets play
                 # the following card as an Event:") — only trust it while the
                 # engine-announced "X Headline Event:" is still the last word:
@@ -412,14 +434,23 @@ class WGRParser(GameParserBase):
                 # phase marker, and an AR play must never merge into the
                 # headline record.
                 hl = self.headline_recs.get(side)
+                restated = (
+                    resolve_card(m.group("uc"))
+                    if m.group("uc") else None
+                )
                 if ("as an Event" in intro and self.resolving == side
                         and hl is not None and hl.get("card") is not None
-                        and not hl.get("_resolved")):
+                        and not hl.get("_resolved") and not hl.get("exchanged")):
                     hl["_resolved"] = True
                     self.resolving = None
                     self.cur = hl
+                elif (restated is not None and self.cur is not None
+                      and self.cur.get("side") == side
+                      and self.cur.get("card") == restated):
+                    pass  # the same card's play continues ("...card for a coup attempt:")
                 elif (self.cur is not None and self.cur.get("side") == side
-                      and not self.cur.get("placements")):
+                      and not self.cur.get("placements")
+                      and not self.cur.get("exchanged")):
                     pass  # continuation: this record's ops half is still pending
                 elif self.cur is None or self.cur.get("side") != side or self.cur.get("card") is not None:
                     self.cur = self._new("play", side, self.turn)
@@ -427,21 +458,40 @@ class WGRParser(GameParserBase):
                 # ops half, or a Defectors+UN-Intervention-style combo, both
                 # restate "The X play the following card..." with no new AR
                 # header. The placements belong to the card already playing.
+                if m.group("uc") and self.cur is not None and self.cur["card"] is None:
+                    # "The X use the <Name> card for a coup attempt:" names
+                    # the card inline.
+                    self.cur["card"] = resolve_card(m.group("uc"))
+                    if self.cur["card"] is None:
+                        self.warn(f"unresolved card: {m.group('uc')!r}")
+                new_ops_type = None
                 if "as an Event" in intro:
-                    self.mode, self.cur["mode"] = "event", "event"
+                    new_mode, self.mode = "event", "event"
                 elif "place influence" in intro:
-                    self.mode, self.cur["mode"], self.cur["ops_type"] = "ops", "ops", "influence"
+                    new_mode, self.mode, new_ops_type = "ops", "ops", "influence"
                 elif "coup attempt" in intro:
-                    self.mode, self.cur["mode"], self.cur["ops_type"] = "coup", "ops", "coup"
+                    new_mode, self.mode, new_ops_type = "ops", "coup", "coup"
                 elif "realignment" in intro:
-                    self.mode, self.cur["mode"], self.cur["ops_type"] = "realign", "ops", "realignment"
+                    new_mode, self.mode, new_ops_type = "ops", "realign", "realignment"
                 elif "Space Race" in intro:
-                    self.mode, self.cur["mode"] = "space", "space_race"
+                    new_mode, self.mode = "space_race", "space"
                 else:  # "for Ops": event-first vs ops-only decided by later lines
-                    self.mode = "ops"
-                    self.cur["mode"] = "ops"
+                    new_mode, self.mode = "ops", "ops"
+                if self.cur["mode"] != "un_intervention":
+                    # The UN Intervention combo was flagged on an earlier
+                    # "They also play UN Intervention..." line; later coup/ops
+                    # intros must not reset it to plain ops.
+                    self.cur["mode"] = new_mode
+                if new_ops_type:
+                    self.cur["ops_type"] = new_ops_type
                 continue
-            if RE_CARD.match(stripped) and self.cur is not None and self.cur["card"] is None:
+            m = RE_CARD.match(stripped)
+            if m and self.exchanging is not None:
+                # The card the opponent handed over for Missile Envy.
+                self.exchanging["exchanged"] = resolve_card(m.group(0))
+                self.exchanging = None
+                continue
+            if m and self.cur is not None and self.cur["card"] is None:
                 self.cur["card"] = resolve_card(stripped)
                 if self.cur["card"] is None:
                     self.warn(f"unresolved card: {stripped!r}")

@@ -424,7 +424,7 @@
    "turn": 1,
    "side": "US",
    "card": "Korean_War",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -683,7 +683,7 @@
    "turn": 1,
    "side": "USSR",
    "card": "Containment",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -724,7 +724,7 @@
    "turn": 1,
    "side": "US",
    "card": "Vietnam_Revolts",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -775,25 +775,7 @@
    "turn": 2,
    "side": "USSR",
    "card": "Captured_Nazi_Scientist",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 2,
-   "side": "US",
-   "card": "Red_Scare_Purge",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -804,14 +786,34 @@
    "event_first": null,
    "post": [],
    "vp_after": -7,
-   "raw": []
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 2,
+   "side": "US",
+   "card": "Red_Scare_Purge",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
    "turn": 2,
    "side": "USSR",
    "card": "Truman_Doctrine",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -977,7 +979,7 @@
    "turn": 2,
    "side": "USSR",
    "card": "Independent_Reds",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1274,7 +1276,7 @@
    "turn": 3,
    "side": "USSR",
    "card": "Defectors",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1367,7 +1369,7 @@
    "turn": 3,
    "side": "US",
    "card": "Suez_Crisis",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1520,9 +1522,12 @@
    "turn": 3,
    "side": "US",
    "card": "Nasser",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Egypt",
+    "roll": 5
+   },
    "realignments": [],
    "placements": [
     [
@@ -1784,7 +1789,8 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "_resolved": true
+   "_resolved": true,
+   "exchanged": "Arms_Race"
   },
   {
    "kind": "play",
@@ -1827,6 +1833,24 @@
      2
     ]
    ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Arms_Race",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
    "vp_after": null,
    "raw": []
   },
@@ -1899,7 +1923,7 @@
    "turn": 4,
    "side": "USSR",
    "card": "Formosan_Resolution",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1940,9 +1964,12 @@
    "turn": 4,
    "side": "US",
    "card": "Romanian_Abdication",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Angola",
+    "roll": 6
+   },
    "realignments": [],
    "placements": [
     [
@@ -1987,7 +2014,7 @@
    "turn": 4,
    "side": "USSR",
    "card": "Nixon_Plays_The_China_Card",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2100,7 +2127,7 @@
    "turn": 4,
    "side": "US",
    "card": "U2_Incident",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2163,9 +2190,12 @@
    "turn": 4,
    "side": "US",
    "card": "Portuguese_Empire_Crumbles",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nigeria",
+    "roll": 6
+   },
    "realignments": [],
    "placements": [
     [
@@ -2545,7 +2575,7 @@
    "turn": 5,
    "side": "US",
    "card": "Willy_Brandt",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2596,7 +2626,7 @@
    "turn": 5,
    "side": "USSR",
    "card": "Alliance_for_Progress",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2687,7 +2717,7 @@
    "turn": 5,
    "side": "US",
    "card": "Muslim_Revolution",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2870,7 +2900,7 @@
    "turn": 5,
    "side": "USSR",
    "card": "US_Japan_Mutual_Defense_Pact",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -2942,25 +2972,7 @@
    "turn": 6,
    "side": "USSR",
    "card": "Brezhnev_Doctrine",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "Lone_Gunman",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -2982,6 +2994,25 @@
      0
     ]
    ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Lone_Gunman",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
    "vp_after": null,
    "raw": []
   },
@@ -3175,9 +3206,12 @@
    "turn": 6,
    "side": "US",
    "card": "De_Gaulle_Leads_France",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 2
+   },
    "realignments": [],
    "placements": [
     [
@@ -3232,9 +3266,12 @@
    "turn": 6,
    "side": "USSR",
    "card": "Sadat_Expels_Soviets",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 6
+   },
    "realignments": [],
    "placements": [
     [
@@ -3361,7 +3398,7 @@
    "turn": 6,
    "side": "USSR",
    "card": "Panama_Canal_Returned",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3444,7 +3481,7 @@
    "turn": 6,
    "side": "USSR",
    "card": "Duck_and_Cover",
-   "mode": "ops",
+   "mode": "un_intervention",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3503,7 +3540,7 @@
    "turn": 6,
    "side": "US",
    "card": "Cultural_Revolution",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3575,7 +3612,7 @@
    "turn": 6,
    "side": "US",
    "card": "Red_Scare_Purge",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -3586,7 +3623,8 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -3751,7 +3789,7 @@
    "turn": 7,
    "side": "USSR",
    "card": "John_Paul_II_Elected_Pope",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3834,8 +3872,8 @@
    "turn": 7,
    "side": "USSR",
    "card": "Colonial_Rear_Guards",
-   "mode": null,
-   "ops_type": "influence",
+   "mode": "ops",
+   "ops_type": null,
    "coup": null,
    "realignments": [],
    "placements": [
@@ -3857,11 +3895,6 @@
     [
      "Thailand",
      "US",
-     1
-    ],
-    [
-     "Algeria",
-     "USSR",
      1
     ]
    ],
@@ -3889,7 +3922,33 @@
      "Thailand",
      "US",
      3
-    ],
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": null,
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Algeria",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
     [
      "Algeria",
      "USSR",
@@ -3897,8 +3956,7 @@
     ]
    ],
    "vp_after": null,
-   "raw": [],
-   "ar": 5
+   "raw": []
   },
   {
    "kind": "play",
@@ -3950,7 +4008,7 @@
    "turn": 7,
    "side": "USSR",
    "card": "NATO",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -4068,7 +4126,7 @@
    "turn": 7,
    "side": "US",
    "card": "Arab_Israeli_War",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -4126,7 +4184,7 @@
    "turn": 8,
    "side": "US",
    "card": "Five_Year_Plan",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -4139,14 +4197,15 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
    "turn": 8,
    "side": "USSR",
    "card": "Soviets_Shoot_Down_KAL_007",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -4177,9 +4236,12 @@
    "turn": 8,
    "side": "US",
    "card": "Glasnost",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Iran",
+    "roll": 4
+   },
    "realignments": [],
    "placements": [
     [
@@ -4732,6 +4794,26 @@
    "turn": 9,
    "side": "US",
    "card": "Missile_Envy",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1,
+   "exchanged": "The_Reformer"
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "The_Reformer",
    "mode": "ops",
    "ops_type": "influence",
    "coup": null,
@@ -4755,8 +4837,7 @@
     ]
    ],
    "vp_after": null,
-   "raw": [],
-   "ar": 1
+   "raw": []
   },
   {
    "kind": "play",
@@ -4951,7 +5032,7 @@
    "turn": 9,
    "side": "USSR",
    "card": "Star_Wars",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -5385,7 +5466,7 @@
    "turn": 10,
    "side": "USSR",
    "card": "The_Iron_Lady",
-   "mode": null,
+   "mode": "ops",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -5394,7 +5475,41 @@
      "Argentina",
      "USSR",
      1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Argentina",
+     "USSR",
+     3
     ],
+    [
+     "UK",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": -16,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nigeria",
+    "roll": 5
+   },
+   "realignments": [],
+   "placements": [
     [
      "Nigeria",
      "USSR",
@@ -5410,18 +5525,8 @@
    ],
    "discards": [],
    "space": null,
-   "event_first": true,
+   "event_first": null,
    "post": [
-    [
-     "Argentina",
-     "USSR",
-     3
-    ],
-    [
-     "UK",
-     "USSR",
-     0
-    ],
     [
      "Nigeria",
      "US",
@@ -5433,9 +5538,8 @@
      4
     ]
    ],
-   "vp_after": -16,
-   "raw": [],
-   "ar": 2
+   "vp_after": null,
+   "raw": []
   },
   {
    "kind": "play",
@@ -5545,7 +5649,7 @@
    "turn": 10,
    "side": "USSR",
    "card": "Duck_and_Cover",
-   "mode": "ops",
+   "mode": "un_intervention",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -5635,7 +5739,7 @@
    "turn": 10,
    "side": "USSR",
    "card": "Camp_David_Accords",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -5823,7 +5927,7 @@
    "turn": 10,
    "side": "USSR",
    "card": "Solidarity",
-   "mode": null,
+   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -5982,8 +6086,7 @@
   }
  ],
  "warnings": [
-  "turn 0 line 0: continuity: West_Germany/US 2+3 != 3",
-  "turn 0 line 0: continuity: Italy/US 1+2 != 2",
-  "turn 3 line 0: continuity: West_Germany/USSR 3+2 != 2"
+  "turn 7 line 0: unresolved card: 'the Colonial Rearguards'",
+  "turn 10 line 0: unresolved card: 'the The Iron Lady'"
  ]
 }
