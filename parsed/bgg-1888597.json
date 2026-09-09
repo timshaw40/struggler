@@ -5578,5 +5578,9 @@
    "ar": 7
   }
  ],
- "warnings": []
+ "warnings": [
+  "turn 0 line 0: continuity: West_Germany/US 2+4 != 4",
+  "turn 0 line 0: continuity: Italy/US 1+3 != 3",
+  "turn 6 line 0: continuity: West_Germany/USSR 3+1 != 1"
+ ]
 }

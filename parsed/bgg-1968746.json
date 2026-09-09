@@ -6268,7 +6268,10 @@
   }
  ],
  "warnings": [
-  "turn 10: continuity: Pakistan/USSR 3+3 != 3",
-  "turn 10: continuity: Iran/USSR 4-2 != 0"
+  "turn 0 line 0: continuity: West_Germany/US 2+3 != 3",
+  "turn 0 line 0: continuity: Italy/US 1+2 != 2",
+  "turn 7 line 0: continuity: West_Germany/USSR 3+2 != 2",
+  "turn 10 line 0: continuity: Pakistan/USSR 3+3 != 3",
+  "turn 10 line 0: continuity: Iran/USSR 4-2 != 0"
  ]
 }

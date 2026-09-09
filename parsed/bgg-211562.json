@@ -80,12 +80,12 @@
     [
      "West_Germany",
      "US",
-     4
+     6
     ],
     [
      "Italy",
      "US",
-     3
+     4
     ]
    ],
    "vp_after": null,
@@ -165,7 +165,7 @@
     [
      "West_Germany",
      "US",
-     5
+     7
     ]
    ],
    "vp_after": null,
@@ -218,7 +218,7 @@
     [
      "Italy",
      "US",
-     1
+     2
     ]
    ],
    "discards": [],
@@ -2785,21 +2785,32 @@
    "realignments": [],
    "placements": [
     [
-     "West_Germany",
-     "USSR",
-     1
-    ],
-    [
      "Libya",
      "US",
      2
     ]
    ],
-   "removals": [],
+   "removals": [
+    [
+     "West_Germany",
+     "US",
+     2
+    ],
+    [
+     "West_Germany",
+     "USSR",
+     2
+    ]
+   ],
    "discards": [],
    "space": null,
    "event_first": null,
    "post": [
+    [
+     "West_Germany",
+     "US",
+     5
+    ],
     [
      "West_Germany",
      "USSR",

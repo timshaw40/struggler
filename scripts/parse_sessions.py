@@ -68,8 +68,17 @@ for _alias, _cid in {
     "mideast scoring": "Middle_East_Scoring",
     "usa japan mutual defense pact": "US_Japan_Mutual_Defense_Pact",
     "u2 incident": "U2_Incident",
+    "caputured nazi scientist": "Captured_Nazi_Scientist",
+    "cambridge five": "The_Cambridge_Five",
 }.items():
     NAME_MAP[_alias] = _cid
+# "The X" card spellings: try both with and without the leading article.
+_the_map = {k: v for k, v in NAME_MAP.items() if k.startswith("the ")}
+for _k, _v in _the_map.items():
+    NAME_MAP.setdefault(_k[4:], _v)
+for _k, _v in list(NAME_MAP.items()):
+    if not _k.startswith("the "):
+        NAME_MAP.setdefault("the " + _k, _v)
 
 # WGR / BGG display spellings -> engine country ids. Built from engine
 # country names first (they already say "Spain/Portugal"), then a small
@@ -142,6 +151,7 @@ def resolve_card(raw: str) -> str | None:
     Name wins (numbering schemes differ across sources); number is fallback."""
     name = re.sub(r"^#?\d+\s*(Ops\s*\d+)?\s*:?\s*", "", raw.strip())
     name = re.sub(r"[(].*$", "", name).replace("*", "").strip()
+    name = re.sub(r"\s+event\.?$", "", name, flags=re.I).strip()
     hit = NAME_MAP.get(_norm(name))
     if hit:
         return hit
@@ -214,7 +224,7 @@ RE_SETUP_INF = re.compile(
 RE_NO_DISCARD = re.compile(r"does not choose to discard")
 
 
-RE_BBCODE = re.compile(r"\[/?(?:b|i|u|q|color=[^\]]*|imageid=[^\]]*)\]")
+RE_BBCODE = re.compile(r"\[/?(?:b|i|u|q|size=[^\]]*|color=[^\]]*|imageid=[^\]]*)\]")
 
 
 def side_of(token: str) -> str:
@@ -964,6 +974,248 @@ class BareParser(GameParserBase):
         }
 
 
+class PlaydekParser(GameParserBase):
+    """The Playdek-app log grammar (the 'Ruskie steamroller' tetralogy,
+    bgg-1443421/1445959/1454510/1455504, and bgg-1477640).
+
+    Machine text lives inside [q] blocks; everything else is author prose.
+    Every influence line is ABSOLUTE ('US Influence in Italy increased
+    from 0 to 3' => set to 3); turn anchors are
+    '*** US player updated turn to Turn N Round M (Side)'; card plays are
+    '*** USSR plays Warsaw Pact Formed* for 3 Ops.' (headline picks before
+    the first anchor, and scoring/ops/event suffixes otherwise)."""
+
+    RE_TURN_MARK = re.compile(
+        r"\*{2,3} (USA?|USSR) player updated turn to Turn (\d+) (?:Round (\d+) \((USA?|USSR)\)"
+        r"|Headline Phase)")
+    RE_HEADLINE_MARK = re.compile(r"\*\*\* (USA?|USSR) plays headline card\.?$")
+    RE_CARD = re.compile(
+        r"\*\*\* (USA?|USSR) plays (.+?)(?:\*)? "
+        r"(for (\d+) Ops?\.?|Event\.?|in the Space Race\.?)?\s*$")
+    RE_SCORES = re.compile(r"\*\*\* (USA?|USSR) scores (.+?)\.?$")
+    REGION_CARDS = {
+        "middle east": "Middle_East_Scoring", "europe": "Europe_Scoring",
+        "asia": "Asia_Scoring", "africa": "Africa_Scoring",
+        "central america": "Central_America_Scoring", "south america": "South_America_Scoring",
+        "southeast asia": "Southeast_Asia_Scoring",
+    }
+    RE_INF = re.compile(
+        r"^(USA?|USSR) Influence in (.+?) (?:increased|decreased|reduced)"
+        r" (?:from -?\d+ )?to (-?\d+)")
+    RE_REMOVED_ALL = re.compile(r"^All (USA?|USSR) Influence \(\d+\) removed from (.+?)\.?$")
+    RE_DEFCON = re.compile(r"^DEFCON (?:increased|decreased) to (\d+)")
+    RE_MILOPS = re.compile(r"^(USA?|USSR) Military Ops (?:increased|decreased) to (\d+)")
+    RE_MILOPS_NOCHG = re.compile(r"^No change in (USA?|USSR) Military Ops")
+    RE_ROLL = re.compile(r"^(USA?|USSR) rolls an? (\d+)")
+    RE_COUP = re.compile(r"^\* (USA?|USSR) attempts Coup in (.+?) with (\d+) Ops?")
+    RE_REALIGN = re.compile(r"^\* (USA?|USSR) attempts Realignment(?: Roll)? in (.+?)\.?$")
+    RE_INVADING = re.compile(r"^(.+?) invades (.+?)\.?$")
+    RE_WAR_WIN = re.compile(r"^\S+ wins? (.+?)[.*]?$")
+    RE_DISCARD_CARD = re.compile(r"^(USA?|USSR)(?: player)? discards? (.+?)[*.]*\.?$")
+    RE_SPACE = re.compile(r"^(USA?|USSR) Space Race advanced to (.+?)\.?$")
+    RE_SPACE_ATTEMPT = re.compile(
+        r"^(USA?|USSR) (?:plays .+ for Ops to Space Race|attempts Space Race)")
+    RE_VP = re.compile(r"^(USA?|USSR) VPs increased by (\d+)")
+    RE_PENALTY = re.compile(r"^(USA?|USSR) penalized (\d+) VPs?")
+    RE_SKIP = re.compile(
+        r"^- Twilight Struggle|^(USA?|USSR) (?:has (?:Domination|Presence|Control)"
+        r"|controls \d+ Battleground|player has no Scoring|does not control)"
+        r"|^(USA?|USSR) VPs? [^.]*for \d+ VPs|Coup and Realignment attempts"
+        r"|no longer permitted|^(USA?|USSR) recieves|^.*(Scoring|scored)"
+        r"|^(USA?|USSR) die-roll modifier|\. 0 die-roll modifier"
+        r"|^\d+ \+ \d+ Ops|Coup Attempt is|^Coup Attempt|^\d+ \+ \d+ Ops"
+        r"|^All cards played|^\+\d+ if all Ops|^(USA?|USSR) controls .*die-roll"
+        r"|^(USA?|USSR) now controls|^Already no|may not longer|did not perform enough"
+        r"|^\* Discards shuffled|^Cards dealt|already has|is canceled|^!!!"
+        r"|hand is revealed|has the following cards|Space Race Cards per turn"
+        r"|adds \+\d+ [Tt]o|adds \+\d+ Op|has more influence|^\d+ \+ \d+ Op "
+        r"|^Modifier to|^(USA?|USSR) controls [A-Z]|has (?:no )?(?:Domination|Presence|Control)"
+        r"|to add \d+ Influence|^Draw: |^No change in VPs|receives The China Card"
+        r"|event now playable|die-roll modifier|reclaims|do not affect DEFCON"
+        r"|^\* UNDO|scores null|Event is cancelled|must discard a \d+\+? Op card"
+        r"|^\* Late-War Cards|less than \d+ Influence|no longer playable"
+        r"|Realignment rolls are|may make a second Coup|Scandal is in effect")
+
+    def _set(self, country: str, side: str, value: int) -> None:
+        if self.cur is None or country is None:
+            return
+        before = self.board.get(country, {}).get(side)
+        if before is not None:
+            self._touch(country, side, value, value - before)
+
+    def parse(self, lines: list[str]) -> dict:
+        in_q = False
+        in_headline = False  # plays before the first turn anchor are headlines
+        for raw in lines:
+            self.li += 1
+            if "[q]" in raw:
+                in_q = True
+            if "[/q]" in raw:
+                in_q = False
+            if "[size=9]" in raw:
+                in_q = True
+            if "[/size]" in raw:
+                in_q = False
+                continue
+            if not in_q:
+                continue
+            line = RE_BBCODE.sub("", raw.rstrip("\n"))
+            stripped = line.strip()
+            if not stripped or stripped.startswith("URL:") or stripped.startswith("---"):
+                continue
+
+            m = self.RE_TURN_MARK.match(stripped)
+            if m:
+                self.turn = int(m.group(2))
+                in_headline = m.group(3) is None
+                self.cur = None
+                if not in_headline:
+                    self.ar = int(m.group(3))
+                    self.cur = self._new("play", side_of(m.group(4)), self.turn, self.ar)
+                continue
+            if self.RE_HEADLINE_MARK.match(stripped):
+                in_headline = True
+                self.cur = None
+                continue
+
+            m = self.RE_CARD.match(stripped)
+            if m:
+                who = side_of(m.group(1))
+                card = resolve_card(m.group(2))
+                if card is None and m.group(2).strip().lower() != "card":
+                    self.warn(f"unresolved card: {m.group(2)!r}")
+                if in_headline or self.cur is None:
+                    rec = self._new("headline", who, self.turn)
+                    self.cur = rec
+                    self.headline_recs[who] = rec
+                    in_headline = True
+                if card:
+                    self.cur["card"] = card
+                if m.group(4):
+                    self.cur["mode"] = "ops"
+                elif (m.group(3) or "").startswith("Event"):
+                    self.cur["mode"] = "event"
+                elif (m.group(3) or "").startswith("in the Space Race"):
+                    self.cur["mode"] = "space_race"
+                continue
+
+            m = self.RE_SCORES.match(stripped)
+            if m:
+                # "scores null" is the app's rendering of Southeast Asia Scoring.
+                region = m.group(2).strip().lower()
+                if region == "null":
+                    card = "Southeast_Asia_Scoring"
+                else:
+                    card = self.REGION_CARDS.get(region)
+                rec = self._new("play", side_of(m.group(1)), self.turn, self.ar)
+                self.cur = rec
+                rec["mode"] = "event"
+                if card:
+                    rec["card"] = card
+                else:
+                    self.warn(f"unresolved scoring region: {m.group(2)!r}")
+                continue
+
+            m = self.RE_COUP.match(stripped)
+            if m and self.cur is not None:
+                self.cur["ops_type"] = "coup"
+                self.cur["coup"] = {"country": resolve_country(m.group(2)), "roll": None}
+                continue
+            m = self.RE_REALIGN.match(stripped)
+            if m and self.cur is not None:
+                self.cur["ops_type"] = "realignment"
+                self.cur["realignments"].append(
+                    {"country": resolve_country(m.group(2)), "rolls": {}})
+                continue
+            m = self.RE_ROLL.match(stripped)
+            if m and self.cur is not None:
+                rec = self.cur
+                if rec.get("coup") and rec["coup"]["roll"] is None:
+                    rec["coup"]["roll"] = int(m.group(2))
+                elif rec["realignments"]:
+                    rec["realignments"][-1]["rolls"][side_of(m.group(1))] = int(m.group(2))
+                elif rec.get("war"):
+                    rec["war"][-1]["roll"] = int(m.group(2))  # placeholder, set below
+                else:
+                    rec.setdefault("war", []).append({"roll": int(m.group(2))})
+                continue
+            m = self.RE_INVADING.match(stripped)
+            if m and self.cur is not None:
+                # A war event's target: the engine asks WAR_TARGET for
+                # declared-target wars; record it the same way coups are.
+                self.cur["ops_type"] = None
+                self.cur["coup"] = {"country": resolve_country(m.group(2)), "roll": None}
+                self.cur.setdefault("war", []).append({"roll": None})
+                continue
+            m = self.RE_WAR_WIN.match(stripped)
+            if m and self.cur is not None:
+                continue  # victory text only; the roll and VP deltas suffice
+            m = self.RE_SPACE_ATTEMPT.match(stripped)
+            if m and self.cur is not None:
+                self.cur["mode"] = "space_race"
+                continue
+            m = self.RE_SPACE.match(stripped)
+            if m:
+                continue  # the engine advances space itself
+            m = self.RE_INF.match(stripped)
+            if m:
+                side, country, value = (
+                    side_of(m.group(1)), resolve_country(m.group(2)), int(m.group(3)))
+                if self.turn == 0 and (self.cur is None or self.cur["kind"] == "headline"):
+                    # Pre-anchor setup lines: track the board, and record the
+                    # discretionary delta for the engine's setup decision.
+                    delta = value - self.board.get(country, {}).get(side, 0)
+                    if delta > 0:
+                        if not self.actions or self.actions[-1]["kind"] != "setup" \
+                                or self.actions[-1]["side"] != side:
+                            self.cur = self._new("setup", side, 0)
+                        self.cur["placements"].append([country, delta])
+                    self._touch(country, side, value, value - self.board.get(country, {}).get(side, 0))
+                    continue
+                self._set(country, side, value)
+                continue
+            m = self.RE_REMOVED_ALL.match(stripped)
+            if m:
+                self._set(resolve_country(m.group(2)), side_of(m.group(1)), 0)
+                continue
+            m = self.RE_VP.match(stripped)
+            if m:
+                delta = int(m.group(2)) * (1 if side_of(m.group(1)) == "US" else -1)
+                self.vp = (self.vp or 0) + delta
+                if self.cur is not None:
+                    self.cur["vp_after"] = self.vp
+                continue
+            m = self.RE_PENALTY.match(stripped)
+            if m:
+                delta = int(m.group(2)) * (1 if side_of(m.group(1)) == "US" else -1)
+                self.vp = (self.vp or 0) + delta
+                if self.cur is not None:
+                    self.cur["vp_after"] = self.vp
+                continue
+            m = self.RE_DISCARD_CARD.match(stripped)
+            if m and self.cur is not None:
+                for name in re.split(r", | and | \+ ", m.group(2)):
+                    cid = resolve_card(name.strip(' "'))
+                    if cid:
+                        self.cur["discards"].append(cid)
+                continue
+            if self.RE_SKIP.search(stripped) or self.RE_DEFCON.match(stripped) \
+                    or self.RE_MILOPS.match(stripped) or self.RE_MILOPS_NOCHG.match(stripped):
+                continue
+            self.warn(f"unparsed: {stripped!r}")
+
+        return {
+            "source": self.source,
+            "title": self.title,
+            "format": "playdek",
+            "include_optional": True,
+            "winner": None,
+            "vp_final": self.vp,
+            "actions": self.actions,
+            "warnings": self.warnings,
+        }
+
+
 # -- thread extraction ---------------------------------------------------------
 
 def extract_thread(text: str, thread_id: int) -> tuple[str, list[str]]:
@@ -985,19 +1237,27 @@ def extract_thread(text: str, thread_id: int) -> tuple[str, list[str]]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--file", default="twilight_struggle_sessions.txt")
-    ap.add_argument("--thread", type=int, required=True)
+    ap.add_argument("--thread", type=int, nargs="+", required=True)
     ap.add_argument("--out", default=None, help="output dir (default: stdout)")
-    ap.add_argument("--format", default="auto", choices=["auto", "wgr", "bare"])
+    ap.add_argument("--format", default="auto", choices=["auto", "wgr", "bare", "playdek"])
     args = ap.parse_args()
 
     text = Path(args.file).read_text(encoding="utf-8", errors="replace")
-    title, lines = extract_thread(text, args.thread)
+    parts = [extract_thread(text, t) for t in args.thread]
+    title = parts[0][0]
+    lines = [ln for _, ls in parts for ln in ls]
     if args.format == "auto":
-        fmt = "bare" if any("Discretionary Influence" in ln for ln in lines) else "wgr"
+        joined = "\n".join(lines)
+        if "Discretionary Influence" in joined:
+            fmt = "bare"
+        elif "player updated turn to" in joined:
+            fmt = "playdek"
+        else:
+            fmt = "wgr"
     else:
         fmt = args.format
-    parser = BareParser if fmt == "bare" else WGRParser
-    game = parser(args.thread, title).parse(lines)
+    parser = {"bare": BareParser, "playdek": PlaydekParser}.get(fmt, WGRParser)
+    game = parser(args.thread[0], title).parse(lines)
 
     unresolved = sum(1 for a in game["actions"] if a["card"] is None)
     print(
