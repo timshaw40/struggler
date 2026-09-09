@@ -27,3 +27,6 @@ Thumbs.db
 
 # Outputs
 logs/
+
+# User-supplied BGG sessions archive (like the PDFs: never committed)
+twilight_struggle_sessions.txt

@@ -120,6 +120,38 @@ python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
 
 See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approximation. The MCTS bot is lookahead on top of greedy — stronger-than-greedy territory, not an expert claim.
 
+## Learn from expert games
+
+Historical tournament games (BGG session reports) replay through the
+engine and produce a supervised set for the bot's eval weights:
+
+```sh
+# one or more BGG threads; the format is auto-detected
+python scripts/parse_sessions.py --thread 286443 --out parsed/
+python scripts/parse_sessions.py --thread 1443421 1445959 1454510 1455504 --out parsed/
+python scripts/replay_game.py parsed/bgg-286443.json             # replay + board/VP assertions
+python scripts/extract_training.py 'parsed/*.json'               # expert decisions JSONL
+python scripts/fit_weights.py 'parsed/*.json' --minutes 25       # weight fitting
+python scripts/extract_scoring.py 'parsed/*.json'                # scoring-moment snapshots
+```
+
+Three log grammars are supported: the Wargameroom log (the 2008 league
+semifinals + the 2017-2020 Ziemowit games), a purpose-built "bare bones"
+format (bgg-211562, 2007), and the Playdek-app log (the "steamroller"
+tetralogy + the VOA epic). The engine's recorded-replay mode
+(`Engine.new_game(replay_mode=True)`) declares cards when the log plays
+them and answers every die from the log, so each game runs through
+today's engine and every board snapshot in the log must be reproduced.
+The archive text is user-supplied and gitignored; the parsed records
+(factual game data) are committed.
+
+Current corpus: 8 games, 856 clean-prefix expert decisions, fitted
+greedy agreement 41.0% (the pre-fit hand-set values score 38.3% on the
+same states). Known limits live in the per-game replay status and the
+PR discussion: rules-version gaps (a 2007 pre-Deluxe log's Five-Year
+Plan and UN-Intervention conventions differ from ours) and two Playdek
+games with a side's discretionary setup unlogged cap the clean prefixes.
+
 ## License
 
 Released under the [MIT License](LICENSE).

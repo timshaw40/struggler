@@ -118,6 +118,10 @@ class Engine:
         # See docs/BOTS.md for the full design.
         self.physical_mode = False
         self.physical_side: Side | None = None
+        # Recorded-replay mode: physical machinery with BOTH hands hidden
+        # (declared-on-play). Used to replay externally logged games
+        # (tournament logs don't record hands) — see scripts/replay_game.py.
+        self.replay_mode = False
         # Real card ids not yet matched to a known location: the physical
         # hand's actual contents, plus whatever hasn't been dealt to anyone
         # yet. A card leaves this pool the instant its identity becomes
@@ -227,6 +231,7 @@ class Engine:
             "our_man_kept": list(self._our_man_kept),
             "physical_mode": self.physical_mode,
             "physical_side": self.physical_side.value if self.physical_side is not None else None,
+            **({"replay_mode": True} if self.replay_mode else {}),
             "hidden_pool": list(self.hidden_pool),
             "ops_round_snapshot": (
                 copy.deepcopy(self._ops_round_snapshot)
@@ -275,6 +280,7 @@ class Engine:
         engine.physical_mode = data.get("physical_mode", False)
         physical_side = data.get("physical_side")
         engine.physical_side = Side(physical_side) if physical_side is not None else None
+        engine.replay_mode = bool(data.get("replay_mode", False))
         engine.hidden_pool = list(data.get("hidden_pool", []))
         snapshot = data.get("ops_round_snapshot")
         engine._ops_round_snapshot = copy.deepcopy(snapshot) if snapshot is not None else None
@@ -311,6 +317,7 @@ class Engine:
         events: bool = True,
         physical_mode: bool = False,
         physical_side: Side | None = None,
+        replay_mode: bool = False,
     ) -> "Engine":
         """Start a complete game: build the Early War deck, deal opening
         hands, and push the first (USSR) headline decision.
@@ -325,14 +332,22 @@ class Engine:
         fields on `__init__`) — its hand is unknown to the engine until
         revealed, and all dice (both sides') are entered manually. See
         docs/BOTS.md.
+
+        `replay_mode`: recorded-replay (both hands hidden, cards declared
+        on play, dice entered) — physical machinery with no physical side.
+        Used by scripts/replay_game.py to replay externally logged games.
         """
-        if physical_mode and physical_side not in (Side.US, Side.USSR):
+        if replay_mode:
+            physical_mode = True
+            physical_side = None
+        elif physical_mode and physical_side not in (Side.US, Side.USSR):
             raise ValueError("physical_mode requires physical_side to be Side.US or Side.USSR")
         engine = cls(seed=seed, board=board)
         engine.include_optional = include_optional
         engine.events_enabled = events
         engine.physical_mode = physical_mode
         engine.physical_side = physical_side
+        engine.replay_mode = replay_mode
         engine.china_card_owner = "USSR"
         engine.china_card_available = True
         engine.turn = 1
@@ -395,7 +410,7 @@ class Engine:
         bot-first default already reveals the bot's card to the operator
         before their own pick, exactly what the ability would grant them."""
         holder = self.game_effects.get("space_race_headline_reveal_holder")
-        if self.physical_mode:
+        if self.physical_mode and not self.replay_mode:
             bot_side = self.physical_side.opponent
             if holder == bot_side.value:
                 return (self.physical_side, bot_side)
@@ -527,7 +542,7 @@ class Engine:
         side = Side(holder)
         candidates = (
             self._physical_hand_candidates(side)
-            if self.physical_mode and side is self.physical_side
+            if self._declares(side)
             else list(self.hands[side.value])
         )
         if not candidates:
@@ -698,9 +713,12 @@ class Engine:
 
     def _deal_to_limit_physical(self) -> None:
         limit = hand_limit(self.turn)
-        self._deal_n(self.physical_side, max(0, limit - len(self.hands[self.physical_side.value])))
-        bot_side = self.physical_side.opponent
-        self._deal_n(bot_side, max(0, limit - len(self.hands[bot_side.value])))
+        sides = (
+            (Side.US, Side.USSR) if self.replay_mode
+            else (self.physical_side, self.physical_side.opponent)
+        )
+        for side in sides:
+            self._deal_n(side, max(0, limit - len(self.hands[side.value])))
 
     def _deal_n(self, side: Side, n: int) -> None:
         """Physical-mode draw of `n` cards into `side`'s hand. For the
@@ -709,7 +727,7 @@ class Engine:
         card, which `_handle_deal_card` re-drives until `n` are dealt."""
         if n <= 0:
             return
-        if side is self.physical_side:
+        if self._declares(side):
             for _ in range(n):
                 if not self.draw_pile:
                     self._reshuffle_discard_into_draw()
@@ -757,7 +775,7 @@ class Engine:
 
     def _push_headline(self, side: Side) -> None:
         # The China Card cannot be headlined; scoring cards can.
-        physical_turn = self.physical_mode and side is self.physical_side
+        physical_turn = self._declares(side)
         candidates = (
             self._physical_hand_candidates(side)
             if physical_turn
@@ -766,7 +784,7 @@ class Engine:
         options = tuple(
             Action(DecisionKind.HEADLINE_PLAY, {"card": cid}) for cid in candidates
         )
-        if physical_turn and self.discard_pile:
+        if physical_turn and not self.replay_mode and self.discard_pile:
             # The operator's real discard pile can empty and get reshuffled
             # at the table sooner than the engine's own draw-pile bookkeeping
             # expects (see docs/BOTS.md). Offering this alongside the real
@@ -896,7 +914,7 @@ class Engine:
         )
 
     def _push_action_round_play(self, side: Side) -> None:
-        if self.physical_mode and side is self.physical_side:
+        if self._declares(side):
             # The engine can't compute must-play-scoring for a hand it can't
             # see the true contents of (a documented simplification): every
             # not-yet-accounted-for card is offered, and the physical player
@@ -1031,7 +1049,7 @@ class Engine:
         for `cid` first (only if it isn't already a revealed card in hand)
         and require a genuinely separate slot to remain for UN Intervention."""
         un_id = RULES["un_intervention_id"]
-        if self.physical_mode and side is self.physical_side:
+        if self._declares(side):
             hand = self.hands[side.value]
             if un_id in hand:
                 return True
@@ -1560,7 +1578,7 @@ class Engine:
             # itself — either way the operator picks the one matching the
             # physical card actually drawn.
             candidates = (
-                self._physical_hand_candidates(owner) if owner is self.physical_side else hand
+                self._physical_hand_candidates(owner) if self._declares(owner) else hand
             )
             options = tuple(Action(DecisionKind.RANDOM_DISCARD, {"card": cid}) for cid in candidates)
             if options:
@@ -1985,7 +2003,7 @@ class Engine:
         card can never later be claimed as still in the pool. No-op outside
         physical mode, for the non-physical side, or for a non-card id
         (e.g. an EVENT_CHOICE keyword like "refuse")."""
-        if self.physical_mode and side is self.physical_side and cid in self.hidden_pool:
+        if self._declares(side) and cid in self.hidden_pool:
             self.hidden_pool.remove(cid)
 
     def _hand_remove_known(self, side: Side, cid: str) -> None:
@@ -2002,7 +2020,7 @@ class Engine:
         hand = self.hands[side.value]
         if cid in hand:
             hand.remove(cid)
-        elif self.physical_mode and side is self.physical_side and HIDDEN_CARD in hand:
+        elif self._declares(side) and HIDDEN_CARD in hand:
             hand.remove(HIDDEN_CARD)
 
     def _reveal_in_hand(self, side: Side, cid: str) -> None:
@@ -2024,13 +2042,19 @@ class Engine:
         (since `cid` was never in it) — a `hidden_pool` vs. placeholder-slot
         count divergence `assert_invariants` forbids."""
         was_hidden = (
-            self.physical_mode and side is self.physical_side and cid in self.hidden_pool
+            self._declares(side) and cid in self.hidden_pool
         )
         self.declare_physical_card(side, cid)
         if was_hidden:
             hand = self.hands[side.value]
             if HIDDEN_CARD in hand:
                 hand[hand.index(HIDDEN_CARD)] = cid
+
+    def _declares(self, side: Side) -> bool:
+        """True when `side`'s hand identity is engine-hidden and its card
+        choices are declared (on play) by the operator/driver: the physical
+        side in tabletop physical mode, BOTH sides in recorded-replay mode."""
+        return self.physical_mode and (self.replay_mode or side is self.physical_side)
 
     def _physical_hand_candidates(self, side: Side) -> list[str]:
         """All card ids that might be sitting in `side`'s physical hand: any
@@ -2462,7 +2486,7 @@ class Engine:
     def _push_trap_step(self, side: Side, key: str) -> None:
         source = (
             self._physical_hand_candidates(side)
-            if self.physical_mode and side is self.physical_side
+            if self._declares(side)
             else self.hands[side.value]
         )
         payable = [
@@ -2477,7 +2501,7 @@ class Engine:
             return
         # No Ops-2+ card: no roll this round -- but any scoring card in hand
         # must still be played.
-        if self.physical_mode and side is self.physical_side:
+        if self._declares(side):
             # Unlike `payable` (which only ever feeds a genuine operator
             # decision), `source`'s hidden_pool candidates might not
             # actually be in THIS hand at all -- so, unlike the bot branch
