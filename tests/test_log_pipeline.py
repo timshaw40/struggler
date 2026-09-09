@@ -211,3 +211,19 @@ def test_selfplay_pair_cancels_side(parse_sessions) -> None:
     jittered = tsp.perturb(w, tsp.random.Random(1), 0.3, knobs=4)
     assert jittered.defcon_self_kill_penalty == w.defcon_self_kill_penalty
     assert all(getattr(jittered, f) > 0 for f in tsp.TUNABLE)
+
+
+def test_scoring_extractor_snapshot(parse_sessions, replay_game) -> None:
+    """The extractor's region snapshot reports tiers and a net VP for both
+    a regular region and the Southeast-Asia subregion."""
+    extract_scoring = _load("extract_scoring")
+    p = parse_sessions.WGRParser(1, "mini")
+    game = p.parse(MINI_LOG.splitlines())
+    r = replay_game.Replay(game)
+    r.run(max_steps=40)  # the mini-log's opening; the full game goes further
+    assert r.engine.vp == 0
+    snap = extract_scoring.region_snapshot(r.engine.board, "EUROPE")
+    assert set(snap) == {"countries", "us_tier", "ussr_tier", "engine_net_vp"}
+    assert snap["engine_net_vp"] == 0  # empty-ish region scores 0
+    se = extract_scoring.region_snapshot(r.engine.board, "SOUTHEAST_ASIA", r.engine)
+    assert "countries" in se and se["engine_net_vp"] == 0
