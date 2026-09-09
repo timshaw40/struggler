@@ -10,6 +10,7 @@ const POS = {};     // country id -> {x, y} fractions of the board image
 
 let state = null;
 let busy = false;
+let zoom = 1;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -55,7 +56,27 @@ async function boot() {
   Object.assign(IMAGES, manifest);
   Object.assign(POS, countries);
   if (!Object.keys(IMAGES).length) $("#boardwrap").classList.add("noboard");
+  $("#zoomin").addEventListener("click", () => setZoom(zoom * 1.5));
+  $("#zoomout").addEventListener("click", () => setZoom(zoom / 1.5));
+  $("#zoomfit").addEventListener("click", () => setZoom(1));
+  window.addEventListener("resize", layoutBoard);
+  layoutBoard();
   await refresh();
+}
+
+/* The board image is sized in px (base fit × zoom) instead of CSS-capped, so
+ * zooming grows the scrollable area and markers — %-anchored inside
+ * #boardbox — stay glued to their countries at any zoom. */
+function layoutBoard() {
+  const wrap = $("#boardwrap");
+  if (wrap.classList.contains("noboard")) return;
+  const base = Math.min(wrap.clientWidth, wrap.clientHeight) - 4;
+  $("#board").style.width = Math.round(base * zoom) + "px";
+}
+
+function setZoom(next) {
+  zoom = Math.min(6, Math.max(1, next));
+  layoutBoard();
 }
 
 async function refresh() {

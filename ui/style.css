@@ -27,25 +27,54 @@ main {
   min-height: 0;
 }
 
+#boardarea {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
 #boardwrap {
   flex: 1;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: auto;
   position: relative;
 }
 
-#board {
-  display: block;
-  max-width: 100%;
-  max-height: calc(100vh - 200px);
-  position: relative;
+#zoomer {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
 }
 
-#boardwrap.noboard #boardbox { display: none; }
+#zoomer button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.9;
+}
 
-#boardbox { position: relative; }
+#zoomer button:hover { border-color: var(--gold); }
+
+#boardwrap.noboard ~ #zoomer { display: none; }
+
+#boardbox {
+  position: relative;
+  margin: 0 auto;
+}
+
+#board {
+  display: block;
+}
 
 #markers {
   position: absolute;
@@ -143,7 +172,29 @@ main {
   flex-shrink: 0;
 }
 
-.card img { width: 100%; display: block; }
+.card img {
+  width: 100%;
+  display: block;
+  transition: transform 0.12s ease;
+}
+
+/* Hover a hand card to read it: scale in place from the bottom edge so it
+ * grows upward over the board (transform keeps layout, so no flicker). */
+.card:hover { overflow: visible; z-index: 21; }
+
+.card:hover img {
+  transform: scale(4);
+  transform-origin: bottom center;
+  position: relative;
+  z-index: 20;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.card.textcard:hover {
+  transform: scale(2);
+  transform-origin: bottom left;
+}
 
 .card.playable {
   outline: 2px solid var(--gold);
