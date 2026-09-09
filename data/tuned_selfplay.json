@@ -1,0 +1,23 @@
+{
+ "weights": {
+  "region_tier": 19.58484947257013,
+  "country_control": 1.0,
+  "battleground_control": 1.870030244326675,
+  "defcon_self_kill_penalty": 1000000.0,
+  "defcon_caution": 11.148074628300202,
+  "coup_base": 3.0859770683438006,
+  "realignment_base": 1.0,
+  "influence_base": 0.8504549086439196,
+  "doubled_cost_penalty": 0.5,
+  "space_race_base": 4.447839859626462,
+  "space_race_vp_weight": 2.8579246506901543,
+  "space_race_ops_penalty": 1.2101165961613127,
+  "ops_mode_per_point": 3.300489460471235,
+  "event_mode_penalty": 27.747499361678038,
+  "scoring_card_weight": 1.6048849478417742,
+  "hold_high_ops_weight": 0.6374205313739901,
+  "action_round_ops_weight": 0.8374008193649152
+ },
+ "adopted": 3,
+ "games": 4896
+}

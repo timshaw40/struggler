@@ -208,6 +208,6 @@ def test_selfplay_pair_cancels_side(parse_sessions) -> None:
     w = tsp.GreedyWeights()
     wins, total = tsp._play_pair((50_000, w, w))
     assert (wins, total) == (1, 2)
-    jittered = tsp.perturb(w, tsp.random.Random(1), 0.3)
+    jittered = tsp.perturb(w, tsp.random.Random(1), 0.3, knobs=4)
     assert jittered.defcon_self_kill_penalty == w.defcon_self_kill_penalty
     assert all(getattr(jittered, f) > 0 for f in tsp.TUNABLE)

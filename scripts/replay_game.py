@@ -239,9 +239,9 @@ class Replay:
 
         if kind is DecisionKind.PLACE_INFLUENCE or kind is DecisionKind.EVENT_INFLUENCE:
             if kind is DecisionKind.EVENT_INFLUENCE:
-                rec = self._record_for_event(dec.context.get("event"))
-                if rec is not None:
-                    self.ri = self.actions.index(rec)
+                found = self._record_for_event(dec.context.get("event"))
+                if found is not None:
+                    self.ri = self.actions.index(found)
             country = self._pop_placement(dec, side)
             if country:
                 return self._pick(dec, {"country": country}, f"place {country}")

@@ -38,13 +38,20 @@ from struggler.bots.greedy import GreedyPlayer  # noqa: E402
 from struggler.engine import Side  # noqa: E402
 
 
-def extract(game: dict, greedy: GreedyPlayer) -> tuple[list[dict], dict]:
+def extract(game: dict, greedy: GreedyPlayer, max_errors: int = 12) -> tuple[list[dict], dict]:
     r = Replay(game)
     rows: list[dict] = []
     decisions = 0
+    # Quality first: once the engine's board has diverged from the log in
+    # more than `max_errors` places, later decisions describe positions the
+    # experts never faced — stop rather than pollute the training set.
+    stopped = "records_end"
     while not r.engine.is_terminal and not r.exhausted and r.ri < len(r.actions):
         dec = r.engine.pending_decision
         if dec is None:
+            break
+        if len(r.errors) > max_errors:
+            stopped = "board_divergence"
             break
         before = len(r.errors)
         action = r.answer(dec)
@@ -75,6 +82,7 @@ def extract(game: dict, greedy: GreedyPlayer) -> tuple[list[dict], dict]:
         "game": game["source"],
         "records_total": len(game["actions"]),
         "records_consumed": min(r.ri + 1, len(game["actions"])),
+        "stopped": stopped,
         "human_decisions": len(rows),
         "greedy_agreement": round(agree / len(rows), 3) if rows else None,
         "fallbacks": r.fallbacks,
