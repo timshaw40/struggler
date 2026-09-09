@@ -120,6 +120,24 @@ python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
 
 See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approximation. The MCTS bot is lookahead on top of greedy — stronger-than-greedy territory, not an expert claim.
 
+## Learn from expert games
+
+Historical tournament games (BGG session reports) replay through the
+engine and produce a supervised set for the bot's eval weights:
+
+```sh
+python scripts/parse_sessions.py --thread 286443 --out parsed/   # BGG thread -> records
+python scripts/replay_game.py parsed/bgg-286443.json             # replay + board/VP assertions
+python scripts/extract_training.py 'parsed/*.json'               # expert decisions JSONL
+```
+
+The engine's recorded-replay mode (`Engine.new_game(replay_mode=True)`)
+declares cards when the log plays them and answers every die from the
+log, so a 2008 tournament game runs through today's engine and every
+`now at N` board snapshot in the log must be reproduced. The archive
+text is user-supplied and gitignored; the parsed records (factual game
+data) are committed.
+
 ## License
 
 Released under the [MIT License](LICENSE).
