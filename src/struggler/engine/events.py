@@ -913,7 +913,7 @@ CONTEST_RESOLVERS: dict[str, Callable[["Engine", Side, Side], None]] = {
 def _aldrich_ames(engine: "Engine", side: Side) -> None:
     # The USSR sees the US hand and chooses one card the US must discard. (The
     # remix's ongoing "sees the hand for the turn" reveal is not modeled.)
-    if engine.physical_mode and engine.physical_side is Side.US:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is Side.US):
         # The card's printed effect is "reveal the hand, then choose": the
         # USSR bot can't inspect a hidden US hand directly, so first have the
         # operator declare every still-hidden slot's real identity (one at a
@@ -987,7 +987,7 @@ def _ask_not(engine: "Engine", side: Side) -> None:
 
 
 def _push_ask_not(engine: "Engine", side: Side, discarded: int) -> None:
-    if engine.physical_mode and side is engine.physical_side and not engine.hands[side.value]:
+    if engine._declares(side) and not engine.hands[side.value]:
         # The physical hand's true (unknown-to-the-engine) card count has
         # already reached 0: hidden_pool alone (cards elsewhere in the deck)
         # would otherwise keep offering "more" discards forever, well past
@@ -996,7 +996,7 @@ def _push_ask_not(engine: "Engine", side: Side, discarded: int) -> None:
         return
     source = (
         engine._physical_hand_candidates(side)
-        if engine.physical_mode and side is engine.physical_side
+        if engine._declares(side)
         else engine.hands[side.value]
     )
     choices = tuple(cid for cid in source if not engine.cards[cid].scoring) + ("stop",)
@@ -1035,7 +1035,7 @@ def _scoring_card_countries(engine: "Engine", scoring_id: str) -> list[str]:
 def _cambridge_five(engine: "Engine", side: Side) -> None:
     # The US reveals its scoring cards; the USSR adds 1 Influence to a country
     # in one of those regions.
-    if engine.physical_mode and engine.physical_side is Side.US:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is Side.US):
         # The USSR bot can't inspect a hidden US hand to see which scoring
         # cards it holds. Unlike a single-card choice (Aldrich Ames), this
         # needs to know *which regions* apply, not one specific card -- ask
@@ -1119,7 +1119,7 @@ def _missile_envy(engine: "Engine", side: Side) -> None:
     # _handle_action_round_play). The taker then uses the *taken* card for
     # Ops, or its Event when allowed.
     opp = side.opponent
-    if engine.physical_mode and engine.physical_side is opp:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is opp):
         # A physical giver's hand can't be inspected for the highest-Ops
         # card -- the operator names the one being handed over directly,
         # folding the max-Ops-then-tie-break computation into their answer
@@ -1360,7 +1360,7 @@ def _payable_cards(engine: "Engine", side: Side) -> list[str]:
     matches the real physical card."""
     source = (
         engine._physical_hand_candidates(side)
-        if engine.physical_mode and side is engine.physical_side
+        if engine._declares(side)
         else engine.hands[side.value]
     )
     return [
