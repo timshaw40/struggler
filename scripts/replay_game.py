@@ -285,6 +285,8 @@ class Replay:
                     roll = rec["space"]["roll"]
                 elif rec.get("war"):
                     roll = rec["war"].pop(0)["roll"]
+                elif kind is DecisionKind.QUAGMIRE_ROLL and rec.get("quagmire_rolls"):
+                    roll = rec["quagmire_rolls"].pop(0)
                 elif rec["realignments"] and kind in (
                     DecisionKind.REALIGNMENT_ACTOR_ROLL, DecisionKind.REALIGNMENT_OPPONENT_ROLL
                 ):
