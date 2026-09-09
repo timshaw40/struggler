@@ -12,6 +12,8 @@ let state = null;
 let busy = false;
 let zoom = 1;
 let previewEl = null;
+let playing = true;   // watch mode playback
+let inFlight = false; // one poll chain at a time
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -68,6 +70,7 @@ async function boot() {
   window.addEventListener("resize", layoutBoard);
   layoutBoard();
   await refresh();
+  if (state.watch) setTimeout(tick, 400);
 }
 
 /* The board image is sized in px (base fit × zoom) instead of CSS-capped, so
@@ -88,6 +91,18 @@ function setZoom(next) {
 async function refresh() {
   state = await fetchJson("/state");
   render();
+}
+
+/* Watch mode (bot vs bot): the server resolves exactly one move per
+ * /state poll, so this chain paces playback. MCTS think time dominates;
+ * the interval just catches instant steps (chance rolls, setup). */
+function tick() {
+  if (inFlight) return;
+  inFlight = true;
+  refresh().finally(() => {
+    inFlight = false;
+    if (state && state.watch && playing && !state.is_terminal) setTimeout(tick, 400);
+  });
 }
 
 async function act(index) {
@@ -298,6 +313,22 @@ function renderDecision() {
   if (state.is_terminal) return;
   const d = state.decision;
   if (!d || busy) {
+    if (state.watch && !state.is_terminal) {
+      const note = document.createElement("em");
+      note.textContent = playing ? "Watching · bot vs bot" : "Watching · paused";
+      const btn = document.createElement("button");
+      btn.textContent = playing ? "Pause" : "Resume";
+      btn.addEventListener("click", () => {
+        playing = !playing;
+        render();
+        if (playing) tick();
+      });
+      const row = document.createElement("div");
+      row.className = "options";
+      row.append(btn);
+      box.append(note, row);
+      return;
+    }
     const note = document.createElement("em");
     note.textContent = busy ? "Opponent thinking…" : "Resolving…";
     box.append(note);

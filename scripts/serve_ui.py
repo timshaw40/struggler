@@ -3,9 +3,16 @@
     python scripts/serve_ui.py --us human --ussr mcts --seed 1
     -> http://localhost:8000
 
-One human seat is required; the other seat is any bot kind from
-`main.build_player` ("mcts", "greedy", "random", "first", "llm"). The
-server mirrors `runner.play_game`'s loop, interactively:
+One seat is human and the other is any bot kind from `main.build_player`
+("mcts", "greedy", "random", "first", "llm") — or both seats are bots for
+spectator mode:
+
+    python scripts/serve_ui.py --us mcts --ussr mcts --seed 2
+
+In spectator mode every GET /state resolves exactly one CHANCE roll or
+bot decision before returning: the browser's poll chain paces playback
+(bot think time dominates), and no single request blocks for a whole
+game. The server mirrors `runner.play_game`'s loop, interactively:
 
 - GET /state resolves CHANCE rolls and bot decisions until it is the
   human's turn (or the game ends), then returns the human's observation.
@@ -58,11 +65,13 @@ class Session:
     """One interactive game: the engine, the bot seats, the advance loop."""
 
     def __init__(self, seed: int, us: str, ussr: str, events: bool) -> None:
-        if (us == "human") + (ussr == "human") != 1:
-            raise SystemExit(
-                "exactly one of --us/--ussr must be 'human'; bot-vs-bot stays terminal-mode"
-            )
-        self.human_side = Side.US if us == "human" else Side.USSR
+        humans = (us == "human") + (ussr == "human")
+        if humans > 1:
+            raise SystemExit("at most one human seat (no per-client identity)")
+        self.watch = humans == 0
+        # Play mode: the human's seat. Watch mode: the camera side — the
+        # opponent hand stays hidden exactly as it would be for a bot.
+        self.human_side = Side.US if (us == "human" or self.watch) else Side.USSR
         self.engine = Engine.new_game(seed=seed, events=events)
         self.players: dict[Side, Any] = {}
         for side, kind in ((Side.US, us), (Side.USSR, ussr)):
@@ -87,22 +96,29 @@ class Session:
         )
         return event
 
+    def step_once(self) -> None:
+        """Resolve exactly one CHANCE roll or bot decision (watch mode)."""
+        if self.engine.is_terminal:
+            return
+        decision = self.engine.pending_decision
+        if decision is None:  # unreachable in practice; never spin on it
+            return
+        if decision.actor is Side.CHANCE:
+            self._step(decision.options[0])
+        else:
+            observation = self.engine.observe(decision.actor)
+            action = self.players[decision.actor].choose_action(
+                observation, self.history.history
+            )
+            self._step(action)
+
     def advance(self) -> None:
         """Resolve CHANCE + bot decisions until the human must choose."""
         while not self.engine.is_terminal:
             decision = self.engine.pending_decision
-            if decision is None:  # unreachable in practice; never spin on it
+            if decision is None or decision.actor is self.human_side:
                 return
-            if decision.actor is Side.CHANCE:
-                self._step(decision.options[0])
-            elif decision.actor is not self.human_side:
-                observation = self.engine.observe(decision.actor)
-                action = self.players[decision.actor].choose_action(
-                    observation, self.history.history
-                )
-                self._step(action)
-            else:
-                return
+            self.step_once()
 
     def act(self, index: int) -> None:
         decision = self.engine.pending_decision
@@ -144,6 +160,7 @@ class Session:
         decision = obs.pending_decision
         data: dict[str, Any] = {
             "human_side": self.human_side.value,
+            "watch": self.watch,
             "phase": obs.phase,
             "defcon": obs.defcon,
             "vp": obs.vp,
@@ -167,9 +184,11 @@ class Session:
             "game_over_reason": engine._game_over_reason,
             "history": [self._event_view(e) for e in self.history.history[-60:]],
             # Only the human's own decisions reach the browser; bot/CHANCE
-            # decisions are resolved server-side before state is sent.
+            # decisions are resolved server-side before state is sent. In
+            # watch mode NO decision is surfaced — a spectator post must not
+            # spend a bot's move.
             "decision": None
-            if decision is None or decision.actor is not self.human_side
+            if decision is None or self.watch or decision.actor is not self.human_side
             else {
                 "kind": decision.kind.value,
                 "context": self._json(decision.context),
@@ -208,6 +227,8 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             route = self.path.split("?")[0]
             if route == "/state":
                 with session.lock:
+                    if session.watch:
+                        session.step_once()
                     self._send_json(200, session.state())
             elif route == "/cards":
                 self._send_json(200, cards_meta)
@@ -267,7 +288,8 @@ def main() -> None:
         }
         for cid, card in session.engine.cards.items()
     }
-    session.advance()  # setup + bot headline pick, up to the human's first decision
+    if not session.watch:
+        session.advance()  # setup + bot headline pick, up to the human's first decision
 
     handler = make_handler(session, cards_meta)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)

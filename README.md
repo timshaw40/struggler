@@ -100,9 +100,20 @@ python scripts/serve_ui.py --us human --ussr mcts --seed 1
 
 Open http://localhost:8000 (it opens itself). Seat flags mirror
 `src/main.py` — `--us`/`--ussr` take `human/first/random/greedy/mcts/llm`,
-and exactly one seat must be `human`. The server resolves dice and bot
+and at most one seat may be `human`. The server resolves dice and bot
 moves itself; the browser only ever posts an index into the pending
 decision's options, so it is exactly as powerful as the engine allows.
+
+### Watch the bots play each other
+
+```sh
+python scripts/serve_ui.py --us mcts --ussr mcts --seed 2
+```
+
+Spectator mode: every page poll resolves one move server-side, so the
+game plays out in the browser at the bots' own pace (MCTS think time
+dominates). A Pause/Resume control sits where the decision panel would
+be. Use `--no-open` if you'd rather open the URL yourself.
 
 The board and card faces are **your own** images: `render_assets.py` reads
 your print-and-play PDFs and writes `ui/assets/board.png` plus one image

@@ -21,9 +21,34 @@ def make_session() -> serve_ui.Session:
     return serve_ui.Session(seed=3, us="human", ussr="greedy", events=True)
 
 
-def test_requires_exactly_one_human_seat() -> None:
+def test_two_human_seats_refused() -> None:
     with pytest.raises(SystemExit):
-        serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
+        serve_ui.Session(seed=1, us="human", ussr="human", events=True)
+
+
+def test_watch_mode_steps_one_move_per_poll() -> None:
+    session = serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
+    assert session.watch and session.human_side.value == "US"
+    before = len(session.history.history)
+    session.step_once()
+    assert len(session.history.history) == before + 1
+    state = session.state()
+    assert state["watch"] is True
+    # A spectator never sees a decision to act on, even while a bot's
+    # decision is pending.
+    assert state["decision"] is None
+
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        first = json.load(urllib.request.urlopen(base + "/state"))["history"]
+        second = json.load(urllib.request.urlopen(base + "/state"))["history"]
+        assert len(second) > len(first)
+    finally:
+        server.shutdown()
 
 
 def test_advance_parks_on_human_decision() -> None:
