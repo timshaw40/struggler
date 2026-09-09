@@ -11,6 +11,7 @@ const POS = {};     // country id -> {x, y} fractions of the board image
 let state = null;
 let busy = false;
 let zoom = 1;
+let previewEl = null;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -56,11 +57,17 @@ async function boot() {
   Object.assign(IMAGES, manifest);
   Object.assign(POS, countries);
   if (!Object.keys(IMAGES).length) $("#boardwrap").classList.add("noboard");
+  const preview = document.createElement("div");
+  preview.id = "cardpreview";
+  preview.hidden = true;
+  document.body.append(preview);
+  previewEl = preview;
   $("#zoomin").addEventListener("click", () => setZoom(zoom * 1.5));
   $("#zoomout").addEventListener("click", () => setZoom(zoom / 1.5));
   $("#zoomfit").addEventListener("click", () => setZoom(1));
   window.addEventListener("resize", layoutBoard);
   layoutBoard();
+  showPreview("Fidel");
   await refresh();
 }
 
@@ -238,8 +245,26 @@ function cardEl(cid, actionIndex) {
     fillCardText(el, m, cid);
   }
   if (m.event_summary) el.title = m.event_summary;
+  el.addEventListener("mouseenter", () => showPreview(cid));
+  el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
   if (actionIndex !== null) el.addEventListener("click", () => act(actionIndex));
   return el;
+}
+
+/* Hover preview: a fixed, pointer-transparent pane near the playbar. */
+function showPreview(cid) {
+  if (!previewEl) return;
+  previewEl.textContent = "";
+  const m = META[cid] || {};
+  if (IMAGES[cid]) {
+    const img = document.createElement("img");
+    img.src = `/assets/cards/${IMAGES[cid]}`;
+    img.alt = m.name || cid;
+    previewEl.append(img);
+  } else {
+    fillCardText(previewEl, m, cid);
+  }
+  previewEl.hidden = false;
 }
 
 function fillCardText(el, m, cid) {

@@ -172,29 +172,7 @@ main {
   flex-shrink: 0;
 }
 
-.card img {
-  width: 100%;
-  display: block;
-  transition: transform 0.12s ease;
-}
-
-/* Hover a hand card to read it: scale in place from the bottom edge so it
- * grows upward over the board (transform keeps layout, so no flicker). */
-.card:hover { overflow: visible; z-index: 21; }
-
-.card:hover img {
-  transform: scale(4);
-  transform-origin: bottom center;
-  position: relative;
-  z-index: 20;
-  border-radius: 10px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-}
-
-.card.textcard:hover {
-  transform: scale(2);
-  transform-origin: bottom left;
-}
+.card img { width: 100%; display: block; }
 
 .card.playable {
   outline: 2px solid var(--gold);
@@ -242,6 +220,30 @@ main {
 }
 
 #winner:not([hidden]) { display: flex; }
+
+/* Big read-a-card preview: pointer-transparent so sweeping the hand keeps
+ * hit-testing the 92px thumbs (a CSS-scaled hover image would cover its
+ * neighbors and swallow their hover). */
+#cardpreview {
+  position: fixed;
+  right: 344px;
+  bottom: 190px;
+  width: 368px;
+  z-index: 30;
+  pointer-events: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+  background: var(--panel2);
+  overflow: hidden;
+}
+
+#cardpreview[hidden] { display: none; }
+
+#cardpreview img { width: 100%; display: block; }
+
+#cardpreview .cardname { font-size: 20px; padding: 10px 12px 2px; }
+
+#cardpreview .cardops { font-size: 15px; padding: 0 12px 12px; }
 
 #winner .cardbig {
   background: var(--panel);
