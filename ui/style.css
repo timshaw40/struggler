@@ -221,13 +221,12 @@ main {
 
 #winner:not([hidden]) { display: flex; }
 
-/* Big read-a-card preview: pointer-transparent so sweeping the hand keeps
- * hit-testing the 92px thumbs (a CSS-scaled hover image would cover its
- * neighbors and swallow their hover). */
+/* Big read-a-card preview: floats above the hovered card (positioned by
+ * JS from the card's rect) and is pointer-transparent, so sweeping the
+ * hand keeps hit-testing the 92px thumbs — a CSS-scaled hover image would
+ * cover its neighbors and swallow their hover. */
 #cardpreview {
   position: fixed;
-  right: 344px;
-  bottom: 190px;
   width: 368px;
   z-index: 30;
   pointer-events: none;
@@ -239,7 +238,11 @@ main {
 
 #cardpreview[hidden] { display: none; }
 
-#cardpreview img { width: 100%; display: block; }
+#cardpreview img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 824 / 1124;  /* all faces share it: height is known pre-load */
+}
 
 #cardpreview .cardname { font-size: 20px; padding: 10px 12px 2px; }
 

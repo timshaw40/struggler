@@ -67,7 +67,6 @@ async function boot() {
   $("#zoomfit").addEventListener("click", () => setZoom(1));
   window.addEventListener("resize", layoutBoard);
   layoutBoard();
-  showPreview("Fidel");
   await refresh();
 }
 
@@ -245,14 +244,15 @@ function cardEl(cid, actionIndex) {
     fillCardText(el, m, cid);
   }
   if (m.event_summary) el.title = m.event_summary;
-  el.addEventListener("mouseenter", () => showPreview(cid));
+  el.addEventListener("mouseenter", () => showPreview(cid, el));
   el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
   if (actionIndex !== null) el.addEventListener("click", () => act(actionIndex));
   return el;
 }
 
-/* Hover preview: a fixed, pointer-transparent pane near the playbar. */
-function showPreview(cid) {
+/* Hover preview: floats just above the hovered card, viewport-clamped
+ * (it drops below the card when there is no room above). */
+function showPreview(cid, card) {
   if (!previewEl) return;
   previewEl.textContent = "";
   const m = META[cid] || {};
@@ -265,6 +265,15 @@ function showPreview(cid) {
     fillCardText(previewEl, m, cid);
   }
   previewEl.hidden = false;
+  const r = card.getBoundingClientRect();
+  const w = previewEl.offsetWidth;
+  const h = previewEl.offsetHeight;
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  let top = r.top - h - 8;
+  if (top < 8) top = r.bottom + 8;
+  previewEl.style.left = `${left}px`;
+  previewEl.style.top = `${top}px`;
 }
 
 function fillCardText(el, m, cid) {
