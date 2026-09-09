@@ -21,6 +21,7 @@ Exit code 0 iff every record consumed with zero board/VP mismatches.
 from __future__ import annotations
 
 import argparse
+import copy
 import glob
 import json
 import sys
@@ -44,13 +45,16 @@ SIDE_ROLL_KINDS = {
 
 class Replay:
     def __init__(self, game: dict) -> None:
-        self.game = game
+        # The driver mutates records in place (placement queues, discard
+        # lists, realignment cursors): deep-copy so callers can reuse their
+        # parsed games across evaluations.
+        self.game = copy.deepcopy(game)
         self.engine = Engine.new_game(
             seed=0,
             include_optional=game.get("include_optional", True),
             replay_mode=True,
         )
-        self.actions = game["actions"]
+        self.actions = self.game["actions"]
         self.ri = 0            # index of the record being consumed
         self.validated_i = 0   # records fully validated so far
         self.exhausted = False  # the log ran out before the game ended

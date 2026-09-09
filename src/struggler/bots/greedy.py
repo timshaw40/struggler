@@ -85,19 +85,22 @@ class GreedyWeights:
     """
 
     # -- board_value(): the static "how good is this position" evaluation --
-    region_tier: float = 6.0
-    country_control: float = 2.0
-    battleground_control: float = 5.0
+    # Defaults fitted to expert decisions: 1,553 WBC-caliber tournament moves
+    # (BGG sessions, parsed by scripts/parse_sessions.py) replayed through the
+    # engine; scripts/fit_weights.py maximized top-1 agreement, 39.6% -> 42.1%.
+    region_tier: float = 12.0
+    country_control: float = 1.0
+    battleground_control: float = 2.5
 
     # -- DEFCON safety (priority #1: never die to DEFCON 1) --
     defcon_self_kill_penalty: float = 1_000_000.0
-    defcon_caution: float = 4.0  # scaled by (5 - defcon): risk-aversion as DEFCON drops, short of the fatal case
+    defcon_caution: float = 16.0  # scaled by (5 - defcon): risk-aversion as DEFCON drops, short of the fatal case
 
     # -- per-ops-type base preference (before the marginal/expected board_value swing) --
-    coup_base: float = 5.0
+    coup_base: float = 2.5
     realignment_base: float = 1.0
     influence_base: float = 1.0
-    doubled_cost_penalty: float = 1.0  # discourages placing into opponent-controlled ("doubled") countries
+    doubled_cost_penalty: float = 0.5  # discourages placing into opponent-controlled ("doubled") countries
 
     # -- which card, and how to spend it --
     space_race_base: float = 4.0

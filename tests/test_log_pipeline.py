@@ -34,6 +34,11 @@ def replay_game():
     return _load("replay_game")
 
 
+@pytest.fixture(scope="module")
+def fit_weights():
+    return _load("fit_weights")
+
+
 # -- engine replay mode --------------------------------------------------------
 
 
@@ -170,3 +175,22 @@ def test_replay_driver_opening_moves(parse_sessions, replay_game) -> None:
     assert board["Iran"]["US"] == 1  # printed 1 + extra 1, then coup -1
     assert r.engine.vp == 0
     assert r.errors == []
+
+def test_weight_fitter_scores_and_improves(parse_sessions, fit_weights) -> None:
+    """agreement() scores a candidate; sweeps never lose the baseline."""
+    p = parse_sessions.WGRParser(1, "mini")
+    games = [p.parse(MINI_LOG.splitlines())]
+    base_score, n = fit_weights.agreement(games, fit_weights.GreedyWeights())
+    assert 0.0 <= base_score <= 1.0 and n > 0
+    # Evaluating twice must give the same number: the driver deep-copies,
+    # so no evaluation can consume the next one's states.
+    again, n2 = fit_weights.agreement(games, fit_weights.GreedyWeights())
+    assert again == base_score and n2 == n
+
+    params, score, history = fit_weights.fit(
+        games, minutes=0.05, max_sweeps=2, log=lambda _msg: None
+    )
+    assert score >= base_score - 1e-9
+    assert history[0][1] == base_score
+    for value in params.values():
+        assert value > 0
