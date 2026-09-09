@@ -238,7 +238,13 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "ar": 1
+   "ar": 1,
+   "war": [
+    {
+     "roll": 1,
+     "mod": 0
+    }
+   ]
   },
   {
    "kind": "play",
@@ -729,7 +735,13 @@
    "event_first": null,
    "post": [],
    "vp_after": 2,
-   "raw": []
+   "raw": [],
+   "contests": [
+    {
+     "US": 4,
+     "USSR": 2
+    }
+   ]
   },
   {
    "kind": "play",
@@ -1129,25 +1141,6 @@
    "side": "US",
    "card": "Korean_War",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 6
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "US",
-   "card": "Korean_War",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1180,7 +1173,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 6
   },
   {
    "kind": "play",
@@ -1730,44 +1724,6 @@
    "ops_type": null,
    "coup": null,
    "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "_resolved": true
-  },
-  {
-   "kind": "headline",
-   "turn": 4,
-   "side": "US",
-   "card": "CIA_Created",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "_resolved": true
-  },
-  {
-   "kind": "play",
-   "turn": 4,
-   "side": "USSR",
-   "card": "Warsaw_Pact_Formed",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
    "placements": [
     [
      "Poland",
@@ -1807,10 +1763,11 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
-   "kind": "play",
+   "kind": "headline",
    "turn": 4,
    "side": "US",
    "card": "CIA_Created",
@@ -1828,7 +1785,8 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -2193,7 +2151,13 @@
    ],
    "vp_after": null,
    "raw": [],
-   "ar": 5
+   "ar": 5,
+   "war": [
+    {
+     "roll": 3,
+     "mod": -3
+    }
+   ]
   },
   {
    "kind": "play",
@@ -3281,26 +3245,7 @@
    "turn": 6,
    "side": "US",
    "card": "Lone_Gunman",
-   "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 4
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "US",
-   "card": "Lone_Gunman",
-   "mode": "ops",
+   "mode": "event",
    "ops_type": "realignment",
    "coup": null,
    "realignments": [
@@ -3331,25 +3276,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "US",
-   "card": "UN_Intervention",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 4
   },
   {
    "kind": "play",
@@ -4186,27 +4114,9 @@
    "space": null,
    "event_first": null,
    "post": [],
-   "vp_after": null,
+   "vp_after": 12,
    "raw": [],
    "_resolved": true
-  },
-  {
-   "kind": "play",
-   "turn": 8,
-   "side": "US",
-   "card": "An_Evil_Empire",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": 12,
-   "raw": []
   },
   {
    "kind": "play",

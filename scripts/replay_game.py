@@ -270,6 +270,13 @@ class Replay:
 
         if kind in SIDE_ROLL_KINDS:
             rec = self.cur()
+            if kind is DecisionKind.WAR_ROLL and dec.context.get("card"):
+                # A war roll can fire while the resolving headline is not
+                # the current record (resolution order is ops-descending).
+                found = self._record_for_event(dec.context["card"])
+                if found is not None:
+                    self.ri = self.actions.index(found)
+                    rec = found
             roll = None
             if rec:
                 if kind is DecisionKind.COUP_ROLL and rec.get("coup"):

@@ -87,10 +87,10 @@ class GreedyWeights:
     # -- board_value(): the static "how good is this position" evaluation --
     # Defaults fitted to expert decisions: 1,553 WBC-caliber tournament moves
     # (BGG sessions, parsed by scripts/parse_sessions.py) replayed through the
-    # engine; scripts/fit_weights.py maximized top-1 agreement, 39.6% -> 42.1%.
+    # engine; scripts/fit_weights.py maximized top-1 agreement, 39.6% -> 40.9% on the enlarged 1,784-decision set.
     region_tier: float = 12.0
     country_control: float = 1.0
-    battleground_control: float = 2.5
+    battleground_control: float = 1.25
 
     # -- DEFCON safety (priority #1: never die to DEFCON 1) --
     defcon_self_kill_penalty: float = 1_000_000.0
@@ -99,7 +99,7 @@ class GreedyWeights:
     # -- per-ops-type base preference (before the marginal/expected board_value swing) --
     coup_base: float = 2.5
     realignment_base: float = 1.0
-    influence_base: float = 1.0
+    influence_base: float = 4.0
     doubled_cost_penalty: float = 0.5  # discourages placing into opponent-controlled ("doubled") countries
 
     # -- which card, and how to spend it --
@@ -108,7 +108,7 @@ class GreedyWeights:
     space_race_ops_penalty: float = 1.5  # a high-Ops card is worth more spent on Ops than "wasted" on the Space Race
     ops_mode_per_point: float = 3.0
     event_mode_penalty: float = 30.0  # events off / unimplemented event: playing "event" is a no-op discard
-    scoring_card_weight: float = 2.0  # per net VP the region would score, signed favorably/unfavorably
+    scoring_card_weight: float = 4.0  # per net VP the region would score, signed favorably/unfavorably
     hold_high_ops_weight: float = 0.5  # prefer headlining a low-Ops card, keeping high-Ops ones for Operations
     action_round_ops_weight: float = 1.0
 

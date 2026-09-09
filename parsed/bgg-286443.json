@@ -1243,25 +1243,6 @@
    "turn": 3,
    "side": "US",
    "card": "CIA_Created",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "_resolved": true
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "US",
-   "card": "CIA_Created",
    "mode": "ops",
    "ops_type": "influence",
    "coup": null,
@@ -1285,7 +1266,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -1845,24 +1827,6 @@
      2
     ]
    ],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 4,
-   "side": "US",
-   "card": "Arms_Race",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
    "vp_after": null,
    "raw": []
   },
@@ -2869,25 +2833,6 @@
    "ops_type": null,
    "coup": null,
    "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 6
-  },
-  {
-   "kind": "play",
-   "turn": 5,
-   "side": "US",
-   "card": "Ussuri_River_Skirmish",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
    "placements": [
     [
      "Pakistan",
@@ -2917,7 +2862,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 6
   },
   {
    "kind": "play",
@@ -3075,25 +3021,6 @@
    "turn": 6,
    "side": "US",
    "card": "Grain_Sales_to_Soviets",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 1
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "US",
-   "card": "Grain_Sales_to_Soviets",
    "mode": "ops",
    "ops_type": "influence",
    "coup": null,
@@ -3127,7 +3054,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 1
   },
   {
    "kind": "play",
@@ -3517,25 +3445,6 @@
    "side": "USSR",
    "card": "Duck_and_Cover",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 7
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Duck_and_Cover",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -3568,7 +3477,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 7
   },
   {
    "kind": "play",
@@ -3624,42 +3534,6 @@
    "turn": 6,
    "side": "USSR",
    "card": "Socialist_Governments",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "Red_Scare_Purge",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Socialist_Governments",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3692,6 +3566,25 @@
      1
     ]
    ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Red_Scare_Purge",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
    "vp_after": null,
    "raw": []
   },
@@ -4199,7 +4092,13 @@
    ],
    "vp_after": null,
    "raw": [],
-   "ar": 7
+   "ar": 7,
+   "war": [
+    {
+     "roll": 5,
+     "mod": -3
+    }
+   ]
   },
   {
    "kind": "headline",
@@ -4212,7 +4111,9 @@
    "realignments": [],
    "placements": [],
    "removals": [],
-   "discards": [],
+   "discards": [
+    "OPEC"
+   ],
    "space": null,
    "event_first": null,
    "post": [],
@@ -4528,7 +4429,13 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "ar": 5
+   "ar": 5,
+   "war": [
+    {
+     "roll": 1,
+     "mod": -1
+    }
+   ]
   },
   {
    "kind": "play",
@@ -4825,25 +4732,6 @@
    "turn": 9,
    "side": "US",
    "card": "Missile_Envy",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 1
-  },
-  {
-   "kind": "play",
-   "turn": 9,
-   "side": "US",
-   "card": "The_Reformer",
    "mode": "ops",
    "ops_type": "influence",
    "coup": null,
@@ -4867,7 +4755,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 1
   },
   {
    "kind": "play",
@@ -5158,31 +5047,6 @@
    "coup": null,
    "realignments": [],
    "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [
-    [
-     "Lebanon",
-     "US",
-     0
-    ]
-   ],
-   "vp_after": null,
-   "raw": [],
-   "ar": 6
-  },
-  {
-   "kind": "play",
-   "turn": 9,
-   "side": "USSR",
-   "card": "Marine_Barracks_Bombing",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
    "removals": [
     [
      "Iran",
@@ -5195,13 +5059,19 @@
    "event_first": null,
    "post": [
     [
+     "Lebanon",
+     "US",
+     0
+    ],
+    [
      "Iran",
      "US",
      0
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 6
   },
   {
    "kind": "play",
@@ -5676,25 +5546,6 @@
    "side": "USSR",
    "card": "Duck_and_Cover",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 3
-  },
-  {
-   "kind": "play",
-   "turn": 10,
-   "side": "USSR",
-   "card": "Duck_and_Cover",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -5717,7 +5568,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 3
   },
   {
    "kind": "play",

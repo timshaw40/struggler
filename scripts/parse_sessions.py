@@ -147,7 +147,7 @@ RE_AR = re.compile(r"Turn (\d+), (USSR|USA|Soviet|American) action round (\d+)")
 RE_HEADLINE_CARD = re.compile(
     r"(Soviet|American) Headline Card:\s*(#.*?)(?:\s*\((USSR|USA)\))?\s*$"
 )
-RE_HEADLINE_EVENT = re.compile(r"(Soviet|American) Headline Event:\s*(#.*)$")
+RE_HEADLINE_EVENT = re.compile(r"(Soviet|American|USA|USSR) Headline Event:\s*(#.*)$")
 RE_PLAY = re.compile(
     r"The (Soviets|Americans|American|Soviet player|US player|USSR player) "
     r"play(?:s)? the following card (.+?):\s*$"
@@ -186,9 +186,13 @@ RE_DISCARD = re.compile(
 RE_EVENT_FIRST = re.compile(r"They elect to have the (Soviet|American) event occur first")
 RE_USE_EVENT = re.compile(r"The (Soviets|Americans) use the (USSR|USA) event played by the (USSR|USA)")
 RE_USE_OPS = re.compile(r"The (Soviets|Americans) use the (.+?) card to (place influence|conduct operations)")
-RE_WAR_ROLL = re.compile(r"\*\* Die roll: (\d+)(?: \(([-+]?\d+)\))?(?: = \d+)? -- (USA|USSR) (victory|failure)")
+RE_WAR_ROLL = re.compile(
+    r"\*\* Die roll: (\d+)(?: \(([-+]?\d+)\))?(?: = \d+)? "
+    r"-- ((?:USA|USSR) (?:victory|failure)|no effect)"
+)
 RE_BOYCOTT = re.compile(r"decides? not to boycott|does not boycott")
 RE_REMOVED = re.compile(r"\*\* The (.+?) card is permanently removed")
+RE_CONTEST_DIE = re.compile(r"\*\* (American|Soviet) Die Roll: (\d+)")
 RE_SETUP_INF = re.compile(
     r"^\s*(\d+) (USSR|USA) (extra )?influence added to (.+?), now at (\d+)"
 )
@@ -239,6 +243,7 @@ class WGRParser:
         self.realign: dict | None = None
         self.headline_recs: dict[str, dict] = {}  # side -> its headline record
         self.action_phase = False
+        self.resolving: str | None = None  # side whose headline event is resolving
 
     def warn(self, msg: str) -> None:
         self.warnings.append(f"turn {self.turn}: {msg}")
@@ -329,6 +334,7 @@ class WGRParser:
                 self.cur = None
                 self.headline_recs = {}
                 self.action_phase = False
+                self.resolving = None
                 continue
             m = RE_TURN_ACTION.search(line)
             if m:
@@ -336,9 +342,11 @@ class WGRParser:
                 self.cur = None
                 self.headline_recs = {}  # headline resolution is over
                 self.action_phase = True
+                self.resolving = None
                 continue
             m = RE_AR.search(line)
             if m:
+                self.resolving = None
                 self.cur = self._new("play", _norm_player(m.group(2)), int(m.group(1)), int(m.group(3)))
                 continue
             m = RE_HEADLINE_CARD.search(line)
@@ -355,26 +363,34 @@ class WGRParser:
                 # the headline EVENT resolution of the card picked above
                 if self.cur is not None and self.cur["kind"] == "headline":
                     self.mode = "event"
+                self.resolving = side_of(m.group(1))
                 continue
             m = RE_PLAY.search(line)
             if m:
                 side = _norm_player(m.group(1))
                 intro = m.group(2)
                 # Headline resolution re-states the card ("The Soviets play
-                # the following card as an Event:") — that is that side's
-                # already-picked headline record. Only trust this before the
-                # action phase: some logs (Ziemowit's) start action round 1
-                # without an explicit phase marker, and an AR play must not
-                # be merged into the headline record.
+                # the following card as an Event:") — only trust it while the
+                # engine-announced "X Headline Event:" is still the last word:
+                # some logs (Ziemowit's) start action rounds without any
+                # phase marker, and an AR play must never merge into the
+                # headline record.
                 hl = self.headline_recs.get(side)
-                if ("as an Event" in intro and not self.action_phase
+                if ("as an Event" in intro and self.resolving == side
                         and hl is not None and hl.get("card") is not None
                         and not hl.get("_resolved")):
                     hl["_resolved"] = True
+                    self.resolving = None
                     self.cur = hl
-                else:
-                    if self.cur is None or self.cur.get("side") != side or self.cur.get("card") is not None:
-                        self.cur = self._new("play", side, self.turn)
+                elif (self.cur is not None and self.cur.get("side") == side
+                      and not self.cur.get("placements")):
+                    pass  # continuation: this record's ops half is still pending
+                elif self.cur is None or self.cur.get("side") != side or self.cur.get("card") is not None:
+                    self.cur = self._new("play", side, self.turn)
+                # else: continue the current record — an event-first play's
+                # ops half, or a Defectors+UN-Intervention-style combo, both
+                # restate "The X play the following card..." with no new AR
+                # header. The placements belong to the card already playing.
                 if "as an Event" in intro:
                     self.mode, self.cur["mode"] = "event", "event"
                 elif "place influence" in intro:
@@ -492,11 +508,22 @@ class WGRParser:
             m = RE_DIE.search(line)
             if m and self.mode == "event" and self.cur is not None:
                 # Contest dice (Olympic Games, Summit): two dies under an
-                # event-mode record with no coup/realignment context.
+                # event-mode record with no coup/realignment context. A tie
+                # reroll adds a further pair, hence a list of dicts.
                 if self.cur["coup"] is None and not self.cur["realignments"]:
-                    self.cur.setdefault("contests", {}).setdefault(
-                        "US" if m.group(1) == "USA" else "USSR", int(m.group(2))
-                    )
+                    contests = self.cur.setdefault("contests", [])
+                    side = "US" if m.group(1) == "USA" else "USSR"
+                    if not contests or side in contests[-1]:
+                        contests.append({})
+                    contests[-1][side] = int(m.group(2))
+                continue
+            m = RE_CONTEST_DIE.search(line)
+            if m and self.mode == "event" and self.cur is not None:
+                contests = self.cur.setdefault("contests", [])
+                side = "US" if m.group(1) == "American" else "USSR"
+                if not contests or side in contests[-1]:
+                    contests.append({})
+                contests[-1][side] = int(m.group(2))
                 continue
 
             m = RE_INF.search(line) or RE_INF_SET.search(line) or RE_INF_CARD.search(line) or None

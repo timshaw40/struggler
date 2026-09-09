@@ -108,102 +108,18 @@
    "turn": 1,
    "side": "USSR",
    "card": "The_Cambridge_Five",
-   "mode": "event",
+   "mode": null,
    "ops_type": null,
    "coup": null,
    "realignments": [],
-   "placements": [
-    [
-     "Thailand",
-     "USSR",
-     1
-    ],
-    [
-     "South_Africa",
-     "USSR",
-     1
-    ],
-    [
-     "Venezuela",
-     "USSR",
-     1
-    ],
-    [
-     "Argentina",
-     "USSR",
-     1
-    ]
-   ],
-   "removals": [
-    [
-     "Austria",
-     "USSR",
-     1
-    ],
-    [
-     "Finland",
-     "USSR",
-     1
-    ],
-    [
-     "Poland",
-     "USSR",
-     1
-    ],
-    [
-     "East_Germany",
-     "USSR",
-     1
-    ]
-   ],
+   "placements": [],
+   "removals": [],
    "discards": [],
    "space": null,
    "event_first": null,
-   "post": [
-    [
-     "Austria",
-     "USSR",
-     0
-    ],
-    [
-     "Finland",
-     "USSR",
-     0
-    ],
-    [
-     "Poland",
-     "USSR",
-     3
-    ],
-    [
-     "East_Germany",
-     "USSR",
-     3
-    ],
-    [
-     "Thailand",
-     "USSR",
-     1
-    ],
-    [
-     "South_Africa",
-     "USSR",
-     1
-    ],
-    [
-     "Venezuela",
-     "USSR",
-     1
-    ],
-    [
-     "Argentina",
-     "USSR",
-     1
-    ]
-   ],
+   "post": [],
    "vp_after": null,
-   "raw": [],
-   "_resolved": true
+   "raw": []
   },
   {
    "kind": "headline",
@@ -490,25 +406,6 @@
    "side": "USSR",
    "card": "Defectors",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 4
-  },
-  {
-   "kind": "play",
-   "turn": 1,
-   "side": "USSR",
-   "card": "Defectors",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -541,7 +438,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 4
   },
   {
    "kind": "play",
@@ -605,17 +503,100 @@
    "kind": "play",
    "turn": 1,
    "side": "USSR",
-   "card": null,
-   "mode": null,
+   "card": "De_Stalinization",
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
-   "placements": [],
-   "removals": [],
+   "placements": [
+    [
+     "Thailand",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     1
+    ],
+    [
+     "Argentina",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Austria",
+     "USSR",
+     1
+    ],
+    [
+     "Finland",
+     "USSR",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     1
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     1
+    ]
+   ],
    "discards": [],
    "space": null,
    "event_first": null,
-   "post": [],
+   "post": [
+    [
+     "Austria",
+     "USSR",
+     0
+    ],
+    [
+     "Finland",
+     "USSR",
+     0
+    ],
+    [
+     "Poland",
+     "USSR",
+     3
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     3
+    ],
+    [
+     "Thailand",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     1
+    ],
+    [
+     "Argentina",
+     "USSR",
+     1
+    ]
+   ],
    "vp_after": null,
    "raw": [],
    "ar": 5
@@ -1637,25 +1618,6 @@
    "side": "US",
    "card": "Socialist_Governments",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 6
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "US",
-   "card": "Socialist_Governments",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -1678,46 +1640,11 @@
     ]
    ],
    "vp_after": -5,
-   "raw": []
+   "raw": [],
+   "ar": 6
   },
   {
    "kind": "headline",
-   "turn": 3,
-   "side": "USSR",
-   "card": "Cuban_Missile_Crisis",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 3,
-   "side": "US",
-   "card": "Grain_Sales_to_Soviets",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
    "turn": 3,
    "side": "USSR",
    "card": "Cuban_Missile_Crisis",
@@ -1732,28 +1659,11 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
-   "kind": "play",
-   "turn": 3,
-   "side": "US",
-   "card": "Grain_Sales_to_Soviets",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
+   "kind": "headline",
    "turn": 3,
    "side": "US",
    "card": "Grain_Sales_to_Soviets",
@@ -1780,7 +1690,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -2919,42 +2830,6 @@
    "turn": 5,
    "side": "USSR",
    "card": "Salt_Negotiations",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 5,
-   "side": "US",
-   "card": "OAS_Founded",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 5,
-   "side": "USSR",
-   "card": "Salt_Negotiations",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -2966,10 +2841,11 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
-   "kind": "play",
+   "kind": "headline",
    "turn": 5,
    "side": "US",
    "card": "OAS_Founded",
@@ -3006,7 +2882,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -3437,48 +3314,6 @@
    "turn": 6,
    "side": "USSR",
    "card": "Indo_Pakistani_War",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "Ask_Not_What_Your_Country_Can_Do_For_You",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [
-    "Summit",
-    "Blockade",
-    "Nuclear_Subs",
-    "South_African_Unrest",
-    "Europe_Scoring"
-   ],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Indo_Pakistani_War",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3514,12 +3349,37 @@
    ],
    "vp_after": -13,
    "raw": [],
+   "_resolved": true,
    "war": [
     {
      "roll": 6,
      "mod": -1
     }
    ]
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Ask_Not_What_Your_Country_Can_Do_For_You",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "Summit",
+    "Blockade",
+    "Nuclear_Subs",
+    "South_African_Unrest",
+    "Europe_Scoring"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
   },
   {
    "kind": "play",
@@ -4023,42 +3883,6 @@
    "turn": 7,
    "side": "USSR",
    "card": "Red_Scare_Purge",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 7,
-   "side": "US",
-   "card": "Colonial_Rear_Guards",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 7,
-   "side": "USSR",
-   "card": "Red_Scare_Purge",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -4070,10 +3894,11 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
-   "kind": "play",
+   "kind": "headline",
    "turn": 7,
    "side": "US",
    "card": "Colonial_Rear_Guards",
@@ -4130,7 +3955,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -4717,7 +4543,9 @@
    "realignments": [],
    "placements": [],
    "removals": [],
-   "discards": [],
+   "discards": [
+    "Missile_Envy"
+   ],
    "space": null,
    "event_first": null,
    "post": [],
@@ -5077,24 +4905,6 @@
   {
    "kind": "play",
    "turn": 9,
-   "side": "US",
-   "card": "Ussuri_River_Skirmish",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 9,
    "side": "USSR",
    "card": "The_Voice_Of_America",
    "mode": null,
@@ -5260,18 +5070,31 @@
    "turn": 9,
    "side": "USSR",
    "card": "Lone_Gunman",
-   "mode": null,
-   "ops_type": null,
+   "mode": "ops",
+   "ops_type": "influence",
    "coup": null,
    "realignments": [],
-   "placements": [],
+   "placements": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ]
+   ],
    "removals": [],
    "discards": [],
    "space": null,
    "event_first": null,
-   "post": [],
+   "post": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ]
+   ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "headline",
@@ -5298,54 +5121,6 @@
      "Iran",
      "USSR",
      3
-    ]
-   ],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 9,
-   "side": "USSR",
-   "card": "Lone_Gunman",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 9,
-   "side": "USSR",
-   "card": "Lone_Gunman",
-   "mode": "ops",
-   "ops_type": "influence",
-   "coup": null,
-   "realignments": [],
-   "placements": [
-    [
-     "Colombia",
-     "USSR",
-     1
-    ]
-   ],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [
-    [
-     "Colombia",
-     "USSR",
-     1
     ]
    ],
    "vp_after": null,
@@ -5469,7 +5244,13 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "ar": 3
+   "ar": 3,
+   "war": [
+    {
+     "roll": 2,
+     "mod": -1
+    }
+   ]
   },
   {
    "kind": "play",

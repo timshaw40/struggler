@@ -149,7 +149,13 @@
    "post": [],
    "vp_after": 2,
    "raw": [],
-   "_resolved": true
+   "_resolved": true,
+   "contests": [
+    {
+     "US": 1,
+     "USSR": 2
+    }
+   ]
   },
   {
    "kind": "play",
@@ -833,25 +839,6 @@
    "side": "USSR",
    "card": "East_European_Unrest",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 3
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "USSR",
-   "card": "East_European_Unrest",
-   "mode": "ops",
    "ops_type": "influence",
    "coup": null,
    "realignments": [],
@@ -884,7 +871,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 3
   },
   {
    "kind": "play",
@@ -915,7 +903,13 @@
    ],
    "vp_after": null,
    "raw": [],
-   "ar": 3
+   "ar": 3,
+   "war": [
+    {
+     "roll": 2,
+     "mod": -1
+    }
+   ]
   },
   {
    "kind": "play",
@@ -1122,42 +1116,6 @@
    "turn": 2,
    "side": "USSR",
    "card": "Socialist_Governments",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 2,
-   "side": "US",
-   "card": "Europe_Scoring",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "USSR",
-   "card": "Socialist_Governments",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -1201,10 +1159,11 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
-   "kind": "play",
+   "kind": "headline",
    "turn": 2,
    "side": "US",
    "card": "Europe_Scoring",
@@ -1219,7 +1178,8 @@
    "event_first": null,
    "post": [],
    "vp_after": -4,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -1551,7 +1511,13 @@
    ],
    "vp_after": null,
    "raw": [],
-   "ar": 4
+   "ar": 4,
+   "war": [
+    {
+     "roll": 4,
+     "mod": -1
+    }
+   ]
   },
   {
    "kind": "play",
@@ -1728,78 +1694,6 @@
    "turn": 3,
    "side": "USSR",
    "card": "Fidel",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 3,
-   "side": "US",
-   "card": "Missile_Envy",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "US",
-   "card": "Missile_Envy",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "US",
-   "card": "Ussuri_River_Skirmish",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "USSR",
-   "card": "Fidel",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -1817,7 +1711,27 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 3,
+   "side": "US",
+   "card": "Missile_Envy",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -2436,7 +2350,7 @@
    "turn": 4,
    "side": "USSR",
    "card": "How_I_Learned_to_Stop_Worrying",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -2447,28 +2361,11 @@
    "event_first": null,
    "post": [],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "headline",
-   "turn": 4,
-   "side": "US",
-   "card": "Colonial_Rear_Guards",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
    "turn": 4,
    "side": "US",
    "card": "Colonial_Rear_Guards",
@@ -2525,25 +2422,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 4,
-   "side": "USSR",
-   "card": "How_I_Learned_to_Stop_Worrying",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -3081,42 +2961,6 @@
    "turn": 5,
    "side": "US",
    "card": "Grain_Sales_to_Soviets",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 5,
-   "side": "US",
-   "card": "Grain_Sales_to_Soviets",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 5,
-   "side": "US",
-   "card": "Olympic_Games",
    "mode": "ops",
    "ops_type": "coup",
    "coup": {
@@ -3164,26 +3008,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Bear_Trap",
-   "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
    "raw": [],
-   "ar": 1
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -3223,7 +3049,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 1
   },
   {
    "kind": "play",
@@ -3341,7 +3168,13 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "ar": 3
+   "ar": 3,
+   "war": [
+    {
+     "roll": 1,
+     "mod": -1
+    }
+   ]
   },
   {
    "kind": "play",
@@ -3604,60 +3437,6 @@
    "turn": 6,
    "side": "USSR",
    "card": "Suez_Crisis",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "Bear_Trap",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "US",
-   "card": "Bear_Trap",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Suez_Crisis",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3691,7 +3470,27 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Bear_Trap",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",

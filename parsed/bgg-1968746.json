@@ -133,7 +133,13 @@
    "post": [],
    "vp_after": null,
    "raw": [],
-   "_resolved": true
+   "_resolved": true,
+   "war": [
+    {
+     "roll": 3,
+     "mod": 0
+    }
+   ]
   },
   {
    "kind": "headline",
@@ -232,25 +238,6 @@
    "side": "USSR",
    "card": "US_Japan_Mutual_Defense_Pact",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 1
-  },
-  {
-   "kind": "play",
-   "turn": 1,
-   "side": "USSR",
-   "card": "US_Japan_Mutual_Defense_Pact",
-   "mode": "ops",
    "ops_type": "coup",
    "coup": {
     "country": "Iran",
@@ -287,7 +274,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 1
   },
   {
    "kind": "play",
@@ -682,7 +670,7 @@
    "turn": 1,
    "side": "USSR",
    "card": "Middle_East_Scoring",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -692,29 +680,12 @@
    "space": null,
    "event_first": null,
    "post": [],
-   "vp_after": null,
-   "raw": []
+   "vp_after": -2,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "headline",
-   "turn": 1,
-   "side": "US",
-   "card": "Indo_Pakistani_War",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
    "turn": 1,
    "side": "US",
    "card": "Indo_Pakistani_War",
@@ -753,30 +724,13 @@
    ],
    "vp_after": -1,
    "raw": [],
+   "_resolved": true,
    "war": [
     {
      "roll": 6,
      "mod": -1
     }
    ]
-  },
-  {
-   "kind": "play",
-   "turn": 1,
-   "side": "USSR",
-   "card": "Middle_East_Scoring",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": -2,
-   "raw": []
   },
   {
    "kind": "play",
@@ -1196,80 +1150,6 @@
    "turn": 2,
    "side": "USSR",
    "card": "De_Stalinization",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 2,
-   "side": "US",
-   "card": "Five_Year_Plan",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "US",
-   "card": "Five_Year_Plan",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [
-    "NATO"
-   ],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "US",
-   "card": "NATO",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 2,
-   "side": "USSR",
-   "card": "De_Stalinization",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -1354,7 +1234,30 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 2,
+   "side": "US",
+   "card": "Five_Year_Plan",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "NATO",
+    "NATO"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -1804,42 +1707,6 @@
    "turn": 3,
    "side": "USSR",
    "card": "Socialist_Governments",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 3,
-   "side": "US",
-   "card": "Junta",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 3,
-   "side": "USSR",
-   "card": "Socialist_Governments",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -1903,6 +1770,25 @@
      3
     ]
    ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 3,
+   "side": "US",
+   "card": "Junta",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
    "vp_after": null,
    "raw": []
   },
@@ -2085,40 +1971,6 @@
    "mode": "ops",
    "ops_type": "coup",
    "coup": {
-    "country": "Colombia",
-    "roll": 2
-   },
-   "realignments": [],
-   "placements": [],
-   "removals": [
-    [
-     "Colombia",
-     "US",
-     3
-    ]
-   ],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [
-    [
-     "Colombia",
-     "US",
-     0
-    ]
-   ],
-   "vp_after": null,
-   "raw": [],
-   "ar": 3
-  },
-  {
-   "kind": "play",
-   "turn": 4,
-   "side": "USSR",
-   "card": "Che",
-   "mode": "ops",
-   "ops_type": "coup",
-   "coup": {
     "country": "Saharan_States",
     "roll": 2
    },
@@ -2132,6 +1984,11 @@
    ],
    "removals": [
     [
+     "Colombia",
+     "US",
+     3
+    ],
+    [
      "Saharan_States",
      "US",
      1
@@ -2141,6 +1998,11 @@
    "space": null,
    "event_first": null,
    "post": [
+    [
+     "Colombia",
+     "US",
+     0
+    ],
     [
      "Saharan_States",
      "US",
@@ -2153,7 +2015,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 3
   },
   {
    "kind": "play",
@@ -2505,7 +2368,7 @@
    "turn": 4,
    "side": "US",
    "card": "Grain_Sales_to_Soviets",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
@@ -2545,25 +2408,8 @@
      "roll": 4,
      "mod": -1
     }
-   ]
-  },
-  {
-   "kind": "play",
-   "turn": 4,
-   "side": "US",
-   "card": "Grain_Sales_to_Soviets",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
+   ],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -3145,42 +2991,6 @@
    "turn": 5,
    "side": "USSR",
    "card": "Muslim_Revolution",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 5,
-   "side": "US",
-   "card": "Missile_Envy",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 5,
-   "side": "USSR",
-   "card": "Muslim_Revolution",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3203,6 +3013,25 @@
     ]
    ],
    "vp_after": 10,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 5,
+   "side": "US",
+   "card": "Missile_Envy",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
    "raw": []
   },
   {
@@ -3770,102 +3599,6 @@
    "turn": 6,
    "side": "USSR",
    "card": "Liberation_Theology",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "headline",
-   "turn": 6,
-   "side": "US",
-   "card": "Colonial_Rear_Guards",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "US",
-   "card": "Colonial_Rear_Guards",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [
-    [
-     "Zaire",
-     "US",
-     1
-    ],
-    [
-     "Laos_Cambodia",
-     "US",
-     1
-    ],
-    [
-     "Thailand",
-     "US",
-     1
-    ],
-    [
-     "Vietnam",
-     "US",
-     1
-    ]
-   ],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [
-    [
-     "Zaire",
-     "US",
-     1
-    ],
-    [
-     "Laos_Cambodia",
-     "US",
-     1
-    ],
-    [
-     "Thailand",
-     "US",
-     1
-    ],
-    [
-     "Vietnam",
-     "US",
-     1
-    ]
-   ],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 6,
-   "side": "USSR",
-   "card": "Liberation_Theology",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -3909,7 +3642,69 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Colonial_Rear_Guards",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "Laos_Cambodia",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ],
+    [
+     "Vietnam",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "Laos_Cambodia",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ],
+    [
+     "Vietnam",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "play",
@@ -4450,25 +4245,6 @@
    "side": "USSR",
    "card": "Soviets_Shoot_Down_KAL_007",
    "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 1
-  },
-  {
-   "kind": "play",
-   "turn": 8,
-   "side": "USSR",
-   "card": "Soviets_Shoot_Down_KAL_007",
-   "mode": "ops",
    "ops_type": "coup",
    "coup": {
     "country": "Venezuela",
@@ -4505,7 +4281,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 1
   },
   {
    "kind": "play",
@@ -4953,43 +4730,6 @@
    "turn": 8,
    "side": "US",
    "card": "Star_Wars",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": [],
-   "ar": 6
-  },
-  {
-   "kind": "play",
-   "turn": 8,
-   "side": "US",
-   "card": "Glasnost",
-   "mode": "ops",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 8,
-   "side": "US",
-   "card": "Glasnost",
    "mode": "ops",
    "ops_type": "influence",
    "coup": null,
@@ -5023,7 +4763,8 @@
     ]
    ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "ar": 6
   },
   {
    "kind": "play",
@@ -5125,24 +4866,6 @@
    "turn": 8,
    "side": "US",
    "card": "Brush_War",
-   "mode": null,
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 8,
-   "side": "US",
-   "card": "Brush_War",
    "mode": "event",
    "ops_type": null,
    "coup": null,
@@ -5178,6 +4901,7 @@
    ],
    "vp_after": 9,
    "raw": [],
+   "_resolved": true,
    "war": [
     {
      "roll": 6,
@@ -5756,18 +5480,31 @@
    "turn": 9,
    "side": "USSR",
    "card": "Junta",
-   "mode": null,
+   "mode": "event",
    "ops_type": null,
    "coup": null,
    "realignments": [],
-   "placements": [],
+   "placements": [
+    [
+     "Argentina",
+     "USSR",
+     2
+    ]
+   ],
    "removals": [],
    "discards": [],
    "space": null,
    "event_first": null,
-   "post": [],
+   "post": [
+    [
+     "Argentina",
+     "USSR",
+     2
+    ]
+   ],
    "vp_after": null,
-   "raw": []
+   "raw": [],
+   "_resolved": true
   },
   {
    "kind": "headline",
@@ -5805,36 +5542,6 @@
      "Poland",
      "US",
      1
-    ]
-   ],
-   "vp_after": null,
-   "raw": []
-  },
-  {
-   "kind": "play",
-   "turn": 9,
-   "side": "USSR",
-   "card": "Junta",
-   "mode": "event",
-   "ops_type": null,
-   "coup": null,
-   "realignments": [],
-   "placements": [
-    [
-     "Argentina",
-     "USSR",
-     2
-    ]
-   ],
-   "removals": [],
-   "discards": [],
-   "space": null,
-   "event_first": null,
-   "post": [
-    [
-     "Argentina",
-     "USSR",
-     2
     ]
    ],
    "vp_after": null,
