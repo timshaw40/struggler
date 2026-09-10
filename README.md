@@ -87,6 +87,41 @@ python src/main.py --resume-game-log logs/2026-08-18_10-58_game.json \
 from its log see [docs/BOTS.md](docs/BOTS.md) for the resumption
 contract, including keeping that memory in sync if you trim the game log.
 
+## Play in the browser
+
+A local web UI: the map on screen, you click countries and cards, a bot
+thinks and answers.
+
+```sh
+pip install -e ".[ui]"    # PyMuPDF, used only for the asset step below
+python scripts/render_assets.py --map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"
+python scripts/serve_ui.py --us human --ussr mcts --seed 1
+```
+
+Open http://localhost:8000 (it opens itself). Seat flags mirror
+`src/main.py` — `--us`/`--ussr` take `human/first/random/greedy/mcts/llm`,
+and at most one seat may be `human`. The server resolves dice and bot
+moves itself; the browser only ever posts an index into the pending
+decision's options, so it is exactly as powerful as the engine allows.
+
+### Watch the bots play each other
+
+```sh
+python scripts/serve_ui.py --us mcts --ussr mcts --seed 2
+```
+
+Spectator mode: every page poll resolves one move server-side, so the
+game plays out in the browser at the bots' own pace (MCTS think time
+dominates). A Pause/Resume control sits where the decision panel would
+be. Use `--no-open` if you'd rather open the URL yourself.
+
+The board and card faces are **your own** images: `render_assets.py` reads
+your print-and-play PDFs and writes `ui/assets/board.png` plus one image
+per card under `ui/assets/cards/`. That folder is gitignored — user-supplied
+art is never committed — so a fresh clone falls back to plain text cards and
+no board. `scripts/calibrate_countries.py` derives the marker positions
+committed in `ui/countries.json` from the PDF's own label positions.
+
 ## Add a new bot
 
 Every player, human or bot, uses the same `Player` interface:

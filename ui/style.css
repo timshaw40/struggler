@@ -1,0 +1,258 @@
+:root {
+  --bg: #14161a;
+  --panel: #1d2129;
+  --panel2: #232833;
+  --text: #dfe3ea;
+  --muted: #8b93a3;
+  --us: #2f6fed;
+  --ussr: #d43a3a;
+  --gold: #ffd54a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#boardarea {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+#boardwrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+  position: relative;
+}
+
+#zoomer {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
+}
+
+#zoomer button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+#zoomer button:hover { border-color: var(--gold); }
+
+#boardwrap.noboard ~ #zoomer { display: none; }
+
+#boardbox {
+  position: relative;
+  margin: 0 auto;
+}
+
+#board {
+  display: block;
+}
+
+#markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 2px;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.marker span {
+  min-width: 22px;
+  padding: 1px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 6px;
+  color: #fff;
+}
+
+.marker .us { background: var(--us); }
+.marker .ussr { background: var(--ussr); }
+
+.marker.legal {
+  cursor: pointer;
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.marker.legal:hover { transform: translate(-50%, -50%) scale(1.25); }
+
+#panel {
+  width: 320px;
+  background: var(--panel);
+  padding: 12px 14px;
+  overflow-y: auto;
+  border-left: 1px solid #000;
+}
+
+#panel h1 { font-size: 18px; margin: 0 0 10px; }
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid #2a303c;
+}
+
+.kv b { font-weight: 600; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+
+.chip {
+  background: var(--panel2);
+  border: 1px solid #333b49;
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+#feed { margin-top: 12px; }
+
+.feedrow {
+  padding: 3px 0;
+  border-bottom: 1px solid #262c37;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.feedrow b { color: var(--text); font-weight: 600; }
+
+#playbar {
+  background: var(--panel);
+  border-top: 1px solid #000;
+  padding: 10px 14px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-height: 168px;
+}
+
+#hand { display: flex; gap: 8px; flex-wrap: wrap; max-width: 55%; }
+
+.card {
+  width: 92px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel2);
+  flex-shrink: 0;
+}
+
+.card img { width: 100%; display: block; }
+
+.card.playable {
+  outline: 2px solid var(--gold);
+  cursor: pointer;
+}
+
+.card.playable:hover { transform: translateY(-4px); }
+
+.card.textcard { padding: 6px; min-height: 60px; }
+
+.cardname { font-size: 12px; font-weight: 600; }
+
+.cardops { font-size: 11px; color: var(--muted); }
+
+.side-us .cardname { color: #7ea4f5; }
+.side-ussr .cardname { color: #e57373; }
+
+#decision { flex: 1; }
+
+#decision strong { font-size: 15px; }
+
+#decision .ctx { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; }
+
+#decision .options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 110px; overflow-y: auto; }
+
+#decision button {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#decision button:hover { border-color: var(--gold); }
+
+#winner {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+#winner:not([hidden]) { display: flex; }
+
+/* Big read-a-card preview: floats above the hovered card (positioned by
+ * JS from the card's rect) and is pointer-transparent, so sweeping the
+ * hand keeps hit-testing the 92px thumbs — a CSS-scaled hover image would
+ * cover its neighbors and swallow their hover. */
+#cardpreview {
+  position: fixed;
+  width: 368px;
+  z-index: 30;
+  pointer-events: none;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+  background: var(--panel2);
+  overflow: hidden;
+}
+
+#cardpreview[hidden] { display: none; }
+
+#cardpreview img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 824 / 1124;  /* all faces share it: height is known pre-load */
+}
+
+#cardpreview .cardname { font-size: 20px; padding: 10px 12px 2px; }
+
+#cardpreview .cardops { font-size: 15px; padding: 0 12px 12px; }
+
+#winner .cardbig {
+  background: var(--panel);
+  border: 1px solid #3a4252;
+  border-radius: 12px;
+  padding: 24px 36px;
+  font-size: 20px;
+  text-align: center;
+}
