@@ -102,25 +102,37 @@ main {
   z-index: 2;
 }
 
-.marker span {
-  /* Flex-center the digit inside a fixed-height chip: line-box sizing made
-   * nonzero values sit a pixel or two off versus their neighbor. All sizes
-   * are em so the chips scale with the board when zooming. */
+.marker .pip {
+  position: relative;
+  width: 1.9em;
+  height: 1.9em;
+}
+
+.marker .pip img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.marker .pip b {
+  /* The count sits centered over the face, VASSAL-style; the halo keeps
+   * it legible where it crosses the star. */
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.913em;
-  height: 1.739em;
-  padding: 0 0.435em;
   font-size: 1em;
+  font-weight: 700;
   line-height: 1;
-  font-weight: 600;
-  border-radius: 0.522em;
-  color: #fff;
+  color: #1c2330;
+  text-shadow: 0 0 0.25em rgba(255, 255, 255, 0.9);
 }
 
-.marker .us { background: var(--us); }
-.marker .ussr { background: var(--ussr); }
+.marker .pip.controlled b {
+  color: #fff;
+  text-shadow: 0 0 0.25em rgba(0, 0, 0, 0.9);
+}
 
 .marker.legal {
   cursor: pointer;

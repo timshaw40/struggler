@@ -6,23 +6,24 @@
 
 const META = {};    // card id -> {number, name, ops, side, scoring, event_summary, ...}
 const IMAGES = {};  // card id -> card-face filename under /assets/cards/ (optional)
-const POS = {};     // country id -> {x, y} fractions of the board image
+const POS = {};     // country id -> {x, y} board fractions, s stability
 
 const BOARD_W = 5100, BOARD_H = 3300;
 /* Region views: rectangles of the board image (box layout, as measured by
  * the asset installer). A region renders its slice across the viewport
- * width, so rects are padded to a similar native width (~1400px) — a
- * tight rect around a small region would magnify it absurdly on wide
- * screens. World fits the whole board. Overlapping bounds (Mid-East spans
- * Africa's latitude band) resolve by lookup order — smaller regions first. */
+ * width, so rects run a similar native width (~1600px) for consistent
+ * magnification — and each carries ~half a box of margin, so countries on
+ * the edge render whole instead of sliced at the scroll boundary. World
+ * fits the whole board. Overlapping bounds (Mid-East spans Africa's
+ * latitude band) resolve by lookup order — smaller regions first. */
 const REGIONS = {
   "World": [0, 0, BOARD_W, BOARD_H],
-  "C. America": [80, 1180, 1480, 2030],
-  "S. America": [500, 1750, 1950, 3050],
-  "Mid-East": [2480, 1000, 3930, 1900],
-  "Europe": [1620, 180, 3060, 1350],
-  "Asia": [3550, 900, 4990, 2750],
-  "Africa": [1700, 1300, 3170, 2850],
+  "C. America": [0, 1140, 1590, 2070],
+  "S. America": [390, 1710, 2060, 3090],
+  "Mid-East": [2370, 960, 4040, 1940],
+  "Europe": [1510, 140, 3170, 1390],
+  "Asia": [3440, 860, 5100, 2790],
+  "Africa": [1590, 1260, 3280, 2890],
 };
 let view = "Europe";
 
@@ -319,8 +320,8 @@ function renderBoard() {
     el.className = "marker" + (target !== null ? " legal" : "");
     el.style.left = pos.x * 100 + "%";
     el.style.top = pos.y * 100 + "%";
-    el.innerHTML =
-      `<span class="us">${inf.US}</span><span class="ussr">${inf.USSR}</span>`;
+    const ctrl = controlOf(cid, inf);
+    el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
     el.addEventListener("mouseleave", () => { countryTip.hidden = true; });
     if (target !== null) {
@@ -331,6 +332,27 @@ function renderBoard() {
     }
     host.append(el);
   }
+}
+
+/* Which side (if any) controls the country: influence margin >= stability —
+ * the engine's own rule (board.control), mirrored here so each pip shows
+ * the right face. Schematic fallback countries carry no stability: no
+ * faces there. */
+function controlOf(cid, inf) {
+  const s = POS[cid] && POS[cid].s;
+  if (!s) return null;
+  if (inf.US - inf.USSR >= s) return "US";
+  if (inf.USSR - inf.US >= s) return "USSR";
+  return null;
+}
+
+/* One side's influence pip: the VASSAL face (white while merely present,
+ * colored once the side controls) with our count over it, VASSAL-style. */
+function pip(side, n, controlled) {
+  const face = controlled ? "controlled" : "uncontrolled";
+  return `<span class="pip ${side}${controlled ? " controlled" : ""}">` +
+    `<img src="/assets/markers/${side}_${face}.svg" alt="">` +
+    `<b>${n}</b></span>`;
 }
 
 function kv(label, value) {
