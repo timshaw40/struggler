@@ -23,20 +23,24 @@ pip install -e ".[llm]"  # optional if you plan to use the llm
 
 ### Configure an LLM bot
 
-To use the llm bot, you need to set up your api keys. This implementation supports anthropic and openai.
+To use the llm bot, you need to set up your api keys. This implementation supports anthropic, openai, and local OpenAI-compatible servers (LM Studio, Ollama — no key needed).
 
 ```sh
 export ANTHROPIC_API_KEY=...   # for provider=anthropic
 export OPENAI_API_KEY=...      # for provider=openai (the default)
+# for provider=openai_compatible (e.g. LM Studio):
+export STRUGGLER_LLM_BASE_URL=http://192.168.10.91:1234/v1
 ```
 
 Provider and model are picked via environment variables, each overridable per run:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic` or `openai` — used for both the per-decision client and the once-per-turn planning client |
+| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic`, `openai`, or `openai_compatible` — used for both the per-decision client and the once-per-turn planning client |
 | `STRUGGLER_LLM_MODEL` | provider's built-in default | model for in-decision calls |
 | `STRUGGLER_LLM_PLAN_MODEL` | provider's built-in default | model for the turn-planning call (same provider as above) |
+| `STRUGGLER_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint for `openai_compatible` |
+| `STRUGGLER_LLM_API_KEY` | `local` | key sent to the local server (required by the SDK, ignored by the server) |
 
 ## Play a game
 

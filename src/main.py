@@ -29,8 +29,18 @@ from struggler.runner import play_game
 
 
 DEFAULT_LLM_PROVIDER = "openai"
-DEFAULT_LLM_MODELS = {"anthropic": "claude-opus-5", "openai": "gpt-5.6-luna"}
-DEFAULT_LLM_PLAN_MODELS = {"anthropic": "claude-opus-5", "openai": "gpt-5.6-sol"}
+DEFAULT_LLM_MODELS = {
+    "anthropic": "claude-opus-5",
+    "openai": "gpt-5.6-luna",
+    "openai_compatible": "qwen/qwen3.8-27b",
+}
+DEFAULT_LLM_PLAN_MODELS = {
+    "anthropic": "claude-opus-5",
+    "openai": "gpt-5.6-sol",
+    "openai_compatible": "qwen/qwen3.8-27b",
+}
+# Default base URL for local OpenAI-compatible servers (LM Studio, Ollama).
+DEFAULT_LOCAL_BASE_URL = "http://localhost:11434/v1"
 
 
 def build_llm_client(provider: str | None = None, model: str | None = None):
@@ -43,12 +53,22 @@ def build_llm_client(provider: str | None = None, model: str | None = None):
     provider = provider or os.environ.get("STRUGGLER_LLM_PROVIDER", DEFAULT_LLM_PROVIDER)
     if provider not in DEFAULT_LLM_MODELS:
         raise ValueError(
-            f"unknown STRUGGLER_LLM_PROVIDER: {provider!r} (expected 'anthropic' or 'openai')"
+            "unknown STRUGGLER_LLM_PROVIDER: "
+            f"{provider!r} (expected one of {sorted(DEFAULT_LLM_MODELS)})"
         )
     model = model or os.environ.get("STRUGGLER_LLM_MODEL") or DEFAULT_LLM_MODELS[provider]
     if provider == "anthropic":
         from struggler.bots.llm.anthropic_client import AnthropicClient
         client: LLMClient = AnthropicClient(model=model)
+    elif provider == "openai_compatible":
+        # Local servers (LM Studio, Ollama) speak the OpenAI chat API.
+        # The key is required by the SDK but ignored by the server.
+        from struggler.bots.llm.openai_client import OpenAIClient
+        client = OpenAIClient(
+            model=model,
+            api_key=os.environ.get("STRUGGLER_LLM_API_KEY", "local"),
+            base_url=os.environ.get("STRUGGLER_LLM_BASE_URL", DEFAULT_LOCAL_BASE_URL),
+        )
     else:
         from struggler.bots.llm.openai_client import OpenAIClient
         client = OpenAIClient(model=model)

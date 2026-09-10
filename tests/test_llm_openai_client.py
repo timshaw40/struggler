@@ -96,6 +96,54 @@ def test_complete_raises_llm_client_error_on_sdk_exception(monkeypatch):
         client.complete(request)
 
 
+def test_complete_falls_back_to_reasoning_content_when_content_empty(monkeypatch):
+    # Reasoning models behind LM Studio emit the schema-constrained answer
+    # as `reasoning_content` with an empty `content`.
+    client = _client()
+
+    def fake_create(**kwargs):
+        message = SimpleNamespace(content="", reasoning_content='{"a": 1}')
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=None)
+
+    monkeypatch.setattr(client._client.chat.completions, "create", fake_create)
+
+    request = LLMRequest(
+        system="s", messages=(), output=StructuredOutputSpec(name="x", description="y", schema={"type": "object"})
+    )
+    assert client.complete(request).structured == {"a": 1}
+
+
+def test_constructor_forwards_base_url(monkeypatch):
+    import openai
+
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    OpenAIClient(model="qwen/qwen3.8-27b", api_key="local", base_url="http://192.168.10.91:1234/v1")
+    assert captured == {"api_key": "local", "base_url": "http://192.168.10.91:1234/v1"}
+
+
+def test_build_llm_client_openai_compatible_uses_base_url(monkeypatch):
+    import openai
+    from main import build_llm_client
+
+    captured = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    monkeypatch.setenv("STRUGGLER_LLM_BASE_URL", "http://192.168.10.91:1234/v1")
+    client = build_llm_client(provider="openai_compatible")
+    assert client.model_name == "qwen/qwen3.8-27b"
+    assert captured["base_url"] == "http://192.168.10.91:1234/v1"
+
+
 def test_to_openai_strict_schema_marks_optional_payload_keys_nullable_and_required():
     transformed = _to_openai_strict_schema(PLAN_SCHEMA)
 

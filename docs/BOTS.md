@@ -254,7 +254,7 @@ built:
    `step()` needs to advance — the tier is prompt engineering
    (`prompt.py`, `rules_primer.py`) plus response parsing into a legal
    `Action` (`schema.py`), over a provider-agnostic `LLMClient` with
-   Anthropic and OpenAI adapters. The one new plumbing question this tier
+   Anthropic, OpenAI, and OpenAI-compatible adapters (local servers like LM Studio or Ollama via `STRUGGLER_LLM_BASE_URL`). The one new plumbing question this tier
    raised — do the model's reasoning turns count as "moves" in a replay
    log, or stay external to it — is answered in "Game-level logging"
    above: they stay external. What the model is actually shown, and the

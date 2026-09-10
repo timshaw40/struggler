@@ -33,7 +33,8 @@ class OpenAIClient:
     """
 
     def __init__(
-        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS
+        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS,
+        base_url: str | None = None,
     ) -> None:
         try:
             import openai
@@ -42,7 +43,14 @@ class OpenAIClient:
                 "OpenAIClient requires the 'openai' package: "
                 "pip install 'struggler[llm-openai]'"
             ) from exc
-        self._client = openai.OpenAI(**({"api_key": api_key} if api_key else {}))
+        kwargs: dict[str, Any] = {}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            # Local OpenAI-compatible servers (LM Studio, Ollama): the key
+            # is required by the SDK but ignored by the server.
+            kwargs["base_url"] = base_url
+        self._client = openai.OpenAI(**kwargs)
         self._model = model
         self._max_tokens = max_tokens
         self.provider_name = "openai"
@@ -71,8 +79,13 @@ class OpenAIClient:
         except Exception as exc:  # network/HTTP/SDK failure
             raise LLMClientError(str(exc)) from exc
 
-        text = response.choices[0].message.content if response.choices else None
-        if text is None:
+        message = response.choices[0].message if response.choices else None
+        text = message.content if message is not None else None
+        if not text and message is not None:
+            # Reasoning models behind LM Studio emit the schema-constrained
+            # answer as `reasoning_content` with an empty `content`.
+            text = getattr(message, "reasoning_content", None)
+        if not text:
             raise LLMClientError("OpenAI response carried no message content")
         try:
             structured = json.loads(text)
