@@ -241,3 +241,23 @@ def test_last_action_round_forces_a_held_scoring_card():
     engine._push_action_round_play(Side.US)
     cards = {a.payload["card"] for a in engine.legal_actions()}
     assert "Duck_and_Cover" in cards and "Asia_Scoring" in cards
+
+
+def test_headline_cards_revealed_simultaneously_before_resolution():
+    # 4.5-C: "Once both players have made their choice, they reveal their
+    # cards to each other simultaneously" — both headline cards are public
+    # before either event takes effect. The engine revealed each card only
+    # when its own resolution began, so a player resolving the first card's
+    # event was blind to the second.
+    from conftest import bare_engine as _bare
+    from conftest import headline_setup as _hs
+
+    engine = _bare()
+    _hs(engine, "Summit", "Duck_and_Cover")
+    engine.step(engine.legal_actions()[0])  # USSR picks (still secret)
+    assert engine.observe(Side.USSR).headline_revealed == {}
+    engine.step(engine.legal_actions()[0])  # US picks; both now public
+    for side in (Side.US, Side.USSR):
+        assert dict(engine.observe(side).headline_revealed) == {
+            "USSR": "Summit", "US": "Duck_and_Cover",
+        }

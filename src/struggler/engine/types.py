@@ -157,9 +157,10 @@ class Observation:
     currently in force, e.g. NATO or Containment) — every value ever
     stored in them is a fact both players already know once the event
     that set it has resolved, so surfacing them here is not a leak. The
-    one exception, `Engine._headline` (each side's secret headline pick
-    before both are revealed), is deliberately never exposed and stays
-    off this dataclass.
+    in-progress secret headline pick (each side's choice before BOTH have
+    picked) stays off this dataclass; `headline_revealed` carries the two
+    cards only once both are picked — 4.5-C reveals them simultaneously
+    before either event takes effect.
     """
 
     side: Side
@@ -186,3 +187,4 @@ class Observation:
     military_ops: Mapping[str, int]
     turn_effects: Mapping[str, Any]
     game_effects: Mapping[str, Any]
+    headline_revealed: Mapping[str, str]

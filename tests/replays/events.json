@@ -5661,6 +5661,7 @@
         },
         "headline_resolving": false,
         "headline_pending": [],
+        "headline_revealed": {},
         "events_enabled": true,
         "turn_effects": {},
         "game_effects": {
@@ -6761,6 +6762,7 @@
         },
         "headline_resolving": false,
         "headline_pending": [],
+        "headline_revealed": {},
         "events_enabled": true,
         "turn_effects": {},
         "game_effects": {
@@ -7907,6 +7909,7 @@
         },
         "headline_resolving": false,
         "headline_pending": [],
+        "headline_revealed": {},
         "events_enabled": true,
         "turn_effects": {},
         "game_effects": {

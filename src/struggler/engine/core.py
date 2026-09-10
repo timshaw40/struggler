@@ -94,6 +94,11 @@ class Engine:
         # ([side, cid] pairs, higher Ops first) is being worked through.
         self._headline_resolving = False
         self._headline_pending: list[list[str]] = []
+        # 4.5-C: once BOTH headline cards are picked they are revealed
+        # simultaneously, before either event takes effect. Held between the
+        # freeze and the start of the action rounds; empty while picks are
+        # still secret.
+        self._headline_revealed: dict[str, str] = {}
 
         # -- Card-event state --------------------------------------------
         # `events_enabled` gates the whole event layer: with it False every
@@ -196,6 +201,7 @@ class Engine:
             # and is never surfaced here.
             turn_effects=copy.deepcopy(self.turn_effects),
             game_effects=copy.deepcopy(self.game_effects),
+            headline_revealed=dict(self._headline_revealed),
         )
 
     @property
@@ -239,6 +245,7 @@ class Engine:
             "headline": dict(self._headline),
             "headline_resolving": self._headline_resolving,
             "headline_pending": [list(pair) for pair in self._headline_pending],
+            "headline_revealed": dict(self._headline_revealed),
             "events_enabled": self.events_enabled,
             "turn_effects": dict(self.turn_effects),
             "game_effects": dict(self.game_effects),
@@ -290,6 +297,7 @@ class Engine:
         engine._headline = dict(data.get("headline", {"US": None, "USSR": None}))
         engine._headline_resolving = data.get("headline_resolving", False)
         engine._headline_pending = [list(pair) for pair in data.get("headline_pending", [])]
+        engine._headline_revealed = dict(data.get("headline_revealed", {}))
         engine.events_enabled = data.get("events_enabled", False)
         engine.turn_effects = dict(data.get("turn_effects", {}))
         engine.game_effects = dict(data.get("game_effects", {}))
@@ -462,6 +470,7 @@ class Engine:
                 order = self._headline_resolution_order()
                 order = self._apply_defectors_headline(order)
                 self._headline_pending = order
+                self._headline_revealed = {s: c for s, c in order}
                 self._headline = {"US": None, "USSR": None}
                 self._headline_resolving = True
             if self._headline_pending:
@@ -634,6 +643,7 @@ class Engine:
         self._ars_played = 0
         self.action_round = 1
         self.sat_out = {"US": False, "USSR": False}
+        self._headline_revealed = {}
 
     def _extra_action_round_sides(self) -> tuple[Side, ...]:
         """Sides granted extra Action Rounds this turn, beyond the normal
