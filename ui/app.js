@@ -544,13 +544,21 @@ function renderPanel() {
   title.textContent = "History";
   title.style.fontSize = "13px";
   feed.append(title);
+  if (busy) {
+    const wait = document.createElement("div");
+    wait.className = "feedrow wait";
+    wait.textContent = "Calculating…";
+    feed.append(wait);
+  }
   for (const e of state.history.slice().reverse().slice(0, 25)) {
     const row = document.createElement("div");
     row.className = "feedrow";
     const what = e.payload.card ? cardName(e.payload.card)
       : e.country ? pretty(e.country)
       : pretty(Object.values(e.payload)[0] ?? e.kind);
-    row.innerHTML = `<b>${e.actor}</b> ${pretty(e.kind)} · ${what} · T${e.turn} R${e.action_round}`;
+    const side = e.actor === "USSR" ? "ussr" : "us";
+    row.innerHTML = `<span>${pretty(e.kind)} · ${what} · T${e.turn} R${e.action_round}</span>`
+      + `<b class="${side}">${e.actor}</b>`;
     feed.append(row);
   }
 }
