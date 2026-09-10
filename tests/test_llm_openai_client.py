@@ -140,7 +140,7 @@ def test_build_llm_client_openai_compatible_uses_base_url(monkeypatch):
     monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
     monkeypatch.setenv("STRUGGLER_LLM_BASE_URL", "http://192.168.10.91:1234/v1")
     client = build_llm_client(provider="openai_compatible")
-    assert client.model_name == "qwen/qwen3.8-27b"
+    assert client.model_name == "qwen3.6-35b-a3b-uncensored-genesis-hermes-v7"
     assert captured["base_url"] == "http://192.168.10.91:1234/v1"
 
 

@@ -32,12 +32,12 @@ DEFAULT_LLM_PROVIDER = "openai"
 DEFAULT_LLM_MODELS = {
     "anthropic": "claude-opus-5",
     "openai": "gpt-5.6-luna",
-    "openai_compatible": "qwen/qwen3.8-27b",
+    "openai_compatible": "qwen3.6-35b-a3b-uncensored-genesis-hermes-v7",
 }
 DEFAULT_LLM_PLAN_MODELS = {
     "anthropic": "claude-opus-5",
     "openai": "gpt-5.6-sol",
-    "openai_compatible": "qwen/qwen3.8-27b",
+    "openai_compatible": "qwen3.6-35b-a3b-uncensored-genesis-hermes-v7",
 }
 # Default base URL for local OpenAI-compatible servers (LM Studio, Ollama).
 DEFAULT_LOCAL_BASE_URL = "http://localhost:11434/v1"
