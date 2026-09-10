@@ -6,7 +6,7 @@
 
 const META = {};    // card id -> {number, name, ops, side, scoring, event_summary, ...}
 const IMAGES = {};  // card id -> card-face filename under /assets/cards/ (optional)
-const POS = {};     // country id -> {x, y} board fractions, s stability
+const POS = {};     // country id -> {x, y} box top-left fractions, w/h px, s stability
 
 const BOARD_W = 5100, BOARD_H = 3300;
 /* Region views: rectangles of the board image (box layout, as measured by
@@ -172,7 +172,7 @@ function jumpToTargets(d) {
   const pts = d.options
     .map((o) => POS[o.payload.country])
     .filter(Boolean)
-    .map((p) => [p.x * BOARD_W, p.y * BOARD_H]);
+    .map((p) => [p.x * BOARD_W + (p.w || 0) / 2, p.y * BOARD_H + (p.h || 0) / 2]);
   if (!pts.length) return;
   lastJump = key;
   const inside = (reg, x, y) =>
@@ -300,8 +300,8 @@ function flyPip(cid, side) {
   const p = POS[cid];
   if (!p) return;
   const box = $("#boardbox").getBoundingClientRect();
-  const x = box.left + p.x * box.width;
-  const y = box.top + p.y * box.height;
+  const x = box.left + (p.x + (p.w || 0) / 2 / BOARD_W) * box.width;
+  const y = box.top + (p.y + 0.62 * (p.h || 0) / BOARD_H) * box.height;
   const img = document.createElement("img");
   img.className = "flypip";
   img.src = `/assets/markers/${side.toLowerCase()}_uncontrolled.svg`;
@@ -412,14 +412,14 @@ function renderBoard() {
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     if (pos.w && pos.h) {
-      // Marker IS the country rectangle: gold outline wraps the whole
-      // box, US pip the left oval, USSR the right. 32px = name strip.
+      // Marker IS the country rectangle (installer top-left + size).
+      // Pips share one size (body height), not the noisy detected width.
       el.classList.add("boxed");
-      el.style.left = (pos.x - pos.w / 2 / BOARD_W) * 100 + "%";
-      el.style.top = (pos.y - (pos.h + 32) / 2 / BOARD_H) * 100 + "%";
+      el.style.left = pos.x * 100 + "%";
+      el.style.top = pos.y * 100 + "%";
       el.style.width = pos.w / BOARD_W * 100 + "%";
       el.style.height = pos.h / BOARD_H * 100 + "%";
-      el.style.fontSize = `calc(var(--boardw) * ${(pos.w / BOARD_W * 0.42).toFixed(4)})`;
+      el.style.fontSize = "calc(var(--boardw) * 0.0238)";
       el.style.setProperty("--strip", (32 / pos.h * 100).toFixed(1) + "%");
     } else {
       el.style.left = pos.x * 100 + "%";
