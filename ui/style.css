@@ -156,24 +156,20 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1em;
+  font-size: calc(1em + 2px);
   font-weight: 700;
   line-height: 1;
   color: #1c2330;
-  text-shadow: 0 0 0.25em rgba(255, 255, 255, 0.9);
+  -webkit-text-stroke: 1.5px #fff;
+  paint-order: stroke fill;
+  text-shadow: none;
 }
 
-.marker.boxed .pip b { font-size: 58cqmin; }
+.marker.boxed .pip b { font-size: calc(58cqmin + 2px); }
 
-.marker .pip.controlled b {
-  color: #fff;
-  text-shadow: 0 0 0.25em rgba(0, 0, 0, 0.9);
-}
+.marker .pip.controlled b { color: #fff; }
 
-.marker .pip.us b {
-  color: #1c2330;
-  text-shadow: 0 0 0.25em rgba(255, 255, 255, 0.9);
-}
+.marker .pip.us b { color: #1c2330; }
 
 .marker.legal {
   cursor: pointer;
