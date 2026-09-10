@@ -218,7 +218,7 @@ def ensure_board(board_jpg: Path, out_board: Path) -> None:
     print(f"board: {img.size[0]}x{img.size[1]} -> {out_board}")
 
 
-def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[int, int]] | None:
+def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[int, int], int, bool] | None:
     """Locate a country box around an anchor point.
 
     The map draws every country box with a solid black top border spanning
@@ -226,9 +226,10 @@ def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[in
     over them break the vertical runs). Scan upward from the anchor for the
     closest row with a long dark run containing it (map connection lines and
     labels are diagonal/short, so they never qualify). Box widths vary per
-    country (~180-220px). Returns ((left, top, right, strip_bottom), center)
-    — the header-strip rect for the tooltip crop, and the box center as the
-    marker anchor.
+    country (~180-220px). Returns (strip rect, body center, box height,
+    bottom border found) — the header-strip rect for the tooltip crop,
+    the influence-columns center as the marker anchor, and the full box
+    height so markers scale to the box.
     """
     win_w, win_h = 600, 400
     x0, y0 = cx - win_w // 2, cy - win_h // 2
@@ -318,58 +319,80 @@ def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[in
         left = run[0]
     height = bottom - y if bottom is not None else 34  # strip design height
     strip_bottom = y + min(max(height, 30), 46)
-    # Box bottom border: the next spanning line below the strip separator —
-    # the body (influence columns) is ~30px, so the border lands within
-    # ~45px. The midpoint of top and bottom borders is the box center, the
-    # marker anchor. Without it the strip bottom stands in: every box's
-    # body is about as tall as its strip, so the strip bottom lands close
-    # to center anyway.
+    # Box bottom border: the next spanning line below the strip separator
+    # with roughly the strip's own left edge and length. Box bodies run
+    # ~98px, Romania's 124 — the scan reaches +140. The shape match keeps
+    # a neighbor row's top border (different x-extent) from qualifying,
+    # and the true border comes first anyway. The border's left end must
+    # land near the strip's left edge by either estimate — the raw top
+    # run (which can bridge into a neighbor) or the column-detected edge
+    # (which can stop wide on map clutter) — and match the raw run
+    # length (not the badge-trimmed right). The midpoint of top and
+    # bottom borders is the box center, the marker anchor. Without it
+    # the strip bottom stands in — ~33px above center, the old
+    # riding-high offset.
     box_bottom = None
     if bottom is not None:
-        box_bottom = next((by for by in range(bottom + 8, bottom + 46)
+        box_bottom = next((by for by in range(bottom + 8, bottom + 141)
                            if (br := spanning_run(by)) is not None
-                           and br[0] <= ax < br[1]), None)
-    center_y = (y + box_bottom) // 2 if box_bottom is not None else strip_bottom
+                           and br[0] <= ax < br[1]
+                           and min(abs(br[0] - run[0]), abs(br[0] - left)) <= 40
+                           and abs((br[1] - br[0]) - (run[1] - run[0])) <= 60), None)
+    # The marker anchor is the BODY center (strip bottom to box bottom):
+    # VASSAL counters sit in the influence columns below the name strip,
+    # and centering pips on the whole box lets tall pips swallow the
+    # strip and badge.
+    if box_bottom is not None:
+        box_h = box_bottom - y
+        center_y = (strip_bottom + box_bottom) // 2
+    else:
+        box_h = 2 * (strip_bottom - y)
+        center_y = strip_bottom + (strip_bottom - y) // 2
     return ((x0 + left, y0 + y, x0 + right, y0 + strip_bottom),
-            (x0 + (left + right) // 2, y0 + center_y))
+            (x0 + (left + right) // 2, y0 + center_y), box_h,
+            box_bottom is not None)
 
 
 # Two boxes defeat the detector and carry hand-measured data: Benelux
 # (W. Germany's row-aligned box 25px away bridges into its top-border run)
 # and Chinese_Civil_War (a full red event panel, not a flag|name|badge
 # strip — cropped whole so the title stays readable in the tooltip).
-# Each entry: header-strip rect, box center.
+# Each entry: header-strip rect, box center, box height.
 HAND_TWEAK = {
-    "Benelux": ((1856, 693, 2059, 726), (1957, 725)),
-    "Chinese_Civil_War": ((4084, 1134, 4339, 1352), (4211, 1243)),
+    "Benelux": ((1856, 693, 2059, 726), (1957, 775), 131),
+    "Chinese_Civil_War": ((4084, 1134, 4339, 1352), (4211, 1243), 218),
 }
 
 
-def install_boxes(board_png: Path) -> dict[str, tuple[int, int]]:
+def install_boxes(board_png: Path) -> dict[str, tuple[tuple[int, int], int]]:
     """Detect every country box once; write the header-strip crops for the
-    hover tooltip and return each box center for countries.json."""
+    hover tooltip and return each (box center, box height)."""
     from PIL import Image
 
     img = Image.open(board_png)
     out_dir = OUT / "headers"
     out_dir.mkdir(parents=True, exist_ok=True)
-    centers: dict[str, tuple[int, int]] = {}
-    missing = []
+    found_boxes: dict[str, tuple[tuple[int, int], int]] = {}
+    missing, fallback = [], []
     for cid, (cx, cy) in VASSAL_COUNTRIES.items():
         if cid in HAND_TWEAK:
-            rect, center = HAND_TWEAK[cid]
+            rect, center, h = HAND_TWEAK[cid]
         else:
             found = find_box(img, cx, cy)
             if found is None:
                 missing.append(cid)
                 continue
-            rect, center = found
+            (rect, center, h, ok) = found
+            if not ok:
+                fallback.append(cid)
         img.crop(rect).save(out_dir / f"{cid}.png")
-        centers[cid] = center
+        found_boxes[cid] = (center, h)
     if missing:
         print(f"warning: no box found for {missing}", file=sys.stderr)
-    print(f"headers: {len(centers)} -> {out_dir}")
-    return centers
+    if fallback:
+        print(f"note: tall bodies: {fallback}")
+    print(f"headers: {len(found_boxes)} -> {out_dir}")
+    return found_boxes
 
 
 # VASSAL influence faces, two-sided per Tim's ask: the white face while a
@@ -461,16 +484,16 @@ def main() -> None:
         manifest[meta["id"]] = name
     (OUT / "cards.json").write_text(json.dumps(manifest, indent=1) + "\n")
     ensure_board(board_jpg, OUT / "board.png")
-    centers = install_boxes(OUT / "board.png")
+    boxes = install_boxes(OUT / "board.png")
     install_markers()
     stability = load_stability()
     countries = {
         cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4),
-              "s": stability[cid]}
-        for cid, (x, y) in centers.items()
+              "s": stability[cid], "h": h}
+        for cid, ((x, y), h) in boxes.items()
     }
     (OUT / "countries.json").write_text(json.dumps(countries, indent=1, sort_keys=True) + "\n")
-    print(f"countries: {len(countries)} box centers -> {OUT / 'countries.json'}")
+    print(f"countries: {len(countries)} box centers+heights -> {OUT / 'countries.json'}")
     print(f"cards: {len(manifest)} -> {out_cards}")
 
 

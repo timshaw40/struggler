@@ -44,3 +44,4 @@ def test_full_install_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     countries = json.loads((tmp_path / "countries.json").read_text())
     assert len(countries) == 85  # every map country gets an anchor
     assert all(0 <= v["x"] <= 1 and 0 <= v["y"] <= 1 for v in countries.values())
+    assert all(v["s"] >= 1 and v["h"] > 0 for v in countries.values())
