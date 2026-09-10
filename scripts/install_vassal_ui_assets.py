@@ -3,8 +3,8 @@
 
 Maps VASSAL TNRnTS-NN.svg card numbers to engine card ids via cards.json /
 load_cards(), writes board.png + cards/{id}.svg + cards.json + countries.json
-(VASSAL-calibrated marker positions; the browser prefers this over the
-schematic ui/countries.json when present).
+(country-box centers detected off the board; the browser prefers this over
+the schematic ui/countries.json when present).
 
 The TNRnTS faces leave the top banner empty (the VASSAL module overlays the
 ops value / side stripe at runtime), so the install injects that banner —
@@ -29,9 +29,9 @@ OUT = ROOT / "ui" / "assets"
 VMOD_URL = "https://obj.vassalengine.org/images/3/31/Twilight-Struggle-3.2.vmod"
 VMOD_SHA256 = "b5b0f4cfc0f37c6bbbb26d22aaa69acab251bb3fd3b07aeb18679b901e68a24e"
 
-# Marker anchor points, measured by hand on TS Map-11.jpg (5100x3300) as the
-# center of each country's placement box (name strip + marker area). The UI
-# positions influence/control markers at these fractions of the board image.
+# Detection anchors: one point inside each country's placement box on TS
+# Map-11.jpg (5100x3300). find_box() derives the actual box rect and center
+# from the map around these; they are not the marker positions themselves.
 BOARD_W, BOARD_H = 5100, 3300
 VASSAL_COUNTRIES: dict[str, tuple[int, int]] = {
     # North America
@@ -216,15 +216,17 @@ def ensure_board(board_jpg: Path, out_board: Path) -> None:
     print(f"board: {img.size[0]}x{img.size[1]} -> {out_board}")
 
 
-def find_box(img, cx: int, cy: int) -> tuple[int, int, int] | None:
-    """Locate the country-box top border around an anchor point.
+def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[int, int]] | None:
+    """Locate a country box around an anchor point.
 
     The map draws every country box with a solid black top border spanning
     the full box width; side borders can't be used (flags/badges painted
     over them break the vertical runs). Scan upward from the anchor for the
     closest row with a long dark run containing it (map connection lines and
     labels are diagonal/short, so they never qualify). Box widths vary per
-    country (~180-220px). Returns (left, top, right) or None.
+    country (~180-220px). Returns ((left, top, right, strip_bottom), center)
+    — the header-strip rect for the tooltip crop, and the box center as the
+    marker anchor.
     """
     win_w, win_h = 600, 400
     x0, y0 = cx - win_w // 2, cy - win_h // 2
@@ -294,14 +296,6 @@ def find_box(img, cx: int, cy: int) -> tuple[int, int, int] | None:
 
     # Left border: scan leftward from the run start; the flag often hides
     # the border on the top row, but the border column is dark nearly all
-    # the way down the body (map lines are thin/diagonal, so they aren't).
-    left = None
-    for x in range(run[0] - 1, max(run[0] - 70, -1), -1):
-        if sum(dark(x, y + 36 + 4 * i) for i in range(15)) >= 12:
-            left = x
-            break
-    # Left border: scan leftward from the run start; the flag often hides
-    # the border on the top row, but the border column is dark nearly all
     # the way down the body (terrain shading and map lines don't hold a
     # column for the full body height). Reach capped ~52px so tight
     # neighbors aren't mistaken for the border.
@@ -320,40 +314,60 @@ def find_box(img, cx: int, cy: int) -> tuple[int, int, int] | None:
             break
     if left is None:
         left = run[0]
+    height = bottom - y if bottom is not None else 34  # strip design height
+    strip_bottom = y + min(max(height, 30), 46)
+    # Box bottom border: the next spanning line below the strip separator —
+    # the body (influence columns) is ~30px, so the border lands within
+    # ~45px. The midpoint of top and bottom borders is the box center, the
+    # marker anchor. Without it the strip bottom stands in: every box's
+    # body is about as tall as its strip, so the strip bottom lands close
+    # to center anyway.
+    box_bottom = None
     if bottom is not None:
-        height = bottom - y
-    else:
-        height = 34  # no separator line found; strip design height
-    return (x0 + left, y0 + y, x0 + right, y0 + y + min(max(height, 30), 46))
+        box_bottom = next((by for by in range(bottom + 8, bottom + 46)
+                           if (br := spanning_run(by)) is not None
+                           and br[0] <= ax < br[1]), None)
+    center_y = (y + box_bottom) // 2 if box_bottom is not None else strip_bottom
+    return ((x0 + left, y0 + y, x0 + right, y0 + strip_bottom),
+            (x0 + (left + right) // 2, y0 + center_y))
 
 
-def crop_headers(board_png: Path, out_dir: Path) -> int:
-    """Crop each country's header strip (flag | name | stability badge) from
-    the board for the hover tooltip — an amplified copy of the map's own
-    country-box header, exactly as printed."""
+# Two boxes defeat the detector and carry hand-measured data: Benelux
+# (W. Germany's row-aligned box 25px away bridges into its top-border run)
+# and Chinese_Civil_War (a full red event panel, not a flag|name|badge
+# strip — cropped whole so the title stays readable in the tooltip).
+# Each entry: header-strip rect, box center.
+HAND_TWEAK = {
+    "Benelux": ((1856, 693, 2059, 726), (1957, 725)),
+    "Chinese_Civil_War": ((4084, 1134, 4339, 1352), (4211, 1243)),
+}
+
+
+def install_boxes(board_png: Path) -> dict[str, tuple[int, int]]:
+    """Detect every country box once; write the header-strip crops for the
+    hover tooltip and return each box center for countries.json."""
     from PIL import Image
 
-    # Two boxes defeat the detector: Benelux (W. Germany's row-aligned box
-    # 25px away bridges into its top-border run) and Chinese_Civil_War (a
-    # full red event panel, not a flag|name|badge strip — cropped whole so
-    # the title stays readable in the tooltip). Measured by hand.
-    HAND_TWEAK = {
-        "Benelux": (1856, 693, 2059, 726),
-        "Chinese_Civil_War": (4084, 1134, 4339, 1352),
-    }
-
     img = Image.open(board_png)
+    out_dir = OUT / "headers"
     out_dir.mkdir(parents=True, exist_ok=True)
+    centers: dict[str, tuple[int, int]] = {}
     missing = []
     for cid, (cx, cy) in VASSAL_COUNTRIES.items():
-        box = HAND_TWEAK.get(cid) or find_box(img, cx, cy)
-        if box is None:
-            missing.append(cid)
-            continue
-        img.crop(box).save(out_dir / f"{cid}.png")
+        if cid in HAND_TWEAK:
+            rect, center = HAND_TWEAK[cid]
+        else:
+            found = find_box(img, cx, cy)
+            if found is None:
+                missing.append(cid)
+                continue
+            rect, center = found
+        img.crop(rect).save(out_dir / f"{cid}.png")
+        centers[cid] = center
     if missing:
         print(f"warning: no box found for {missing}", file=sys.stderr)
-    return len(VASSAL_COUNTRIES) - len(missing)
+    print(f"headers: {len(centers)} -> {out_dir}")
+    return centers
 
 
 def fetch_board_if_missing(board_jpg: Path) -> None:
@@ -408,13 +422,13 @@ def main() -> None:
         manifest[meta["id"]] = name
     (OUT / "cards.json").write_text(json.dumps(manifest, indent=1) + "\n")
     ensure_board(board_jpg, OUT / "board.png")
-    headers = crop_headers(OUT / "board.png", OUT / "headers")
-    print(f"headers: {headers} -> {OUT / 'headers'}")
+    centers = install_boxes(OUT / "board.png")
     countries = {
         cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4)}
-        for cid, (x, y) in VASSAL_COUNTRIES.items()
+        for cid, (x, y) in centers.items()
     }
     (OUT / "countries.json").write_text(json.dumps(countries, indent=1, sort_keys=True) + "\n")
+    print(f"countries: {len(countries)} box centers -> {OUT / 'countries.json'}")
     print(f"cards: {len(manifest)} -> {out_cards}")
 
 
