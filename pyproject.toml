@@ -12,7 +12,7 @@ license = { text = "MIT" }
 
 [project.optional-dependencies]
 test = ["pytest", "hypothesis"]
-ui = ["pymupdf>=1.24"]
+ui = ["pymupdf>=1.24", "pillow>=10"]
 llm-anthropic = ["anthropic>=0.68"]
 llm-openai = ["openai>=1.0"]
 llm = ["anthropic>=0.68", "openai>=1.0"]
