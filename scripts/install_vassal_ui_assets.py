@@ -6,14 +6,18 @@ load_cards(), writes board.png + cards/{id}.svg + cards.json + countries.json
 (VASSAL-calibrated marker positions; the browser prefers this over the
 schematic ui/countries.json when present).
 
-Requires: Pillow (for board JPG→PNG). Card SVGs are copied as-is.
+The TNRnTS faces leave the top banner empty (the VASSAL module overlays the
+ops value / side stripe at runtime), so the install injects that banner —
+side color + name, plus the ops value except on scoring cards — into each
+card SVG as it is written.
+
+Requires: Pillow (for board JPG→PNG).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 import urllib.request
 import zipfile
@@ -148,21 +152,58 @@ def assemble_board_from_b64_parts(board_jpg: Path) -> bool:
 
 
 
-def load_number_to_id() -> dict[int, str]:
+def load_number_to_meta() -> dict[int, dict]:
+    """card number -> {id, side, ops, scoring}, for banner injection."""
     try:
         from struggler.engine.cards import load_cards
 
-        return {card.number: cid for cid, card in load_cards().items()}
+        return {
+            card.number: {
+                "id": cid,
+                "side": card.side.value,
+                "ops": card.ops,
+                "scoring": card.scoring,
+            }
+            for cid, card in load_cards().items()
+        }
     except Exception:
         raw = json.loads((ROOT / "src" / "struggler" / "data" / "cards.json").read_text())
         cards = raw.get("cards", raw) if isinstance(raw, dict) else {}
-        out: dict[int, str] = {}
+        out: dict[int, dict] = {}
         for cid, card in cards.items():
             if cid == "_schema" or not isinstance(card, dict):
                 continue
             if "number" in card:
-                out[int(card["number"])] = cid
+                out[int(card["number"])] = {
+                    "id": cid,
+                    "side": card["side"],
+                    "ops": card["ops"],
+                    "scoring": card["scoring"],
+                }
         return out
+
+
+# Twilight Struggle banners: US blue, USSR red, neutral purple. Photos on the
+# TNRnTS faces start at y>=88, so a 44px header covers nothing.
+BANNERS = {
+    "US": ("UNITED STATES", "#2e5fa3"),
+    "USSR": ("SOVIET UNION", "#b3282d"),
+    "NEUTRAL": ("NEUTRAL", "#825aa5"),
+}
+
+
+def with_banner(svg: str, meta: dict) -> str:
+    label, color = ("SCORING", "#825aa5") if meta["scoring"] else BANNERS[meta["side"]]
+    ops = "" if meta["scoring"] else (
+        f'<text x="26" y="33" style="font-size:30px;font-weight:bold;'
+        f'font-family:Georgia;fill:#ffffff">{meta["ops"]}</text>'
+    )
+    banner = (
+        f'<g id="banner"><rect width="388" height="44" style="fill:{color}"/>'
+        f'<text x="194" y="31" text-anchor="middle" style="font-size:20px;'
+        f'font-weight:bold;font-family:Georgia;fill:#ffffff">{label}</text>{ops}</g>'
+    )
+    return svg.replace("</svg>", banner + "</svg>")
 
 
 def ensure_board(board_jpg: Path, out_board: Path) -> None:
@@ -173,6 +214,146 @@ def ensure_board(board_jpg: Path, out_board: Path) -> None:
     img = Image.open(board_jpg)
     img.save(out_board, format="PNG")
     print(f"board: {img.size[0]}x{img.size[1]} -> {out_board}")
+
+
+def find_box(img, cx: int, cy: int) -> tuple[int, int, int] | None:
+    """Locate the country-box top border around an anchor point.
+
+    The map draws every country box with a solid black top border spanning
+    the full box width; side borders can't be used (flags/badges painted
+    over them break the vertical runs). Scan upward from the anchor for the
+    closest row with a long dark run containing it (map connection lines and
+    labels are diagonal/short, so they never qualify). Box widths vary per
+    country (~180-220px). Returns (left, top, right) or None.
+    """
+    win_w, win_h = 600, 400
+    x0, y0 = cx - win_w // 2, cy - win_h // 2
+    px = img.convert("RGB").crop((x0, y0, x0 + win_w, y0 + win_h)).load()
+    ax, ay = cx - x0, cy - y0
+
+    def dark(x: int, y: int) -> bool:
+        r, g, b = px[x, y]
+        # Near-black and unsaturated: the 2px box border is JPEG-softened
+        # (~(90,92,68) at worst), while dark-red map terrain is saturated.
+        return r < 110 and g < 110 and b < 110 and max(r, g, b) - min(r, g, b) < 70
+
+    def row_runs(y: int) -> list[tuple[int, int]]:
+        """Dark runs >= 150 px on one row; gaps <= 12 px (JPEG noise) bridge;
+        runs cap at 280 px."""
+        runs, start, gap = [], None, 0
+        for x in range(win_w):
+            if dark(x, y):
+                if start is None:
+                    start = x
+                gap = 0
+            elif start is not None:
+                gap += 1
+                if gap > 12:
+                    end = min(x - gap, start + 280)
+                    if end - start >= 150:
+                        runs.append((start, end))
+                    start, gap = None, 0
+        if start is not None:
+            end = min(win_w - gap, start + 280)
+            if end - start >= 150:
+                runs.append((start, end))
+        return runs
+
+    def spanning_run(y: int) -> tuple[int, int] | None:
+        """The long dark run containing the anchor on row y."""
+        hits = [r for r in row_runs(y) if r[0] <= ax < r[1]]
+        return hits[-1] if hits else None
+
+    hit = next(((y, r) for y in range(ay - 1, -1, -1)
+                if (r := spanning_run(y)) is not None), None)
+    if hit is None:
+        return None
+    y, run = hit
+    bottom = None
+    sep = next((y + k for k in range(1, 37) if spanning_run(y + k)), None)
+    if sep is not None and sep - y <= 36:
+        # Anchor sat inside the strip (or the separator lies just below the
+        # first hit): that line is the strip | body separator.
+        bottom = sep
+    else:
+        # First hit is the strip's bottom border; the box top is the highest
+        # paired spanning line up to ~44px above (the name label's own top
+        # border pairs too, a few px lower, hence descending order).
+        for offset in range(44, 23, -1):
+            if y - offset >= 0 and (up := spanning_run(y - offset)) is not None:
+                run, y, bottom = up, y - offset, y
+                break
+    def strip_like(x: int, y: int) -> bool:
+        """Cream label bg, purple label bg, red or yellow stability badge —
+        i.e. colors that only occur inside the header strip."""
+        r, g, b = px[x, y]
+        return ((r > 235 and g > 235 and b > 170)
+                or (80 < r < 170 and 50 < g < 120 and 140 < b < 210)
+                or (r > 170 and g < 70 and b < 70)
+                or (r > 220 and g > 180 and b < 90))
+
+    # Left border: scan leftward from the run start; the flag often hides
+    # the border on the top row, but the border column is dark nearly all
+    # the way down the body (map lines are thin/diagonal, so they aren't).
+    left = None
+    for x in range(run[0] - 1, max(run[0] - 70, -1), -1):
+        if sum(dark(x, y + 36 + 4 * i) for i in range(15)) >= 12:
+            left = x
+            break
+    # Left border: scan leftward from the run start; the flag often hides
+    # the border on the top row, but the border column is dark nearly all
+    # the way down the body (terrain shading and map lines don't hold a
+    # column for the full body height). Reach capped ~52px so tight
+    # neighbors aren't mistaken for the border.
+    left = None
+    for x in range(run[0] - 1, max(run[0] - 52, -1), -1):
+        if sum(dark(x, y + 36 + 4 * i) for i in range(23)) >= 20:
+            left = x
+            break
+    # Right border: trim the run end to the badge's right border — dark on
+    # the top row, strip-colored just inside, map-colored just outside.
+    right = run[1] + 2
+    for x in range(run[1], max(run[1] - 80, run[0]), -1):
+        if (dark(x, y) and strip_like(x - 4, y + 15)
+                and not strip_like(x + 4, y + 15)):
+            right = x + 2
+            break
+    if left is None:
+        left = run[0]
+    if bottom is not None:
+        height = bottom - y
+    else:
+        height = 34  # no separator line found; strip design height
+    return (x0 + left, y0 + y, x0 + right, y0 + y + min(max(height, 30), 46))
+
+
+def crop_headers(board_png: Path, out_dir: Path) -> int:
+    """Crop each country's header strip (flag | name | stability badge) from
+    the board for the hover tooltip — an amplified copy of the map's own
+    country-box header, exactly as printed."""
+    from PIL import Image
+
+    # Two boxes defeat the detector: Benelux (W. Germany's row-aligned box
+    # 25px away bridges into its top-border run) and Chinese_Civil_War (a
+    # full red event panel, not a flag|name|badge strip — cropped whole so
+    # the title stays readable in the tooltip). Measured by hand.
+    HAND_TWEAK = {
+        "Benelux": (1856, 693, 2059, 726),
+        "Chinese_Civil_War": (4084, 1134, 4339, 1352),
+    }
+
+    img = Image.open(board_png)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    missing = []
+    for cid, (cx, cy) in VASSAL_COUNTRIES.items():
+        box = HAND_TWEAK.get(cid) or find_box(img, cx, cy)
+        if box is None:
+            missing.append(cid)
+            continue
+        img.crop(box).save(out_dir / f"{cid}.png")
+    if missing:
+        print(f"warning: no box found for {missing}", file=sys.stderr)
+    return len(VASSAL_COUNTRIES) - len(missing)
 
 
 def fetch_board_if_missing(board_jpg: Path) -> None:
@@ -208,9 +389,9 @@ def main() -> None:
     if args.fetch_board or not board_jpg.is_file():
         fetch_board_if_missing(board_jpg)
 
-    number_to_id = load_number_to_id()
-    if len(number_to_id) < 110:
-        print(f"warning: only {len(number_to_id)} card ids loaded", file=sys.stderr)
+    number_to_meta = load_number_to_meta()
+    if len(number_to_meta) < 110:
+        print(f"warning: only {len(number_to_meta)} card ids loaded", file=sys.stderr)
 
     out_cards = OUT / "cards"
     out_cards.mkdir(parents=True, exist_ok=True)
@@ -219,14 +400,16 @@ def main() -> None:
         src = cards_dir / f"TNRnTS-{n:02d}.svg"
         if not src.is_file():
             raise SystemExit(f"missing {src}")
-        cid = number_to_id.get(n)
-        if cid is None:
+        meta = number_to_meta.get(n)
+        if meta is None:
             raise SystemExit(f"no engine id for card number {n}")
-        name = f"{cid}.svg"
-        shutil.copyfile(src, out_cards / name)
-        manifest[cid] = name
+        name = f"{meta['id']}.svg"
+        (out_cards / name).write_text(with_banner(src.read_text(), meta))
+        manifest[meta["id"]] = name
     (OUT / "cards.json").write_text(json.dumps(manifest, indent=1) + "\n")
     ensure_board(board_jpg, OUT / "board.png")
+    headers = crop_headers(OUT / "board.png", OUT / "headers")
+    print(f"headers: {headers} -> {OUT / 'headers'}")
     countries = {
         cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4)}
         for cid, (x, y) in VASSAL_COUNTRIES.items()

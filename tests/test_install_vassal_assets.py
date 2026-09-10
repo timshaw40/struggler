@@ -19,7 +19,7 @@ _spec.loader.exec_module(inst)
 
 
 def test_card_mapping_covers_all_110_cards() -> None:
-    assert sorted(inst.load_number_to_id()) == list(range(1, 111))
+    assert sorted(inst.load_number_to_meta()) == list(range(1, 111))
 
 
 def test_anchor_countries_match_engine_board() -> None:
@@ -39,7 +39,8 @@ def test_full_install_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     manifest = json.loads((tmp_path / "cards.json").read_text())
     assert len(manifest) == 110
     one = next(iter(manifest.values()))
-    assert (tmp_path / "cards" / one).is_file()
+    face = (tmp_path / "cards" / one).read_text()
+    assert 'id="banner"' in face  # ops value / side stripe injected
     countries = json.loads((tmp_path / "countries.json").read_text())
     assert len(countries) == 85  # every map country gets an anchor
     assert all(0 <= v["x"] <= 1 and 0 <= v["y"] <= 1 for v in countries.values())
