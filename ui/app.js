@@ -314,10 +314,9 @@ function renderBoard() {
   for (const [cid, inf] of Object.entries(state.influence)) {
     const pos = POS[cid];
     const target = d ? countryOption(cid) : null;
-    // World is the overview: only activity shows. A region view is the
-    // detail surface, so empty boxes read as explicit 0/0 — otherwise a
-    // region with no legal targets looks broken (blank boxes).
-    if (!pos || (view === "World" && target === null && inf.US === 0 && inf.USSR === 0)) continue;
+    // Empty, non-target countries show no chit — blank box, VASSAL-style.
+    // Legal targets always render, even at 0/0 (they're the clickables).
+    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     el.style.left = pos.x * 100 + "%";
