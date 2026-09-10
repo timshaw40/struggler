@@ -636,17 +636,19 @@ class Engine:
         self.sat_out = {"US": False, "USSR": False}
 
     def _extra_action_round_sides(self) -> tuple[Side, ...]:
-        """Sides granted an extra Action Round this turn, beyond the normal
-        alternating rounds, in the order those rounds are played: North Sea
-        Oil grants the US one for this turn only; Space Race box 8 (Space
-        Station) grants its sole holder one every turn for as long as it
-        holds the ability (6.4.3-6.4.4)."""
+        """Sides granted extra Action Rounds this turn, beyond the normal
+        alternating rounds, in the order those rounds are played: Space Race
+        box 8 (Space Station) makes its sole holder play an ABSOLUTE 8 rounds
+        per turn (6.4.4), so in turns 1-3 it tops the 6 base rounds up to 8;
+        North Sea Oil grants the US one for this turn only."""
         extra: list[Side] = []
-        if self.turn_effects.get("north_sea_oil_extra"):
-            extra.append(Side.US)
         holder = self.game_effects.get("space_race_extra_round_holder")
         if holder is not None:
-            extra.append(Side(holder))
+            extra.extend(
+                [Side(holder)] * max(0, RULES["space_race_box8_rounds"] - action_rounds(self.turn))
+            )
+        if self.turn_effects.get("north_sea_oil_extra"):
+            extra.append(Side.US)
         return tuple(extra)
 
     def _total_action_rounds(self) -> int:

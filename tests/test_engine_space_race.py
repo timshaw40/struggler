@@ -1,6 +1,7 @@
 """Engine: Space Race track mechanics, including the box 6/8 perks (6.4.3-6.4.4)."""
 
 from struggler.engine import Action, DecisionKind, Engine, Side
+from struggler.engine.rules import RULES
 
 from conftest import bare_engine as _bare
 from conftest import headline_setup as _headline_setup
@@ -25,11 +26,14 @@ def _advance_to(engine: Engine, side: Side, box: int) -> None:
 def test_reaching_box_8_grants_extra_action_round_cancelled_when_opponent_catches_up():
     engine = Engine.new_game(seed=1, events=False)
     base = engine._total_action_rounds()
+    # Turn 1: 6 rounds per side; the box-8 holder plays an absolute 8
+    # (6.4.4), i.e. +2 over the base alternation.
+    box8_extras = max(0, RULES["space_race_box8_rounds"] - base // 2)
 
     _advance_to(engine, Side.US, 8)
     assert engine.game_effects["space_race_extra_round_holder"] == "US"
-    assert engine._total_action_rounds() == base + 1
-    assert engine._side_for_play_index(base) is Side.US  # the extra round is the US's
+    assert engine._total_action_rounds() == base + box8_extras
+    assert engine._side_for_play_index(base) is Side.US  # the extra rounds are the US's
 
     # 6.4.4: the ability is cancelled outright once the USSR also reaches box 8,
     # not transferred to the USSR.
@@ -143,3 +147,17 @@ def test_space_race_ability_state_round_trips_through_serialization():
     assert restored.serialize() == data
     assert restored.game_effects["space_race_extra_round_holder"] == "US"
     assert restored.game_effects["space_race_discard_holder"] == "US"
+
+
+def test_box8_grants_eight_absolute_rounds_even_in_early_war():
+    # 6.4.4: "Upon reaching space 8 (Space Station), the player may play
+    # eight (8) Action Rounds per turn" — an absolute 8, not base + 1. The
+    # engine granted +1, which gave the holder 7 rounds in turns 1-3.
+    engine = Engine.new_game(seed=1, events=False)
+    assert engine.turn == 1  # 6 action rounds per side here
+    _advance_to(engine, Side.USSR, 8)
+    total = engine._total_action_rounds()
+    assert total == 2 * 6 + 2  # USSR: 6 + 2 = 8; US: 6
+    sides = [engine._side_for_play_index(i) for i in range(total)]
+    assert sides.count(Side.USSR) == 8
+    assert sides.count(Side.US) == 6
