@@ -309,6 +309,7 @@ class Engine:
         include_optional: bool = True,
         board: Board | None = None,
         events: bool = True,
+        include_ccw: bool = True,
         physical_mode: bool = False,
         physical_side: Side | None = None,
     ) -> "Engine":
@@ -328,6 +329,8 @@ class Engine:
         """
         if physical_mode and physical_side not in (Side.US, Side.USSR):
             raise ValueError("physical_mode requires physical_side to be Side.US or Side.USSR")
+        if board is None:
+            board = Board(include_ccw=include_ccw)
         engine = cls(seed=seed, board=board)
         engine.include_optional = include_optional
         engine.events_enabled = events

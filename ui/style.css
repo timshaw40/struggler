@@ -225,7 +225,44 @@ main {
   overflow-y: auto;
 }
 
-#panel h1 { font-size: 18px; margin: 0 0 10px; }
+#panel h1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+#cog {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  z-index: 6;
+  position: relative;
+}
+#cog:hover { color: var(--text); }
+#settings {
+  display: block;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: -4px 0 10px;
+  font-size: 13px;
+  z-index: 6;
+}
+#settings[hidden] { display: none; }
+#settings p { margin: 0 0 8px; }
+#settings label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+#settings button {
+  margin: 8px 6px 0 0;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
 
 .kv {
   display: flex;

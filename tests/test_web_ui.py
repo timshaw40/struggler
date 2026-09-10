@@ -111,3 +111,22 @@ def test_http_state_and_action_roundtrip() -> None:
         assert after["decision"] is not None or after["is_terminal"]
     finally:
         server.shutdown()
+
+
+def test_forfeit_starts_a_new_game() -> None:
+    session = make_session()
+    session.advance()
+    old = session.seed
+    winner = session.forfeit()
+    assert winner == "USSR"
+    assert session.seed == old + 1
+    assert not session.engine.is_terminal
+    assert session.engine.pending_decision is not None
+
+
+def test_restart_can_drop_ccw() -> None:
+    session = make_session()
+    assert "Chinese_Civil_War" in session.engine.board.countries
+    session.restart(include_ccw=False)
+    assert "Chinese_Civil_War" not in session.engine.board.countries
+    assert "Chinese_Civil_War" not in session.engine.board.neighbors("USSR")

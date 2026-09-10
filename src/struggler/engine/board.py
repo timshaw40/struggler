@@ -42,13 +42,15 @@ class Board:
     bug.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, include_ccw: bool = True) -> None:
         raw = load_json("countries.json")
 
         self.countries: dict[str, CountryInfo] = {}
         self._adjacency: dict[str, set[str]] = {"US": set(), "USSR": set()}
 
         for cid, entry in raw["countries"].items():
+            if cid == "Chinese_Civil_War" and not include_ccw:
+                continue
             self.countries[cid] = CountryInfo(
                 id=cid,
                 name=entry["name"],
@@ -59,12 +61,17 @@ class Board:
             )
             self._adjacency.setdefault(cid, set())
 
+        keep = lambda n: include_ccw or n != "Chinese_Civil_War"
         for cid, entry in raw["countries"].items():
+            if cid not in self.countries:
+                continue
             for neighbor in entry["adjacent_to"]:
-                self._adjacency[cid].add(neighbor)
+                if keep(neighbor):
+                    self._adjacency[cid].add(neighbor)
         for side_id, entry in raw["superpowers"].items():
             for neighbor in entry["adjacent_to"]:
-                self._adjacency[side_id].add(neighbor)
+                if keep(neighbor):
+                    self._adjacency[side_id].add(neighbor)
 
         self._validate_symmetric()
 

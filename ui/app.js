@@ -263,6 +263,7 @@ async function act(index) {
 }
 
 function placeSound() {
+  if (localStorage.getItem("struggler.sound") === "0") return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   const ctx = placeSound.ctx || (placeSound.ctx = new AC());
@@ -800,16 +801,98 @@ function renderDecision() {
   }
 }
 
+let recordedEnd = false;
+
+function recordOf(side) {
+  try {
+    const r = JSON.parse(localStorage.getItem("struggler.record") || "{}");
+    return r[side] || { w: 0, l: 0 };
+  } catch {
+    return { w: 0, l: 0 };
+  }
+}
+
+function bumpRecord(side, win) {
+  const all = (() => {
+    try { return JSON.parse(localStorage.getItem("struggler.record") || "{}"); }
+    catch { return {}; }
+  })();
+  const s = all[side] || { w: 0, l: 0 };
+  if (win) s.w += 1; else s.l += 1;
+  all[side] = s;
+  localStorage.setItem("struggler.record", JSON.stringify(all));
+}
+
+function fillSettings() {
+  const box = $("#settings");
+  const side = state ? state.human_side : "US";
+  const rec = recordOf(side);
+  box.innerHTML =
+    `<p>You (${side}): ${rec.w}–${rec.l}</p>` +
+    `<p>Seed ${state ? state.seed : "—"}</p>` +
+    `<label><input type="checkbox" id="set-sound"${localStorage.getItem("struggler.sound") !== "0" ? " checked" : ""}> Sound</label>` +
+    `<label><input type="checkbox" id="set-ccw"${localStorage.getItem("struggler.ccw") !== "0" ? " checked" : ""}> Chinese Civil War (next game)</label>` +
+    `<div>` +
+    (state && !state.watch ? `<button type="button" id="set-forfeit">Forfeit</button>` : "") +
+    `<button type="button" id="set-new">New game</button></div>`;
+  $("#set-sound").addEventListener("change", (e) => {
+    localStorage.setItem("struggler.sound", e.target.checked ? "1" : "0");
+  });
+  $("#set-ccw").addEventListener("change", (e) => {
+    localStorage.setItem("struggler.ccw", e.target.checked ? "1" : "0");
+  });
+  const f = $("#set-forfeit");
+  if (f) f.addEventListener("click", forfeitGame);
+  $("#set-new").addEventListener("click", newGame);
+}
+
+async function postGame(path) {
+  busy = true;
+  render();
+  try {
+    const data = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ include_ccw: localStorage.getItem("struggler.ccw") !== "0" }),
+    }).then((r) => r.json());
+    if (data.forfeit && state) bumpRecord(state.human_side, false);
+    seenHistory = -1;
+    prevInf = null;
+    recordedEnd = false;
+    state = data;
+    $("#settings").hidden = true;
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+function newGame() { return postGame("/new"); }
+function forfeitGame() { return postGame("/forfeit"); }
+
 function renderWinner() {
   const overlay = $("#winner");
   if (!state.is_terminal) {
+    recordedEnd = false;
     overlay.hidden = true;
     return;
+  }
+  if (!recordedEnd && state.winner && !state.watch) {
+    bumpRecord(state.human_side, state.winner === state.human_side);
+    recordedEnd = true;
   }
   overlay.hidden = false;
   const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
   overlay.innerHTML = `<div class="cardbig">${name} wins<br><small>${state.game_over_reason || ""}
-    <br><a href="javascript:location.reload()">new game</a> (restart serve_ui.py with a new --seed)</small></div>`;
+    <br><a href="#" id="again">new game</a></small></div>`;
+  $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
+}
+
+function toggleSettings() {
+  const box = $("#settings");
+  if (!box) return;
+  box.hidden = !box.hidden;
+  if (!box.hidden) fillSettings();
 }
 
 boot();

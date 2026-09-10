@@ -66,7 +66,8 @@ CONTENT_TYPES = {
 class Session:
     """One interactive game: the engine, the bot seats, the advance loop."""
 
-    def __init__(self, seed: int, us: str, ussr: str, events: bool) -> None:
+    def __init__(self, seed: int, us: str, ussr: str, events: bool,
+                 include_ccw: bool = True) -> None:
         humans = (us == "human") + (ussr == "human")
         if humans > 1:
             raise SystemExit("at most one human seat (no per-client identity)")
@@ -74,18 +75,41 @@ class Session:
         # Play mode: the human's seat. Watch mode: the camera side — the
         # opponent hand stays hidden exactly as it would be for a bot.
         self.human_side = Side.US if (us == "human" or self.watch) else Side.USSR
-        self.engine = Engine.new_game(seed=seed, events=events)
+        self.seed = seed
+        self.us, self.ussr, self.events = us, ussr, events
+        self.include_ccw = include_ccw
+        self.lock = threading.Lock()
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self.engine = Engine.new_game(
+            seed=self.seed, events=self.events, include_ccw=self.include_ccw,
+        )
         self.players: dict[Side, Any] = {}
-        for side, kind in ((Side.US, us), (Side.USSR, ussr)):
+        for side, kind in ((Side.US, self.us), (Side.USSR, self.ussr)):
             if kind != "human":
-                # Same per-seat seed offset convention as main.py.
-                self.players[side] = build_player(kind, seed=seed + (1 if side is Side.US else 2))
+                self.players[side] = build_player(kind, seed=self.seed + (1 if side is Side.US else 2))
         for player in self.players.values():
             bind = getattr(player, "bind_engine", None)
             if callable(bind):
                 bind(self.engine)
         self.history = HistoryBuilder()
-        self.lock = threading.Lock()
+
+    def restart(self, include_ccw: bool | None = None) -> None:
+        if include_ccw is not None:
+            self.include_ccw = include_ccw
+        self.seed += 1
+        self._rebuild()
+        if not self.watch:
+            self.advance()
+
+    def forfeit(self) -> str:
+        """Opponent wins, then a new game starts. Returns the winner's side."""
+        winner = self.human_side.opponent
+        self.engine._win(winner, "forfeit")
+        side = winner.value
+        self.restart()
+        return side
 
     def _step(self, action: Action) -> Event:
         decision = self.engine.pending_decision
@@ -166,6 +190,8 @@ class Session:
         decision = obs.pending_decision
         data: dict[str, Any] = {
             "human_side": self.human_side.value,
+            "seed": self.seed,
+            "include_ccw": "Chinese_Civil_War" in engine.board.countries,
             "watch": self.watch,
             "phase": obs.phase,
             "phasing": None if decision is None else decision.actor.value,
@@ -252,19 +278,30 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 self._send_json(404, {"error": "not found"})
 
         def do_POST(self) -> None:
-            if self.path != "/action":
-                self._send_json(404, {"error": "not found"})
-                return
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length) or b"{}")
-                index = int(body.get("index", -1))
+            except json.JSONDecodeError:
+                self._send_json(400, {"error": "bad json"})
+                return
+            try:
                 with session.lock:
-                    session.act(index)
-                    self._send_json(200, session.state())
+                    if self.path == "/action":
+                        session.act(int(body.get("index", -1)))
+                        self._send_json(200, session.state())
+                    elif self.path == "/new":
+                        ccw = body.get("include_ccw")
+                        session.restart(None if ccw is None else bool(ccw))
+                        self._send_json(200, session.state())
+                    elif self.path == "/forfeit":
+                        if session.watch:
+                            self._send_json(409, {"error": "watch mode"})
+                            return
+                        winner = session.forfeit()
+                        self._send_json(200, {"forfeit": True, "winner": winner, **session.state()})
+                    else:
+                        self._send_json(404, {"error": "not found"})
             except (ValueError, RuntimeError) as exc:
-                # Illegal index or stepping a finished game: tell the client
-                # and hand back the current state so the UI resyncs.
                 with session.lock:
                     self._send_json(409, {"error": str(exc), "state": session.state()})
 
