@@ -1854,12 +1854,15 @@ class Engine:
         return None
 
     def _score_region_net(self, region: Region) -> int:
-        # Controlling all of Europe when Europe is scored wins outright.
+        # 10.3.1: if either side Controls Europe — the 10.1.1 Control TIER
+        # (more countries than the opponent and all European Battlegrounds),
+        # not literally every European country — the Europe Scoring card is
+        # an automatic victory for that side.
         if region is Region.EUROPE:
-            controller = self.board.controls_all_of_europe()
-            if controller is not None:
-                self._win(controller, "europe_control")
-                return 0
+            for side in (Side.US, Side.USSR):
+                if self.board.region_tier(side, region) is ScoringTier.CONTROL:
+                    self._win(side, "europe_control")
+                    return 0
         extra_bg, ignored = self._scoring_overrides(region)
         presence, domination, control = RULES["scoring"][region.name]
         tier_value = {
@@ -1870,12 +1873,7 @@ class Engine:
 
         def value_for(s: Side) -> int:
             tier = self.board.region_tier(s, region, extra_bg, ignored)
-            if tier is ScoringTier.CONTROL:
-                # Europe leaves its Control value undefined (full control is
-                # the win handled above); approximate as Domination. VERIFY.
-                base = control if control is not None else domination
-            else:
-                base = tier_value[tier]
+            base = tier_value[tier] if tier is not ScoringTier.CONTROL else control
             # 10.1.2: +1 VP per Battleground Controlled in the region, +1 VP
             # per country Controlled there adjacent to the enemy superpower.
             return base + self.board.region_bonus_vp(s, region, extra_bg, ignored)

@@ -97,7 +97,8 @@ def test_full_control_of_europe_does_not_auto_win():
     action = next(a for a in engine.legal_actions() if a.payload["country"] == last)
     engine.step(action)
 
-    assert engine.board.controls_all_of_europe() is Side.US
+    from struggler.engine.types import ScoringTier
+    assert engine.board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
 
 
 def test_coup_requires_opponent_influence_in_target():

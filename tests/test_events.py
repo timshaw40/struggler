@@ -2166,3 +2166,21 @@ def test_golden_events_replay_actually_fires_events():
         for a in log["actions"]
     )
     assert fired
+
+
+def test_europe_scoring_card_auto_victory_on_control_tier():
+    # 10.3.1: "If either side Controls Europe, that side wins when the Europe
+    # Scoring card is played." Control = the 10.1.1 tier (all Battlegrounds +
+    # more countries), not literally every European country.
+    engine = _bare()
+    board = engine.board
+    europe = board.countries_in(Region.EUROPE)
+    bgs = [c for c in europe if board.countries[c].battleground]
+    non_bgs = [c for c in europe if not board.countries[c].battleground]
+    for cid in bgs:
+        board.influence[cid]["US"] = board.countries[cid].stability
+    board.influence[non_bgs[0]]["US"] = board.countries[non_bgs[0]].stability
+    board.influence[non_bgs[1]]["USSR"] = board.countries[non_bgs[1]].stability
+    engine._score_region_net(Region.EUROPE)
+    assert engine.is_terminal and engine.winner is Side.US
+    assert engine._game_over_reason == "europe_control"

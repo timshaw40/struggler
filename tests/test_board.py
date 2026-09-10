@@ -61,14 +61,17 @@ def test_influence_cost_doubles_in_opponent_controlled_country():
     assert board.influence_cost(Side.USSR, "Guatemala") == 1
 
 
-def test_controls_all_of_europe():
+def test_control_tier_requires_all_battlegrounds_and_more_countries():
+    # 10.1.1: Control of a region = more countries than the opponent AND all
+    # its Battlegrounds (the test that used to pin "controls every European
+    # country" pinned a misreading; see test_europe_control_tier_...).
     board = Board()
     europe = board.countries_in(Region.EUROPE)
-    assert board.controls_all_of_europe() is None
+    assert board.region_tier(Side.US, Region.EUROPE) is not ScoringTier.CONTROL
     for cid in europe:
         stability = board.countries[cid].stability
         board.influence[cid]["US"] = stability
-    assert board.controls_all_of_europe() is Side.US
+    assert board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
 
 
 def test_region_tier_presence_domination_control():
@@ -129,15 +132,14 @@ def test_score_region_rulebook_worked_example_10_1_2():
     assert board.score_region(Region.CENTRAL_AMERICA) == 1 - 5
 
 
-def test_score_region_europe_control_raises_instead_of_guessing():
-    import pytest
-
+def test_score_region_reports_europe_control_as_auto_victory_score():
+    # 10.3.1: a Europe card played while a side Controls the Europe tier is
+    # an automatic victory; the reported "net" is the full ±20 VP win.
     board = Board()
     europe = board.countries_in(Region.EUROPE)
     for cid in europe:
         board.influence[cid]["US"] = board.countries[cid].stability
-    with pytest.raises(RuntimeError):
-        board.score_region(Region.EUROPE)
+    assert board.score_region(Region.EUROPE) == 20
 
 
 def test_chinese_civil_war_space_not_in_standard_game():
@@ -148,3 +150,24 @@ def test_chinese_civil_war_space_not_in_standard_game():
     board = Board()
     assert "Chinese_Civil_War" not in board.countries
     assert "Chinese_Civil_War" not in board.neighbors("USSR")
+
+
+def test_europe_control_tier_is_the_automatic_victory_trigger():
+    # 10.1.1 + 10.3.1: "Controls Europe" is the Control TIER (more countries
+    # than the opponent and all European Battlegrounds) — not literally every
+    # European country. The engine used to require total control and never
+    # awarded the automatic victory.
+    board = Board()
+    europe = board.countries_in(Region.EUROPE)
+    bgs = [c for c in europe if board.countries[c].battleground]
+    non_bgs = [c for c in europe if not board.countries[c].battleground]
+    assert bgs and len(non_bgs) >= 2
+    for cid in bgs:
+        board.influence[cid]["US"] = board.countries[cid].stability
+    board.influence[non_bgs[0]]["US"] = board.countries[non_bgs[0]].stability
+    # The USSR keeps influence in a non-Battleground the US does not control.
+    board.influence[non_bgs[1]]["USSR"] = board.countries[non_bgs[1]].stability
+    assert board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
+    # Scoring Europe in that state is the auto-victory: report it as the full
+    # ±20 VP automatic victory score, not a Domination approximation.
+    assert board.score_region(Region.EUROPE) == 20
