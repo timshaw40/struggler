@@ -131,6 +131,7 @@ function setView(name) {
   const [l, t] = REGIONS[name];
   wrap.scrollLeft = Math.max(0, l * k - 20);
   wrap.scrollTop = Math.max(0, t * k - 20);
+  renderBoard();  // marker sizing is per-view; renderBoard guards null
 }
 
 let lastJump = "";
@@ -304,6 +305,7 @@ function render() {
 }
 
 function renderBoard() {
+  if (!state) return;
   $("#board").onerror = () => $("#boardwrap").classList.add("noboard");
   const host = $("#markers");
   host.textContent = "";
@@ -320,6 +322,15 @@ function renderBoard() {
     el.className = "marker" + (target !== null ? " legal" : "");
     el.style.left = pos.x * 100 + "%";
     el.style.top = pos.y * 100 + "%";
+    // Pips scale to the country's own body (tall bodies get bigger pips):
+    // a side lands near 4/5 of body height, sitting in the influence
+    // columns below the strip VASSAL-style. em, so it tracks zoom for
+    // free; World keeps standard size (overview, floor chips).
+    // Schematic fallback has no h and stays standard everywhere.
+    if (view !== "World" && pos.h) {
+      const boxF = Math.min((pos.h - 32) * 0.0132, 1.6);
+      if (boxF > 1.01) el.style.fontSize = boxF.toFixed(2) + "em";
+    }
     const ctrl = controlOf(cid, inf);
     el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
