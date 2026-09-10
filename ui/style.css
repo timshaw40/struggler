@@ -39,33 +39,10 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  overflow: auto;
+  overflow-y: auto;   /* full-width map: only ever scroll vertically */
+  overflow-x: hidden;
   position: relative;
 }
-
-#zoomer {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  display: flex;
-  gap: 4px;
-  z-index: 5;
-}
-
-#zoomer button {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid #3a4252;
-  border-radius: 8px;
-  padding: 4px 12px;
-  cursor: pointer;
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-#zoomer button:hover { border-color: var(--gold); }
-
-#boardwrap.noboard ~ #zoomer { display: none; }
 
 #boardbox {
   position: relative;
@@ -82,12 +59,10 @@ main {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Chip size = a fixed fraction of the map's rendered width, so zooming
-   * keeps chips proportionate to the printed country boxes (a box is ~63px
-   * tall on the 5100px board; /300 makes a chip about half a box tall, like
-   * a VASSAL counter sitting in the box). The 11px floor keeps digits
-   * legible at fit zoom, where a strictly proportional chip would be ~5px. */
-  font-size: max(11px, calc(var(--boardw, 1600px) / 300));
+  /* Chips hold a fixed, readable size (the map no longer zooms, so there is
+   * one size to get right). The boardw/300 term only wins on very wide
+   * displays, where the full-width map is big enough to afford bigger chips. */
+  font-size: max(11.5px, calc(var(--boardw, 1600px) / 300));
 }
 
 .marker {

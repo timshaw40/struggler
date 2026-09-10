@@ -10,7 +10,6 @@ const POS = {};     // country id -> {x, y} fractions of the board image
 
 let state = null;
 let busy = false;
-let zoom = 1;
 let previewEl = null;
 let playing = true;   // watch mode playback
 let inFlight = false; // one poll chain at a time
@@ -66,30 +65,21 @@ async function boot() {
   preview.hidden = true;
   document.body.append(preview);
   previewEl = preview;
-  $("#zoomin").addEventListener("click", () => setZoom(zoom * 1.5));
-  $("#zoomout").addEventListener("click", () => setZoom(zoom / 1.5));
-  $("#zoomfit").addEventListener("click", () => setZoom(1));
   enableDragPan();
   window.addEventListener("resize", layoutBoard);
-  // once the image has real dimensions, re-fit with the true aspect ratio
-  $("#board").addEventListener("load", layoutBoard);
   layoutBoard();
   await refresh();
   if (state.watch) setTimeout(tick, 400);
 }
 
-/* Zoom has one source of truth: --boardw, the board's rendered width. The
- * image and the chip font both derive from it in CSS, so they can never
- * drift apart — no matter how you zoom or resize the window, a chip stays
- * the same fraction of a country box. */
+/* The map always fills the available width — no zooming. Anything taller
+ * than the window is reached by scrolling (or dragging) vertically. The
+ * width is still written as one CSS variable so the chip size in CSS can
+ * derive from the same number instead of JS juggling two formulas. */
 function layoutBoard() {
   const wrap = $("#boardwrap");
-  const board = $("#board");
   if (wrap.classList.contains("noboard")) return;
-  const bw = board.naturalWidth || 5100;
-  const bh = board.naturalHeight || 3300;
-  const base = Math.min(wrap.clientWidth / bw, wrap.clientHeight / bh) * bw - 4;
-  wrap.style.setProperty("--boardw", Math.round(base * zoom) + "px");
+  wrap.style.setProperty("--boardw", wrap.clientWidth - 4 + "px");
 }
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
@@ -119,11 +109,6 @@ function enableDragPan() {
 }
 
 let dragMoved = 0;
-
-function setZoom(next) {
-  zoom = Math.min(6, Math.max(1, next));
-  layoutBoard();
-}
 
 async function refresh() {
   state = await fetchJson("/state");
@@ -204,24 +189,32 @@ function showCountryTip(el, cid, inf) {
     `<img class="chead" src="/assets/headers/${cid}.png" alt="${pretty(cid)}">`
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
     + `<span class="ussr">USSR ${inf.USSR}</span></div>`;
+  countryTip.hidden = false;
+  // Positioning must happen after the strip image decodes: until then the
+  // tip's height is just the stats line, and the loading image would grow
+  // the tip downward onto the very country being hovered.
+  const place = () => {
+    const r = el.getBoundingClientRect();
+    const w = countryTip.offsetWidth;
+    const h = countryTip.offsetHeight;
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    let top = r.top - h - 12;
+    if (top < 8) top = r.bottom + 12;
+    countryTip.style.left = `${left}px`;
+    countryTip.style.top = `${top}px`;
+  };
+  place();
   const img = countryTip.querySelector("img");
+  img.addEventListener("load", place);
   img.addEventListener("error", () => {
     img.remove();
     const name = document.createElement("div");
     name.className = "cname";
     name.textContent = pretty(cid);
     countryTip.prepend(name);
+    place();
   });
-  countryTip.hidden = false;
-  const r = el.getBoundingClientRect();
-  const w = countryTip.offsetWidth;
-  const h = countryTip.offsetHeight;
-  let left = r.left + r.width / 2 - w / 2;
-  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-  let top = r.top - h - 12;
-  if (top < 8) top = r.bottom + 12;
-  countryTip.style.left = `${left}px`;
-  countryTip.style.top = `${top}px`;
 }
 
 function render() {
