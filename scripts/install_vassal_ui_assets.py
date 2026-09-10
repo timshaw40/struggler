@@ -353,14 +353,16 @@ def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[in
             box_bottom is not None)
 
 
-# Two boxes defeat the detector and carry hand-measured data: Benelux
-# (W. Germany's row-aligned box 25px away bridges into its top-border run)
-# and Chinese_Civil_War (a full red event panel, not a flag|name|badge
-# strip — cropped whole so the title stays readable in the tooltip).
-# Each entry: header-strip rect, box center, box height.
+# Boxes that defeat the detector. Each entry: header-strip rect, body
+# center, box height. Benelux: W. Germany's row-aligned box 25px away
+# bridges into its top-border run. Chinese_Civil_War: a full red event
+# panel, cropped whole so the title stays readable in the tooltip.
+# Panama: Costa Rica's right border bridges into its top-border run
+# (248px wide vs ~200), pulling the center 15px left onto Costa Rica.
 HAND_TWEAK = {
     "Benelux": ((1856, 693, 2059, 726), (1957, 775), 131),
     "Chinese_Civil_War": ((4084, 1134, 4339, 1352), (4211, 1243), 218),
+    "Panama": ((733, 1795, 933, 1827), (833, 1876), 130),
 }
 
 

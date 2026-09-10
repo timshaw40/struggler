@@ -314,8 +314,8 @@ function renderBoard() {
   for (const [cid, inf] of Object.entries(state.influence)) {
     const pos = POS[cid];
     const target = d ? countryOption(cid) : null;
-    // Empty, non-target countries show no chit — blank box, VASSAL-style.
-    // Legal targets always render, even at 0/0 (they're the clickables).
+    // No influence and not a legal target: blank box, VASSAL-style.
+    // A 0/0 legal target still renders (empty glow, no pips) so it stays clickable.
     if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
@@ -359,6 +359,7 @@ function controlOf(cid, inf) {
 /* One side's influence pip: the VASSAL face (white while merely present,
  * colored once the side controls) with our count over it, VASSAL-style. */
 function pip(side, n, controlled) {
+  if (n === 0) return "";  // no chit for an empty side
   const face = controlled ? "controlled" : "uncontrolled";
   return `<span class="pip ${side}${controlled ? " controlled" : ""}">` +
     `<img src="/assets/markers/${side}_${face}.svg" alt="">` +
