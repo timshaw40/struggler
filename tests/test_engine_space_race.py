@@ -66,7 +66,13 @@ def test_held_card_discard_can_be_declined():
 
     d = engine.pending_decision
     engine.step(next(a for a in d.options if a.payload["card"] == "none"))
-    assert all(cid in engine.hands["USSR"] for cid in hand_before)  # nothing discarded
+    # Nothing was discarded by the box-6 offer. (A scoring card in hand at
+    # end of turn is forced into scoring by 4.5-D before this decision --
+    # the held-card ability is about the optional discard, not the
+    # mandatory one.)
+    non_scoring = [c for c in hand_before if not engine.cards[c].scoring]
+    assert all(cid in engine.hands["USSR"] for cid in non_scoring)
+    assert not any(engine.cards[c].scoring for c in engine.hands["USSR"])
     assert engine.turn == 2
 
 

@@ -520,6 +520,19 @@ class Engine:
             self._award_vp(Side.USSR, 3)
             if self.is_terminal:
                 return
+        # 4.5-D: a scoring card may never be held. The play path forces one
+        # out whenever the deadline trips; a second scoring card (or one that
+        # entered the hand after the last deadline) could still strand —
+        # score it here rather than carry it into the next turn. Physical
+        # hands are trusted to the operator (see docs/LIMITATIONS.md).
+        for side in (Side.US, Side.USSR):
+            if self._declares(side):
+                continue
+            for cid in [c for c in self.hands[side.value] if self.cards[c].scoring]:
+                self._resolve_scoring_card(cid)
+                self._file_card(side, cid, fired=True)
+                if self.is_terminal:
+                    return
         # DEFCON recovers by one at the end of every turn.
         self._change_defcon(+1, caused_by=Side.US)
         # A China Card passed this turn becomes available to its new owner.
@@ -2530,6 +2543,17 @@ class Engine:
         return None
 
     def _push_trap_step(self, side: Side, key: str) -> None:
+        # 4.5-D: a scoring card may never be held. If the scoring deadline
+        # trips this round, the ordinary play path (which forces a scoring
+        # card) takes priority over the trap step. Physical hands are the
+        # operator's trust, as documented.
+        if not self._declares(side):
+            scoring_in_hand = [
+                cid for cid in self.hands[side.value] if self.cards[cid].scoring
+            ]
+            if scoring_in_hand and len(scoring_in_hand) >= self._remaining_action_rounds(side):
+                self._push_action_round_play(side)
+                return
         source = (
             self._physical_hand_candidates(side)
             if self._declares(side)

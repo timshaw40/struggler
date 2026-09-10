@@ -1584,6 +1584,7 @@ def test_we_will_bury_you_degrades_defcon_and_scores_at_end_of_turn():
     assert engine.defcon == 4
     assert engine.turn_effects.get("we_will_bury_you") is True
     engine.military_ops = {"US": 9, "USSR": 9}  # silence the required-military-Ops VP
+    engine.hands = {"US": [], "USSR": []}  # no scoring cards to score at end of turn
     vp0 = engine.vp
     engine._end_of_turn()
     assert engine.vp == vp0 - 3  # 3 VP to the USSR (negative on the US-positive track)
@@ -2071,15 +2072,18 @@ def test_trapped_side_with_no_payable_card_wastes_the_round_with_no_roll():
 
 def test_trapped_side_with_no_payable_card_still_must_play_scoring_cards():
     # The one exception to "no card -> no roll, round wasted": a scoring
-    # card may never be held past end of turn, so it's forced regardless.
+    # card may never be held past end of turn, so the scoring deadline
+    # routes the round to the ordinary play path, which forces it out.
+    from struggler.engine.types import DecisionKind as DK
+
     engine = _bare()
     engine.game_effects["quagmire"] = True  # traps the US
     engine.turn = 1
     engine.hands["US"] = ["Nasser", "Europe_Scoring"]  # 1-Op + a scoring card
     engine._push_trap_step(Side.US, "quagmire")
-    assert "Europe_Scoring" not in engine.hands["US"]  # forced into play
-    assert "Nasser" in engine.hands["US"]  # not discardable, so it stays
-    assert engine.pending_decision is None  # still no roll
+    dec = engine.pending_decision
+    assert dec.kind is DK.ACTION_ROUND_PLAY
+    assert [a.payload["card"] for a in dec.options] == ["Europe_Scoring"]
     assert engine._trap_key_for(Side.US) == "quagmire"  # still trapped
 
 
@@ -2397,3 +2401,41 @@ def test_defcon_1_coup_by_opponent_event_ops_blames_phasing_player():
     engine.step(engine.legal_actions()[0])  # the (single) pre-rolled coup die
     assert engine.is_terminal
     assert engine.winner is Side.USSR  # phasing US lost
+
+
+def test_scoring_deadline_overrides_the_trap_step():
+    # 4.5-D: a scoring card may never be held. On the last action round of a
+    # trapped side holding [Scoring, Ops3], the round must play the scoring
+    # card — not burn itself on the trap's forced discard.
+    from struggler.engine.types import DecisionKind as DK
+
+    engine = _bare()
+    engine.phase = "action_rounds"
+    engine.turn = 1
+    engine._decision_stack = []
+    engine._ars_played = 11  # last play of the turn (US)
+    engine.game_effects["quagmire"] = True
+    engine.hands = {"US": ["Asia_Scoring", "Duck_and_Cover"], "USSR": []}
+    engine._dispatch_action_round(Side.US)
+    dec = engine.pending_decision
+    assert dec.kind is DK.ACTION_ROUND_PLAY
+    assert [a.payload["card"] for a in dec.options] == ["Asia_Scoring"]
+
+
+def test_end_of_turn_scores_stranded_scoring_cards():
+    # A second scoring card can still be in hand at end of turn (e.g. it
+    # entered the hand after the last forced-play deadline): 4.5-D says it
+    # may never be held, so it scores here rather than carrying over.
+    engine = _bare()
+    engine.military_ops = {"US": 5, "USSR": 5}  # silence the milops check
+    # Keep the end-of-turn deal from consuming the discard pile: the sandbox
+    # has no real deck, and an empty draw pile reshuffles the discard back in.
+    engine.draw_pile = ["Duck_and_Cover"] * 20
+    board = engine.board
+    board.influence["Philippines"]["US"] = board.countries["Philippines"].stability
+    engine.hands = {"US": ["Asia_Scoring", "Duck_and_Cover"], "USSR": []}
+    engine._end_of_turn()
+    assert "Asia_Scoring" not in engine.hands["US"]
+    assert "Asia_Scoring" in engine.discard_pile
+    assert engine.vp == 3  # US presence in Asia, no bonuses: +3
+    assert not engine.is_terminal
