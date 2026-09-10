@@ -36,17 +36,13 @@ main {
 
 #boardwrap {
   flex: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
   overflow: auto;
   position: relative;
 }
 
 #boardbox {
   position: relative;
-  margin: 0 auto;
-  flex-shrink: 0;  /* don't let flex squash the zoomed map back to the viewport */
+  margin: 0;
   width: var(--boardw, 1600px);  /* set by layoutBoard() — the only zoom knob */
 }
 

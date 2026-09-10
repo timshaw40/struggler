@@ -83,7 +83,7 @@ async function boot() {
   previewEl = preview;
   enableDragPan();
   buildViewBar();
-  window.addEventListener("resize", () => setView(view));
+  window.addEventListener("resize", layoutBoard);
   setView(view);
   await refresh();
   if (state.watch) setTimeout(tick, 400);
@@ -92,13 +92,16 @@ async function boot() {
 /* The map renders the current view's slice across the available width. The
  * width is still written as one CSS variable — --boardw, the only knob —
  * so the chip size in CSS derives from the same number the map scales by;
- * they can't disagree. A region is taller than the window at that scale:
- * vertical scroll (or drag) covers it, as before. */
+ * they can't disagree. Measure the stable parent (#boardarea, min-width 0:
+ * always exactly the viewport): measuring the scroll container itself feeds
+ * the zoomed content width back into the next computation and diverges.
+ * A region is taller than the window at that scale: vertical scroll (or
+ * drag) covers it, as before. */
 function layoutBoard() {
   const wrap = $("#boardwrap");
   if (wrap.classList.contains("noboard")) return;
   const reg = REGIONS[view];
-  const w = Math.round(wrap.clientWidth * BOARD_W / (reg[2] - reg[0]));
+  const w = Math.round($("#boardarea").clientWidth * BOARD_W / (reg[2] - reg[0]));
   wrap.style.setProperty("--boardw", w + "px");
 }
 
