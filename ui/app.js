@@ -11,15 +11,17 @@ const POS = {};     // country id -> {x, y} fractions of the board image
 const BOARD_W = 5100, BOARD_H = 3300;
 /* Region views: rectangles of the board image (box layout, as measured by
  * the asset installer). A region renders its slice across the viewport
- * width; World fits the whole board. Overlapping bounds (Mid-East spans
+ * width, so rects are padded to a similar native width (~1400px) — a
+ * tight rect around a small region would magnify it absurdly on wide
+ * screens. World fits the whole board. Overlapping bounds (Mid-East spans
  * Africa's latitude band) resolve by lookup order — smaller regions first. */
 const REGIONS = {
   "World": [0, 0, BOARD_W, BOARD_H],
-  "C. America": [150, 1230, 1420, 1980],
-  "S. America": [850, 1800, 1650, 3000],
-  "Mid-East": [2560, 1080, 3820, 1800],
+  "C. America": [80, 1180, 1480, 2030],
+  "S. America": [500, 1750, 1950, 3050],
+  "Mid-East": [2480, 1000, 3930, 1900],
   "Europe": [1620, 180, 3060, 1350],
-  "Asia": [3850, 950, 4950, 2700],
+  "Asia": [3550, 900, 4990, 2750],
   "Africa": [1700, 1300, 3170, 2850],
 };
 let view = "Europe";
@@ -309,7 +311,10 @@ function renderBoard() {
   for (const [cid, inf] of Object.entries(state.influence)) {
     const pos = POS[cid];
     const target = d ? countryOption(cid) : null;
-    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
+    // World is the overview: only activity shows. A region view is the
+    // detail surface, so empty boxes read as explicit 0/0 — otherwise a
+    // region with no legal targets looks broken (blank boxes).
+    if (!pos || (view === "World" && target === null && inf.US === 0 && inf.USSR === 0)) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     el.style.left = pos.x * 100 + "%";
