@@ -26,7 +26,7 @@ const REGIONS = {
   "South America": [390, 1710, 2060, 3090],
 };
 let view = "Europe";
-let zoom = 1;  // 1..1.5, extra on top of the region fit
+let zoom = 1;  // 1..1.8, extra on top of the region fit
 
 let state = null;
 let busy = false;
@@ -124,7 +124,7 @@ function buildViewBar() {
   slider.id = "zoom";
   slider.type = "range";
   slider.min = "100";
-  slider.max = "150";
+  slider.max = "180";
   slider.value = "100";
   slider.title = "Zoom";
   slider.addEventListener("input", () => setZoom(+slider.value / 100));
