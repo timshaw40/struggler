@@ -69,7 +69,10 @@ async function boot() {
   $("#zoomin").addEventListener("click", () => setZoom(zoom * 1.5));
   $("#zoomout").addEventListener("click", () => setZoom(zoom / 1.5));
   $("#zoomfit").addEventListener("click", () => setZoom(1));
+  enableDragPan();
   window.addEventListener("resize", layoutBoard);
+  // once the image has real dimensions, re-fit with the true aspect ratio
+  $("#board").addEventListener("load", layoutBoard);
   layoutBoard();
   await refresh();
   if (state.watch) setTimeout(tick, 400);
@@ -77,13 +80,46 @@ async function boot() {
 
 /* The board image is sized in px (base fit × zoom) instead of CSS-capped, so
  * zooming grows the scrollable area and markers — %-anchored inside
- * #boardbox — stay glued to their countries at any zoom. */
+ * #boardbox — stay glued to their countries at any zoom. Chip text is em-
+ * sized off #markers, so it scales with the map instead of shrinking. */
 function layoutBoard() {
   const wrap = $("#boardwrap");
+  const board = $("#board");
   if (wrap.classList.contains("noboard")) return;
-  const base = Math.min(wrap.clientWidth, wrap.clientHeight) - 4;
-  $("#board").style.width = Math.round(base * zoom) + "px";
+  const bw = board.naturalWidth || 5100;
+  const bh = board.naturalHeight || 3300;
+  const base = Math.min(wrap.clientWidth / bw, wrap.clientHeight / bh) * bw - 4;
+  board.style.width = Math.round(base * zoom) + "px";
+  $("#markers").style.fontSize = 11.5 * zoom + "px";
 }
+
+/* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
+ * scrollable #boardwrap follows. A drag never counts as a marker click. */
+function enableDragPan() {
+  const wrap = $("#boardwrap");
+  wrap.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    const sx = e.clientX, sy = e.clientY, sl = wrap.scrollLeft, st = wrap.scrollTop;
+    let moved = 0;
+    const move = (ev) => {
+      moved = Math.max(moved, Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy));
+      wrap.scrollLeft = sl - (ev.clientX - sx);
+      wrap.scrollTop = st - (ev.clientY - sy);
+    };
+    const up = () => {
+      dragMoved = moved;
+      wrap.classList.remove("dragging");
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    wrap.classList.add("dragging");
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    e.preventDefault();
+  });
+}
+
+let dragMoved = 0;
 
 function setZoom(next) {
   zoom = Math.min(6, Math.max(1, next));
@@ -152,6 +188,43 @@ function optionLabel(o) {
 
 // -- rendering ---------------------------------------------------------------
 
+let countryTip = null;
+
+/* Hover readout for a map marker: an amplification of the country's printed
+ * header strip (flag | name | stability badge — red badge = battleground),
+ * plus live influence. Falls back to plain text when a header asset is
+ * missing. Positioned above the marker, viewport-clamped. */
+function showCountryTip(el, cid, inf) {
+  if (!countryTip) {
+    countryTip = document.createElement("div");
+    countryTip.id = "countrytip";
+    countryTip.hidden = true;
+    document.body.append(countryTip);
+  }
+  countryTip.innerHTML =
+    `<img class="chead" src="/assets/headers/${cid}.png" alt="${pretty(cid)}">`
+    + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
+    + `<span class="ussr">USSR ${inf.USSR}</span></div>`;
+  const img = countryTip.querySelector("img");
+  img.addEventListener("error", () => {
+    img.remove();
+    const name = document.createElement("div");
+    name.className = "cname";
+    name.textContent = pretty(cid);
+    countryTip.prepend(name);
+  });
+  countryTip.hidden = false;
+  const r = el.getBoundingClientRect();
+  const w = countryTip.offsetWidth;
+  const h = countryTip.offsetHeight;
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  let top = r.top - h - 10;
+  if (top < 8) top = r.bottom + 10;
+  countryTip.style.left = `${left}px`;
+  countryTip.style.top = `${top}px`;
+}
+
 function render() {
   if (!state) return;
   renderBoard();
@@ -175,10 +248,16 @@ function renderBoard() {
     el.className = "marker" + (target !== null ? " legal" : "");
     el.style.left = pos.x * 100 + "%";
     el.style.top = pos.y * 100 + "%";
-    el.title = `${pretty(cid)} — US ${inf.US} / USSR ${inf.USSR}`;
     el.innerHTML =
       `<span class="us">${inf.US}</span><span class="ussr">${inf.USSR}</span>`;
-    if (target !== null) el.addEventListener("click", () => act(target));
+    el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
+    el.addEventListener("mouseleave", () => { countryTip.hidden = true; });
+    if (target !== null) {
+      el.addEventListener("click", () => {
+        if (dragMoved > 6) return;  // that was a map drag, not a click
+        act(target);
+      });
+    }
     host.append(el);
   }
 }
@@ -312,9 +391,8 @@ function renderHand() {
 function renderDecision() {
   const box = $("#decision");
   box.textContent = "";
-  if (state.is_terminal) return;
   const d = state.decision;
-  if (!d || busy) {
+  if (!d && !busy) {
     if (state.watch && !state.is_terminal) {
       const note = document.createElement("em");
       note.textContent = playing ? "Watching · bot vs bot" : "Watching · paused";
@@ -325,12 +403,14 @@ function renderDecision() {
         render();
         if (playing) tick();
       });
-      const row = document.createElement("div");
-      row.className = "options";
-      row.append(btn);
-      box.append(note, row);
+      box.append(note, btn);
       return;
     }
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (!d) {
     const note = document.createElement("em");
     note.textContent = busy ? "Opponent thinking…" : "Resolving…";
     box.append(note);
@@ -350,17 +430,21 @@ function renderDecision() {
     box.append(line);
   }
 
-  // Every option is always a button — board-click and hand-click are
-  // just shortcuts on top of this complete, safe fallback.
-  const row = document.createElement("div");
-  row.className = "options";
+  // Country-picking happens on the map: the glowing markers are the options
+  // (every one of this decision's options names a country).
+  if (d.options.length && d.options.every((o) => o.payload && o.payload.country)) {
+    const hint = document.createElement("em");
+    hint.className = "hint";
+    hint.textContent = "Click a glowing country on the map.";
+    box.append(hint);
+    return;
+  }
   for (const o of d.options) {
     const b = document.createElement("button");
     b.textContent = optionLabel(o);
     b.addEventListener("click", () => act(o.index));
-    row.append(b);
+    box.append(b);
   }
-  box.append(row);
 }
 
 function renderWinner() {
