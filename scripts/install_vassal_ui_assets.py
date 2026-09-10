@@ -406,6 +406,16 @@ MARKER_FACES = {
     "us_controlled": "AmericanInfluenceControlled.svg",
     "ussr_uncontrolled": "SovietInfluenceUncontrolled.svg",
     "ussr_controlled": "SovietInfluenceControlled.svg",
+    "defcon": "DefCon.svg",
+    "vp": "VPs.svg",
+    "turn": "Turn.svg",
+    "ar_us": "AmericanActionRound.svg",
+    "ar_ussr": "SovietActionRound.svg",
+    "ar_headline": "HeadlinePhase.svg",
+    "milops_us": "AmericanMilitaryOperations.svg",
+    "milops_ussr": "SovietMilitaryOperations.svg",
+    "space_us": "AmericanSpaceRace.svg",
+    "space_ussr": "SovietSpaceRace.svg",
 }
 
 

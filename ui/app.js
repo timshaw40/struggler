@@ -28,6 +28,15 @@ const REGIONS = {
 let view = "Europe";
 let zoom = 1;  // 1..1.8, extra on top of the region fit
 
+/* VASSAL SetupStack centers (native board px). Engine already tracks
+ * every one of these; we just put the matching counter on the map. */
+const DEFCON_AT = { 5: [1584, 2653], 4: [1741, 2653], 3: [1898, 2653], 2: [2055, 2653], 1: [2212, 2653] };
+const MILOPS_AT = [[1586, 3009], [1743, 3009], [1900, 3009], [2057, 3009], [2214, 3009], [2371, 3009]];
+const ROUND_AT = [[856, 258], [973, 258], [1091, 258], [1208, 258], [1326, 258], [1443, 258], [1561, 258], [1678, 258], [1796, 258]];
+const TURN_AT = [null, [3538, 229], [3693, 229], [3848, 229], [4003, 229], [4158, 229], [4313, 229], [4468, 229], [4623, 229], [4778, 229], [4933, 229]];
+const SPACE_AT = [[3541, 583], [3711, 583], [3881, 583], [4051, 583], [4221, 583], [4391, 583], [4561, 583], [4731, 583], [4901, 583]];
+const VP_AT = [[3160, 2523], [3361, 2523], [3495, 2523], [3629, 2523], [3763, 2523], [3897, 2523], [4031, 2523], [4165, 2523], [3093, 2664], [3227, 2664], [3361, 2664], [3495, 2664], [3629, 2664], [3763, 2664], [3897, 2664], [4031, 2664], [4165, 2664], [3093, 2805], [3227, 2805], [3361, 2805], [3629, 2805], [3897, 2805], [4031, 2805], [4165, 2805], [3093, 2946], [3227, 2946], [3361, 2946], [3495, 2946], [3629, 2946], [3763, 2946], [3897, 2946], [4031, 2946], [4165, 2946], [3093, 3087], [3227, 3087], [3361, 3087], [3495, 3087], [3629, 3087], [3763, 3087], [3897, 3087], [4094, 3087]];
+
 let state = null;
 let busy = false;
 let previewEl = null;
@@ -437,6 +446,33 @@ function renderBoard() {
     }
     host.append(el);
   }
+  renderTracks(host);
+}
+
+function renderTracks(host) {
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n | 0));
+  const tok = (name, xy, off) => {
+    if (!xy) return;
+    const el = document.createElement("img");
+    el.className = "tracktok";
+    el.src = `/assets/markers/${name}.svg`;
+    el.style.left = ((xy[0] + (off || 0)) / BOARD_W * 100) + "%";
+    el.style.top = ((xy[1] + (off || 0)) / BOARD_H * 100) + "%";
+    host.append(el);
+  };
+  tok("defcon", DEFCON_AT[clamp(state.defcon, 1, 5)]);
+  tok("vp", VP_AT[clamp(state.vp, -20, 20) + 20]);
+  tok("turn", TURN_AT[clamp(state.turn, 1, 10)]);
+  const mil = state.military_ops || {};
+  tok("milops_us", MILOPS_AT[clamp(mil.US, 0, 5)], 10);
+  tok("milops_ussr", MILOPS_AT[clamp(mil.USSR, 0, 5)], -10);
+  const sp = state.space_race || {};
+  tok("space_us", SPACE_AT[clamp(sp.US, 0, 8)], 10);
+  tok("space_ussr", SPACE_AT[clamp(sp.USSR, 0, 8)], -10);
+  const hl = state.phase === "headline" || state.phase === "setup" || state.phase === "predeal";
+  if (hl) tok("ar_headline", ROUND_AT[0]);
+  else tok((state.phasing || state.human_side) === "US" ? "ar_us" : "ar_ussr",
+           ROUND_AT[clamp(state.action_round, 1, 8)]);
 }
 
 /* Which side (if any) controls the country: influence margin >= stability —

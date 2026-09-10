@@ -45,3 +45,6 @@ def test_full_install_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert len(countries) == 85  # every map country gets an anchor
     assert all(0 <= v["x"] <= 1 and 0 <= v["y"] <= 1 for v in countries.values())
     assert all(v["s"] >= 1 and v["h"] > 0 and v["w"] >= 150 for v in countries.values())
+    for name in ("defcon", "vp", "turn", "ar_us", "ar_ussr", "ar_headline",
+                 "milops_us", "milops_ussr", "space_us", "space_ussr"):
+        assert (tmp_path / "markers" / f"{name}.svg").is_file()

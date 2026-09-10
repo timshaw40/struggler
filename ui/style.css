@@ -176,6 +176,15 @@ main {
 .marker.legal:hover { filter: brightness(1.08); }
 .marker:not(.boxed).legal:hover { transform: translate(-50%, -50%) scale(1.25); }
 
+.tracktok {
+  position: absolute;
+  width: calc(var(--boardw) * 90 / 5100);
+  height: auto;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
 .flypip {
   position: fixed;
   left: 0;

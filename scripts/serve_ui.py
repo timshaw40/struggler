@@ -164,6 +164,7 @@ class Session:
             "human_side": self.human_side.value,
             "watch": self.watch,
             "phase": obs.phase,
+            "phasing": None if decision is None else decision.actor.value,
             "defcon": obs.defcon,
             "vp": obs.vp,
             "turn": obs.turn,
