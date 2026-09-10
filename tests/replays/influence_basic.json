@@ -825,10 +825,6 @@
               "US": 0,
               "USSR": 0
             },
-            "Chinese_Civil_War": {
-              "US": 0,
-              "USSR": 0
-            },
             "Burma": {
               "US": 0,
               "USSR": 0
@@ -1051,12 +1047,6 @@
                 "payload": {
                   "country": "North_Korea"
                 }
-              },
-              {
-                "kind": "place_influence",
-                "payload": {
-                  "country": "Chinese_Civil_War"
-                }
               }
             ],
             "context": {
@@ -1258,10 +1248,6 @@
             "USSR": 0
           },
           "North_Korea": {
-            "US": 0,
-            "USSR": 0
-          },
-          "Chinese_Civil_War": {
             "US": 0,
             "USSR": 0
           },
@@ -2238,10 +2224,6 @@
               "USSR": 0
             },
             "North_Korea": {
-              "US": 0,
-              "USSR": 0
-            },
-            "Chinese_Civil_War": {
               "US": 0,
               "USSR": 0
             },

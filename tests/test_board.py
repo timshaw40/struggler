@@ -138,3 +138,13 @@ def test_score_region_europe_control_raises_instead_of_guessing():
         board.influence[cid]["US"] = board.countries[cid].stability
     with pytest.raises(RuntimeError):
         board.score_region(Region.EUROPE)
+
+
+def test_chinese_civil_war_space_not_in_standard_game():
+    # Rule 12 is an optional variant; its map space does not exist in the
+    # standard game, so the engine must not offer it for placement, scoring,
+    # or coups (the space previously sat in the board data as a live ASIA
+    # country adjacent to the USSR).
+    board = Board()
+    assert "Chinese_Civil_War" not in board.countries
+    assert "Chinese_Civil_War" not in board.neighbors("USSR")

@@ -14,8 +14,7 @@
     "Poland",
     "Romania",
     "Afghanistan",
-    "North_Korea",
-    "Chinese_Civil_War"
+    "North_Korea"
    ]
   }
  },
@@ -517,16 +516,6 @@
    "battleground": true,
    "adjacent_to": [
     "South_Korea",
-    "USSR"
-   ]
-  },
-  "Chinese_Civil_War": {
-   "name": "Chinese Civil War",
-   "region": "ASIA",
-   "subregion": null,
-   "stability": 3,
-   "battleground": false,
-   "adjacent_to": [
     "USSR"
    ]
   },
