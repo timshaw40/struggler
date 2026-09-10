@@ -190,6 +190,7 @@ function jumpToTargets(d) {
  * scrollable #boardwrap follows. A drag never counts as a marker click. */
 function enableDragPan() {
   const wrap = $("#boardwrap");
+  wrap.addEventListener("dragstart", (e) => e.preventDefault());
   wrap.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     dragMoved = 0;
@@ -198,6 +199,7 @@ function enableDragPan() {
     const move = (ev) => {
       moved = Math.max(moved, Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy));
       if (moved <= 6) return;
+      ev.preventDefault();
       wrap.classList.add("dragging");
       wrap.scrollLeft = sl - (ev.clientX - sx);
       wrap.scrollTop = st - (ev.clientY - sy);

@@ -82,9 +82,9 @@ main {
 #zoom {
   position: absolute;
   right: 6px;
-  top: 44px;
-  bottom: 16px;
+  top: 48px;
   width: 18px;
+  height: 25%;  /* 1/4 of the old full-height track */
   margin: 0;
   z-index: 5;
   writing-mode: vertical-lr;
@@ -96,6 +96,7 @@ main {
 #board {
   width: 100%;
   display: block;
+  -webkit-user-drag: none;
 }
 
 #markers {
