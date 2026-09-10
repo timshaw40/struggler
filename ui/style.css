@@ -386,6 +386,36 @@ main {
 
 #countrytip .ussr { color: #e57373; font-weight: 600; }
 
+#dicebox {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 280px;
+  max-width: 420px;
+  padding: 20px 28px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid #3a4252;
+  border-radius: 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
+}
+#dicebox[hidden] { display: none; }
+#dicebox .dtitle { margin: 0; font-size: 16px; font-weight: 600; }
+#dicebox .dice {
+  font-size: 72px;
+  letter-spacing: 10px;
+  line-height: 1.1;
+  margin: 14px 0 8px;
+}
+#dicebox .doutcome {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 14px;
+  color: var(--muted);
+}
+
 #winner {
   position: fixed;
   inset: 0;

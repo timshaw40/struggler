@@ -323,6 +323,121 @@ function flyPip(cid, side) {
   img.addEventListener("transitionend", () => img.remove());
 }
 
+const ROLL_KIND = {
+  coup_roll: 1, war_roll: 1, space_race_roll: 1, contest_roll: 1,
+  quagmire_roll: 1, realignment_actor_roll: 1, realignment_opponent_roll: 1,
+};
+const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+let seenHistory = -1;
+let diceChain = Promise.resolve();
+
+function drainRolls() {
+  const hist = state.history || [];
+  if (seenHistory < 0) { seenHistory = hist.length; return; }
+  const fresh = hist.slice(seenHistory);
+  seenHistory = hist.length;
+  const items = [];
+  for (let i = 0; i < fresh.length; i++) {
+    const e = fresh[i];
+    if (!ROLL_KIND[e.kind]) continue;
+    if (e.kind === "realignment_actor_roll" && fresh[i + 1] && fresh[i + 1].kind === "realignment_opponent_roll") {
+      items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev: hist[seenHistory - fresh.length + i - 1] });
+      i++;
+    } else {
+      items.push({ kind: e.kind, e, prev: hist[seenHistory - fresh.length + i - 1] });
+    }
+  }
+  for (const item of items) diceChain = diceChain.then(() => showDice(item));
+}
+
+function rollValues(item) {
+  if (item.kind === "realignment") return [item.actor.payload.value, item.opp.payload.value];
+  const p = item.e.payload;
+  if (p.sponsor_roll) return [p.sponsor_roll, p.defender_roll].filter(Boolean);
+  return [p.value];
+}
+
+function rollTitle(item) {
+  const e = item.e || item.actor;
+  const c = e.context || {};
+  if (item.kind === "realignment") return `${c.side} realigns ${pretty(c.country)}`;
+  if (e.kind === "coup_roll") return `${c.side} coups ${pretty(c.country)}`;
+  if (e.kind === "war_roll") return `${cardName(c.card)} — ${pretty(c.target)}`;
+  if (e.kind === "space_race_roll") return `${c.side} attempts the space race`;
+  if (e.kind === "quagmire_roll") return "Quagmire / Bear Trap";
+  if (e.kind === "contest_roll") return cardName(c.event) || pretty(c.event);
+  return pretty(e.kind);
+}
+
+function infLine(e, cid) {
+  const inf = e.country_influence;
+  if (!inf || !cid) return "";
+  const ctrl = e.country_control ? `, ${e.country_control} controls` : "";
+  return ` ${pretty(cid)} is now US ${inf.US} / USSR ${inf.USSR}${ctrl}.`;
+}
+
+function rollOutcome(item) {
+  const e = item.e || item.opp;
+  const c = (item.e || item.actor).context || {};
+  const prev = item.prev;
+  if (item.kind === "realignment") {
+    return `${c.side} rolled ${item.actor.payload.value}, opponent ${item.opp.payload.value}.`
+      + infLine(item.opp, c.country);
+  }
+  const n = e.payload.value;
+  let out = "";
+  if (e.kind === "coup_roll") {
+    out = `Rolled ${n}.` + infLine(e, c.country);
+    if (prev && e.defcon < prev.defcon) out += ` DEFCON drops to ${e.defcon}.`;
+  } else if (e.kind === "war_roll") {
+    out = `Rolled ${n}.` + infLine(e, c.target);
+    if (prev && e.vp !== prev.vp) out += e.vp > (prev.vp || 0) ? " Attacker scores VP." : " VP shifts.";
+  } else if (e.kind === "space_race_roll") {
+    const before = prev && prev.space_race ? prev.space_race[c.side] : 0;
+    const now = (e.space_race || {})[c.side];
+    out = `Rolled ${n}. ` + (now > before ? `${c.side} advances to box ${now}.` : `${c.side} fails to advance.`);
+    if (prev && e.vp !== prev.vp) out += " VP scored.";
+  } else if (e.kind === "quagmire_roll") {
+    out = n <= 4 ? `Rolled ${n} — free of the trap.` : `Rolled ${n} — still trapped.`;
+  } else if (e.kind === "contest_roll") {
+    const p = e.payload;
+    out = `Sponsor ${p.sponsor_roll}, defender ${p.defender_roll}.`;
+    if (prev && e.vp !== prev.vp) out += " Winner takes VP.";
+  } else {
+    out = `Rolled ${n}.`;
+  }
+  return out;
+}
+
+function showDice(item) {
+  return new Promise((resolve) => {
+    const box = $("#dicebox");
+    box.querySelector(".dtitle").textContent = rollTitle(item);
+    box.querySelector(".doutcome").textContent = "";
+    const dice = box.querySelector(".dice");
+    const vals = rollValues(item);
+    box.hidden = false;
+    let n = 0;
+    const tick = setInterval(() => {
+      dice.textContent = vals.map(() => DIE[(Math.random() * 6 | 0) + 1]).join(" ");
+      if (++n < 14) return;
+      clearInterval(tick);
+      dice.textContent = vals.map((v) => DIE[v]).join(" ");
+      box.querySelector(".doutcome").textContent = rollOutcome(item);
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        box.hidden = true;
+        box.onclick = null;
+        resolve();
+      };
+      box.onclick = finish;
+      setTimeout(finish, 2800);
+    }, 70);
+  });
+}
+
 // -- option helpers ---------------------------------------------------------
 
 function findOption(pred) {
@@ -403,6 +518,7 @@ function render() {
   renderHand();
   renderDecision();
   renderWinner();
+  drainRolls();
 }
 
 function renderBoard() {

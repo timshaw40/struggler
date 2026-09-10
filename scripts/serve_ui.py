@@ -149,11 +149,15 @@ class Session:
             "actor": event.actor.value,
             "kind": event.decision.kind.value,
             "payload": Session._json(event.action.payload),
+            "context": Session._json(event.decision.context),
             "defcon": event.defcon,
             "vp": event.vp,
             "turn": event.turn,
             "action_round": event.action_round,
             "country": event.country,
+            "country_influence": Session._json(event.country_influence),
+            "country_control": event.country_control,
+            "space_race": Session._json(event.space_race),
         }
 
     def state(self) -> dict:
