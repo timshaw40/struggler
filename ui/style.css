@@ -111,13 +111,16 @@ main {
 
 .marker {
   position: absolute;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.marker:not(.boxed) {
   transform: translate(-50%, -50%);
   display: grid;
   grid-template-columns: 1.9em 1.9em;
   gap: 0.174em;
   min-height: 1.9em;
-  pointer-events: auto;
-  z-index: 2;
 }
 
 .marker .pip {
@@ -128,6 +131,16 @@ main {
 
 .marker .pip.us { grid-column: 1; }
 .marker .pip.ussr { grid-column: 2; }
+
+.marker.boxed .pip {
+  position: absolute;
+  width: 1em;
+  height: 1em;
+  top: calc(var(--strip) + (100% - var(--strip) - 1em) / 2);
+  grid-column: auto;
+}
+.marker.boxed .pip.us { left: 6%; }
+.marker.boxed .pip.ussr { right: 6%; left: auto; }
 
 .marker .pip img {
   display: block;
@@ -157,11 +170,11 @@ main {
 
 .marker.legal {
   cursor: pointer;
-  border-radius: 0.696em;
-  box-shadow: 0 0 0 0.261em var(--gold), 0 0 1.391em 0.435em rgba(255, 213, 74, 0.6);
+  box-shadow: inset 0 0 0 3px var(--gold), 0 0 10px 1px rgba(255, 213, 74, 0.5);
 }
 
-.marker.legal:hover { transform: translate(-50%, -50%) scale(1.25); }
+.marker.legal:hover { filter: brightness(1.08); }
+.marker:not(.boxed).legal:hover { transform: translate(-50%, -50%) scale(1.25); }
 
 .flypip {
   position: fixed;

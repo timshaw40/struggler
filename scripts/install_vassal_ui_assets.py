@@ -366,15 +366,15 @@ HAND_TWEAK = {
 }
 
 
-def install_boxes(board_png: Path) -> dict[str, tuple[tuple[int, int], int]]:
+def install_boxes(board_png: Path) -> dict[str, tuple[tuple[int, int], int, int]]:
     """Detect every country box once; write the header-strip crops for the
-    hover tooltip and return each (box center, box height)."""
+    hover tooltip and return each (body center, box height, box width)."""
     from PIL import Image
 
     img = Image.open(board_png)
     out_dir = OUT / "headers"
     out_dir.mkdir(parents=True, exist_ok=True)
-    found_boxes: dict[str, tuple[tuple[int, int], int]] = {}
+    found_boxes: dict[str, tuple[tuple[int, int], int, int]] = {}
     missing, fallback = [], []
     for cid, (cx, cy) in VASSAL_COUNTRIES.items():
         if cid in HAND_TWEAK:
@@ -388,7 +388,7 @@ def install_boxes(board_png: Path) -> dict[str, tuple[tuple[int, int], int]]:
             if not ok:
                 fallback.append(cid)
         img.crop(rect).save(out_dir / f"{cid}.png")
-        found_boxes[cid] = (center, h)
+        found_boxes[cid] = (center, h, rect[2] - rect[0])
     if missing:
         print(f"warning: no box found for {missing}", file=sys.stderr)
     if fallback:
@@ -491,11 +491,11 @@ def main() -> None:
     stability = load_stability()
     countries = {
         cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4),
-              "s": stability[cid], "h": h}
-        for cid, ((x, y), h) in boxes.items()
+              "s": stability[cid], "h": h, "w": w}
+        for cid, ((x, y), h, w) in boxes.items()
     }
     (OUT / "countries.json").write_text(json.dumps(countries, indent=1, sort_keys=True) + "\n")
-    print(f"countries: {len(countries)} box centers+heights -> {OUT / 'countries.json'}")
+    print(f"countries: {len(countries)} box rects -> {OUT / 'countries.json'}")
     print(f"cards: {len(manifest)} -> {out_cards}")
 
 

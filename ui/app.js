@@ -411,16 +411,19 @@ function renderBoard() {
     if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
-    el.style.left = pos.x * 100 + "%";
-    el.style.top = pos.y * 100 + "%";
-    // Pips scale to the country's own body (tall bodies get bigger pips):
-    // a side lands near 4/5 of body height, sitting in the influence
-    // columns below the strip VASSAL-style. em, so it tracks zoom for
-    // free; World keeps standard size (overview, floor chips).
-    // Schematic fallback has no h and stays standard everywhere.
-    if (view !== "World" && pos.h) {
-      const boxF = Math.min((pos.h - 32) * 0.0132, 1.6);
-      if (boxF > 1.01) el.style.fontSize = boxF.toFixed(2) + "em";
+    if (pos.w && pos.h) {
+      // Marker IS the country rectangle: gold outline wraps the whole
+      // box, US pip the left oval, USSR the right. 32px = name strip.
+      el.classList.add("boxed");
+      el.style.left = (pos.x - pos.w / 2 / BOARD_W) * 100 + "%";
+      el.style.top = (pos.y - (pos.h + 32) / 2 / BOARD_H) * 100 + "%";
+      el.style.width = pos.w / BOARD_W * 100 + "%";
+      el.style.height = pos.h / BOARD_H * 100 + "%";
+      el.style.fontSize = `calc(var(--boardw) * ${(pos.w / BOARD_W * 0.42).toFixed(4)})`;
+      el.style.setProperty("--strip", (32 / pos.h * 100).toFixed(1) + "%");
+    } else {
+      el.style.left = pos.x * 100 + "%";
+      el.style.top = pos.y * 100 + "%";
     }
     const ctrl = controlOf(cid, inf);
     el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
