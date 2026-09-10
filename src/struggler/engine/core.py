@@ -63,6 +63,7 @@ class Engine:
         self.cards: dict[str, Card] = load_cards()
         self.phase = "idle"  # idle | headline | action_rounds | complete
         self.include_optional = False
+        self.setup_us_extra = 0
         self.draw_pile: list[str] = []
         self.discard_pile: list[str] = []
         self.removed_cards: list[str] = []
@@ -310,6 +311,7 @@ class Engine:
         board: Board | None = None,
         events: bool = True,
         include_ccw: bool = True,
+        setup_us_extra: int = 0,
         physical_mode: bool = False,
         physical_side: Side | None = None,
     ) -> "Engine":
@@ -334,6 +336,7 @@ class Engine:
         engine = cls(seed=seed, board=board)
         engine.include_optional = include_optional
         engine.events_enabled = events
+        engine.setup_us_extra = max(0, int(setup_us_extra))
         engine.physical_mode = physical_mode
         engine.physical_side = physical_side
         engine.china_card_owner = "USSR"
@@ -612,6 +615,8 @@ class Engine:
 
     def _push_setup_influence(self, side: Side, subregion: Subregion) -> None:
         remaining = RULES["setup_additional"][subregion.name]["amount"]
+        if side is Side.US:
+            remaining += getattr(self, "setup_us_extra", 0)
         self._push_setup_influence_remaining(side, subregion, remaining)
 
     def _push_setup_influence_remaining(

@@ -77,13 +77,16 @@ class Session:
         self.human_side = Side.US if (us == "human" or self.watch) else Side.USSR
         self.seed = seed
         self.us, self.ussr, self.events = us, ussr, events
+        self.bot_kind = ussr if us == "human" else us
         self.include_ccw = include_ccw
+        self.setup_us_extra = 0
         self.lock = threading.Lock()
         self._rebuild()
 
     def _rebuild(self) -> None:
         self.engine = Engine.new_game(
             seed=self.seed, events=self.events, include_ccw=self.include_ccw,
+            setup_us_extra=self.setup_us_extra,
         )
         self.players: dict[Side, Any] = {}
         for side, kind in ((Side.US, self.us), (Side.USSR, self.ussr)):
@@ -95,18 +98,27 @@ class Session:
                 bind(self.engine)
         self.history = HistoryBuilder()
 
-    def restart(self, include_ccw: bool | None = None) -> None:
+    def restart(self, include_ccw: bool | None = None, side: str | None = None,
+                setup_us_extra: int | None = None) -> None:
         if include_ccw is not None:
             self.include_ccw = include_ccw
+        if setup_us_extra is not None:
+            self.setup_us_extra = max(0, min(6, int(setup_us_extra)))
+        if side in ("US", "USSR") and not self.watch:
+            self.human_side = Side(side)
+            if self.human_side is Side.US:
+                self.us, self.ussr = "human", self.bot_kind
+            else:
+                self.us, self.ussr = self.bot_kind, "human"
         self.seed += 1
         self._rebuild()
 
-    def forfeit(self) -> str:
+    def forfeit(self, **restart_kw: Any) -> str:
         """Opponent wins, then a new game starts. Returns the winner's side."""
         winner = self.human_side.opponent
         self.engine._win(winner, "forfeit")
         side = winner.value
-        self.restart()
+        self.restart(**restart_kw)
         return side
 
     def _step(self, action: Action) -> Event:
@@ -232,6 +244,17 @@ class Session:
         return data
 
 
+def _restart_opts(body: dict) -> dict[str, Any]:
+    opts: dict[str, Any] = {}
+    if "include_ccw" in body:
+        opts["include_ccw"] = bool(body["include_ccw"])
+    if body.get("side") in ("US", "USSR"):
+        opts["side"] = body["side"]
+    if "setup_us_extra" in body:
+        opts["setup_us_extra"] = int(body["setup_us_extra"])
+    return opts
+
+
 def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args: Any) -> None:  # console already shows steps
@@ -292,14 +315,13 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                         session.act(int(body.get("index", -1)))
                         self._send_json(200, session.state())
                     elif self.path == "/new":
-                        ccw = body.get("include_ccw")
-                        session.restart(None if ccw is None else bool(ccw))
+                        session.restart(**_restart_opts(body))
                         self._send_json(200, session.state())
                     elif self.path == "/forfeit":
                         if session.watch:
                             self._send_json(409, {"error": "watch mode"})
                             return
-                        winner = session.forfeit()
+                        winner = session.forfeit(**_restart_opts(body))
                         self._send_json(200, {"forfeit": True, "winner": winner, **session.state()})
                     else:
                         self._send_json(404, {"error": "not found"})

@@ -827,11 +827,18 @@ function fillSettings() {
   const box = $("#settings");
   const side = state ? state.human_side : "US";
   const rec = recordOf(side);
+  const play = (localStorage.getItem("struggler.side") || side);
+  const extra = localStorage.getItem("struggler.usExtra") ?? "2";
   box.innerHTML =
     `<p>You (${side}): ${rec.w}–${rec.l}</p>` +
     `<p>Seed ${state ? state.seed : "—"}</p>` +
     `<label><input type="checkbox" id="set-sound"${localStorage.getItem("struggler.sound") !== "0" ? " checked" : ""}> Sound</label>` +
     `<label><input type="checkbox" id="set-ccw"${localStorage.getItem("struggler.ccw") !== "0" ? " checked" : ""}> Chinese Civil War (next game)</label>` +
+    `<p>Play as</p>` +
+    `<label><input type="radio" name="set-side" value="US"${play !== "USSR" ? " checked" : ""}> US</label>` +
+    `<label><input type="radio" name="set-side" value="USSR"${play === "USSR" ? " checked" : ""}> USSR</label>` +
+    `<label>US extra setup +<b id="set-extra-n">${extra}</b>` +
+    `<input type="range" id="set-extra" min="0" max="6" value="${extra}"></label>` +
     `<div>` +
     (state && !state.watch ? `<button type="button" id="set-forfeit">Forfeit</button>` : "") +
     `<button type="button" id="set-new">New game</button></div>`;
@@ -840,6 +847,13 @@ function fillSettings() {
   });
   $("#set-ccw").addEventListener("change", (e) => {
     localStorage.setItem("struggler.ccw", e.target.checked ? "1" : "0");
+  });
+  for (const r of document.querySelectorAll("input[name=set-side]")) {
+    r.addEventListener("change", () => localStorage.setItem("struggler.side", r.value));
+  }
+  $("#set-extra").addEventListener("input", (e) => {
+    localStorage.setItem("struggler.usExtra", e.target.value);
+    $("#set-extra-n").textContent = e.target.value;
   });
   const f = $("#set-forfeit");
   if (f) f.addEventListener("click", forfeitGame);
@@ -853,7 +867,11 @@ async function postGame(path) {
     const res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ include_ccw: localStorage.getItem("struggler.ccw") !== "0" }),
+      body: JSON.stringify({
+        include_ccw: localStorage.getItem("struggler.ccw") !== "0",
+        side: localStorage.getItem("struggler.side") || "US",
+        setup_us_extra: +(localStorage.getItem("struggler.usExtra") ?? 2),
+      }),
     });
     if (!res.ok) throw new Error(path + " " + res.status);
     const data = await res.json();

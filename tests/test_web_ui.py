@@ -126,6 +126,27 @@ def test_forfeit_starts_a_new_game() -> None:
     assert session.engine.pending_decision.actor is session.human_side
 
 
+def test_restart_can_switch_side_and_us_extra() -> None:
+    session = make_session()
+    session.restart(side="USSR", setup_us_extra=2)
+    assert session.human_side.value == "USSR"
+    assert session.ussr == "human" and session.us == "greedy"
+    session.advance()
+    d = session.engine.pending_decision
+    assert d.actor.value == "USSR"  # setup: USSR places first
+    session.restart(side="US", setup_us_extra=2)
+    eng = session.engine
+    # Walk USSR's 6 setup points (greedy), then US should have 7+2 remaining.
+    while (
+        eng.pending_decision
+        and eng.pending_decision.actor.value == "USSR"
+        and eng.pending_decision.context.get("setup")
+    ):
+        eng.step(eng.pending_decision.options[0])
+    d = eng.pending_decision
+    assert d.actor.value == "US" and d.context["remaining"] == 9
+
+
 def test_restart_can_drop_ccw() -> None:
     session = make_session()
     assert "Chinese_Civil_War" in session.engine.board.countries

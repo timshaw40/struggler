@@ -257,6 +257,7 @@ main {
 #settings[hidden] { display: none; }
 #settings p { margin: 0 0 8px; }
 #settings label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+#settings input[type="range"] { flex: 1; }
 #settings button {
   margin: 8px 6px 0 0;
   padding: 4px 10px;
