@@ -134,23 +134,23 @@ main {
 
 .marker.boxed .pip {
   position: absolute;
-  width: 1em;
-  height: 1em;
-  top: calc(var(--strip) + (100% - var(--strip) - 1em) / 2);
+  container-type: size;
+  top: calc(var(--strip) + 4%);
+  height: calc(100% - var(--strip) - 6%);
+  width: 44%;
   grid-column: auto;
 }
-.marker.boxed .pip.us { left: 6%; }
-.marker.boxed .pip.ussr { right: 6%; left: auto; }
+.marker.boxed .pip.us { left: 4%; }
+.marker.boxed .pip.ussr { right: 4%; left: auto; }
 
 .marker .pip img {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .marker .pip b {
-  /* The count sits centered over the face, VASSAL-style; the halo keeps
-   * it legible where it crosses the star. */
   position: absolute;
   inset: 0;
   display: flex;
@@ -162,6 +162,8 @@ main {
   color: #1c2330;
   text-shadow: 0 0 0.25em rgba(255, 255, 255, 0.9);
 }
+
+.marker.boxed .pip b { font-size: 58cqmin; }
 
 .marker .pip.controlled b {
   color: #fff;

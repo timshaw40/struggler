@@ -421,14 +421,13 @@ function renderBoard() {
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     if (pos.w && pos.h) {
-      // Marker IS the country rectangle (installer top-left + size).
-      // Pips share one size (body height), not the noisy detected width.
+      // Marker IS the country rectangle. Pips are % of this box, so they
+      // stay in the ovals at every region zoom and slider zoom.
       el.classList.add("boxed");
       el.style.left = pos.x * 100 + "%";
       el.style.top = pos.y * 100 + "%";
       el.style.width = pos.w / BOARD_W * 100 + "%";
       el.style.height = pos.h / BOARD_H * 100 + "%";
-      el.style.fontSize = "calc(var(--boardw) * 0.0238)";
       el.style.setProperty("--strip", (32 / pos.h * 100).toFixed(1) + "%");
     } else {
       el.style.left = pos.x * 100 + "%";
