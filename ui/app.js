@@ -25,7 +25,7 @@ const REGIONS = {
   "Central America": [0, 1140, 1590, 2070],
   "South America": [390, 1710, 2060, 3090],
 };
-let view = "Europe";
+let view = "World";
 let zoom = 1;  // 1..1.8, extra on top of the region fit
 
 /* VASSAL SetupStack centers (native board px). Engine already tracks
