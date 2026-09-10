@@ -83,7 +83,7 @@ async function boot() {
   previewEl = preview;
   enableDragPan();
   buildViewBar();
-  window.addEventListener("resize", layoutBoard);
+  window.addEventListener("resize", () => setView(view));
   setView(view);
   await refresh();
   if (state.watch) setTimeout(tick, 400);
@@ -129,9 +129,10 @@ function setView(name) {
 
 let lastJump = "";
 /* Country-picking decisions target one subregion, so the map follows the
- * action: switch to the smallest region view containing every legal target
- * (World when they straddle regions). Re-jumps are skipped for the same
- * target set, so re-renders never yank the view back. */
+ * action: switch to the region holding the most legal targets. (Canada is
+ * Europe-scoring but sits west of the Europe rect — requiring every target
+ * inside a rect sent the setup jump to World.) Same target set is skipped
+ * so re-renders never yank the view back. */
 function jumpToTargets(d) {
   const key = d.options.map((o) => o.index).join(",");
   if (key === lastJump) return;
@@ -140,12 +141,16 @@ function jumpToTargets(d) {
     .filter(Boolean)
     .map((p) => [p.x * BOARD_W, p.y * BOARD_H]);
   if (!pts.length) return;
-  const inside = (reg) => pts.every(([x, y]) =>
-    reg[0] <= x && x <= reg[2] && reg[1] <= y && y <= reg[3]);
-  if (inside(REGIONS[view])) { lastJump = key; return; }
-  const hit = Object.keys(REGIONS).find((n) => n !== "World" && inside(REGIONS[n]));
-  setView(hit || "World");
   lastJump = key;
+  const inside = (reg, x, y) =>
+    reg[0] <= x && x <= reg[2] && reg[1] <= y && y <= reg[3];
+  let best = view, bestN = 0;
+  for (const n of Object.keys(REGIONS)) {
+    if (n === "World") continue;
+    const c = pts.filter(([x, y]) => inside(REGIONS[n], x, y)).length;
+    if (c > bestN) { best = n; bestN = c; }
+  }
+  if (best !== view) setView(best);
 }
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the

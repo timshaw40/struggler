@@ -39,14 +39,14 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  overflow-y: auto;   /* full-width map: only ever scroll vertically */
-  overflow-x: hidden;
+  overflow: auto;
   position: relative;
 }
 
 #boardbox {
   position: relative;
   margin: 0 auto;
+  flex-shrink: 0;  /* don't let flex squash the zoomed map back to the viewport */
   width: var(--boardw, 1600px);  /* set by layoutBoard() — the only zoom knob */
 }
 
