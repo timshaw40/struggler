@@ -5619,7 +5619,9 @@
           "Red_Scare_Purge"
         ],
         "removed_cards": [
-          "Suez_Crisis",
+          "Suez_Crisis"
+        ],
+        "in_play_cards": [
           "Marshall_Plan",
           "De_Gaulle_Leads_France"
         ],
@@ -6718,11 +6720,13 @@
         ],
         "removed_cards": [
           "Suez_Crisis",
-          "Marshall_Plan",
-          "De_Gaulle_Leads_France",
           "Korean_War",
           "Nasser",
           "Truman_Doctrine"
+        ],
+        "in_play_cards": [
+          "Marshall_Plan",
+          "De_Gaulle_Leads_France"
         ],
         "hands": {
           "US": [
@@ -7777,6 +7781,7 @@
           "Ussuri_River_Skirmish",
           "Quagmire",
           "Defectors",
+          "Bear_Trap",
           "Central_America_Scoring",
           "Colonial_Rear_Guards",
           "Panama_Canal_Returned",
@@ -7794,13 +7799,13 @@
           "Iran_Contra_Scandal",
           "Socialist_Governments",
           "Che",
+          "Formosan_Resolution",
           "Latin_American_Debt_Crisis",
           "Red_Scare_Purge",
           "We_Will_Bury_You",
           "Latin_American_Death_Squads",
           "Solidarity",
           "Five_Year_Plan",
-          "Shuttle_Diplomacy",
           "AWACS_Sale_to_Saudis",
           "Arab_Israeli_War",
           "Grain_Sales_to_Soviets",
@@ -7821,28 +7826,22 @@
           "South_African_Unrest",
           "Alliance_for_Progress",
           "COMECON",
+          "Shuttle_Diplomacy",
           "Asia_Scoring"
         ],
         "removed_cards": [
           "Suez_Crisis",
-          "Marshall_Plan",
-          "De_Gaulle_Leads_France",
           "Korean_War",
           "Nasser",
           "Truman_Doctrine",
           "De_Stalinization",
-          "US_Japan_Mutual_Defense_Pact",
           "Captured_Nazi_Scientist",
-          "NORAD",
           "Containment",
           "Romanian_Abdication",
           "Independent_Reds",
           "Allende",
           "Nixon_Plays_The_China_Card",
-          "John_Paul_II_Elected_Pope",
           "Southeast_Asia_Scoring",
-          "Flower_Power",
-          "NATO",
           "Puppet_Governments",
           "Our_Man_In_Tehran",
           "Africa_Scoring",
@@ -7854,26 +7853,33 @@
           "U2_Incident",
           "OAS_Founded",
           "CIA_Created",
-          "Bear_Trap",
           "Cuban_Missile_Crisis",
           "Ask_Not_What_Your_Country_Can_Do_For_You",
           "Blockade",
-          "Willy_Brandt",
-          "Formosan_Resolution",
           "Aldrich_Ames_Remix",
           "Lone_Gunman",
           "Ortega_Elected_in_Nicaragua",
           "Pershing_II_Deployed",
-          "An_Evil_Empire",
+          "Flower_Power",
           "Brezhnev_Doctrine",
           "Marine_Barracks_Bombing",
-          "The_Iron_Lady",
           "Soviets_Shoot_Down_KAL_007",
           "Sadat_Expels_Soviets",
           "Vietnam_Revolts",
-          "North_Sea_Oil",
-          "Camp_David_Accords",
           "Iran_Iraq_War"
+        ],
+        "in_play_cards": [
+          "Marshall_Plan",
+          "De_Gaulle_Leads_France",
+          "US_Japan_Mutual_Defense_Pact",
+          "NORAD",
+          "John_Paul_II_Elected_Pope",
+          "NATO",
+          "Willy_Brandt",
+          "An_Evil_Empire",
+          "The_Iron_Lady",
+          "North_Sea_Oil",
+          "Camp_David_Accords"
         ],
         "hands": {
           "US": [

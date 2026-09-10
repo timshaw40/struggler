@@ -918,7 +918,7 @@ def test_tear_down_this_wall_free_op_ignores_defcon_region_restriction():
 def test_yuri_and_samantha_scores_ussr_on_us_coups():
     engine = _bare(seed=1)
     engine.defcon = 5
-    engine.game_effects["yuri_samantha"] = True
+    engine.turn_effects["yuri_samantha"] = True
     engine.board.influence["Cuba"] = {"US": 0, "USSR": 1}
     _resolve_coup_roll(engine, Side.US, "Cuba", ops=3, value=1)
     assert engine.vp == -1  # 1 VP to the USSR for the US coup attempt
@@ -2249,12 +2249,14 @@ def test_ineligible_asterisked_event_played_as_event_is_discarded_not_removed():
     assert "NATO" not in engine.removed_cards
     assert engine.game_effects.get("nato") is None  # the event did not occur
 
-    # Once the prerequisite is met the same play fires and removes the card.
+    # Once the prerequisite is met the same play fires — and NATO's printed
+    # footer says "persists", so the card goes face-up beside the board.
     engine.game_effects["marshall_or_warsaw"] = True
     engine.hands = {"USSR": [], "US": ["NATO"]}
     engine.push_full_card_play(Side.US, "NATO")
     engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
-    assert "NATO" in engine.removed_cards
+    assert "NATO" in engine.in_play_cards
+    assert "NATO" not in engine.removed_cards
     assert engine.game_effects.get("nato") is True
 
 
@@ -2535,3 +2537,58 @@ def test_china_card_and_vietnam_revolts_ops_stack():
     engine.step(Action(DecisionKind.COUP_TARGET, {"country": "Burma"}))
     dec = engine.pending_decision  # COUP_ROLL
     assert dec.context["ops"] == 6  # 4 + 1 + 1
+
+
+def test_permanent_events_live_in_play_not_in_the_discard_pile():
+    # 2.2.5: an underlined event card is displayed face-up beside the board
+    # until cancelled — it is not in any draw/discard pile, so it can never
+    # be reshuffled back into a hand, reclaimed by SALT Negotiations, or
+    # re-fired from the discard by Star Wars while its effect is live.
+    engine = _bare()
+    engine.hands = {"USSR": ["Flower_Power"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Flower_Power")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is True
+
+    # Cancellation (An Evil Empire): Flower Power's printed footer says
+    # "persists until nullified ... then cut from play" — the card leaves the
+    # game, not the discard pile.
+    engine.hands = {"USSR": [], "US": ["An_Evil_Empire"]}
+    engine.push_full_card_play(Side.US, "An_Evil_Empire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.removed_cards
+    assert "Flower_Power" not in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is None
+    # ...and the cancelling card is itself on the table.
+    assert "An_Evil_Empire" in engine.in_play_cards
+
+
+def test_trap_card_leaves_play_when_freed_by_the_roll():
+    engine = _bare()
+    engine.hands = {"USSR": ["Quagmire"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Quagmire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Quagmire" in engine.in_play_cards
+    # The freeing roll (1-4) cancels the trap: the card goes to the discard.
+    from struggler.engine.types import DecisionKind as DK
+    engine._push(Side.CHANCE, DK.QUAGMIRE_ROLL,
+                 (Action(DK.QUAGMIRE_ROLL, {"value": 3}),), {"key": "quagmire"})
+    engine.step(engine.legal_actions()[0])
+    assert "Quagmire" in engine.discard_pile
+    assert engine.game_effects.get("quagmire") is None
+
+
+def test_shuttle_diplomacy_leaves_play_when_consumed_at_scoring():
+    engine = _bare()
+    engine.board.influence["Egypt"]["USSR"] = 3
+    engine.board.influence["Israel"]["US"] = 3
+    engine.hands = {"USSR": [], "US": ["Shuttle_Diplomacy"]}
+    engine.push_full_card_play(Side.US, "Shuttle_Diplomacy")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Shuttle_Diplomacy" in engine.in_play_cards
+    engine._score_region_net(Region.MIDDLE_EAST)
+    assert "Shuttle_Diplomacy" in engine.discard_pile
+    assert "Shuttle_Diplomacy" not in engine.in_play_cards

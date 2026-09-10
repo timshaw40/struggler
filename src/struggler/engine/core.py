@@ -22,6 +22,42 @@ from struggler.engine.types import (
 
 _DEFAULT_MIN_DEFCON = 1
 
+# Cards whose printed event is a persistent, game-long effect ("underlined"
+# cards, 2.2.5): while the effect is live the card sits face-up beside the
+# board — in `in_play_cards`, NOT the discard pile — so it can never be
+# reshuffled into a hand, reclaimed (SALT Negotiations), or re-fired (Star
+# Wars) while in effect. When the effect is cancelled or consumed, the card
+# moves to the discard pile via `_release_in_play` (except where the printed
+# card says "then cut from play" — see _CUT_ON_RELEASE).
+_CARD_EFFECTS: dict[str, str] = {
+    "NATO": "nato",
+    "De_Gaulle_Leads_France": "degaulle_france",
+    "Marshall_Plan": "marshall_or_warsaw",
+    "Warsaw_Pact_Formed": "marshall_or_warsaw",
+    "US_Japan_Mutual_Defense_Pact": "us_japan_pact",
+    "John_Paul_II_Elected_Pope": "john_paul",
+    "Camp_David_Accords": "camp_david",
+    "Iranian_Hostage_Crisis": "iranian_hostage",
+    "The_Iron_Lady": "iron_lady",
+    "AWACS_Sale_to_Saudis": "awacs",
+    "Flower_Power": "flower_power",
+    "An_Evil_Empire": "evil_empire",
+    "North_Sea_Oil": "north_sea_oil",
+    "NORAD": "norad",
+    "The_Reformer": "reformer",
+    "Willy_Brandt": "willy_brandt",
+    "Tear_Down_This_Wall": "tear_down_wall",
+    "Bear_Trap": "bear_trap",
+    "Quagmire": "quagmire",
+    "Formosan_Resolution": "formosan_resolution",
+    "Shuttle_Diplomacy": "shuttle_diplomacy",
+}
+
+# Printed cards that say their effect "persists until nullified ... then cut
+# from play": when the effect is released the card is removed from the game,
+# not discarded (Flower Power, per its PNP footer).
+_CUT_ON_RELEASE: frozenset[str] = frozenset({"Flower_Power"})
+
 # Physical-mode placeholder: a hand/draw-pile slot whose real card identity is
 # not yet known to the engine (see Engine.physical_mode). No real card id in
 # data/cards.json ever looks like this, so it can never collide with one.
@@ -66,6 +102,9 @@ class Engine:
         self.draw_pile: list[str] = []
         self.discard_pile: list[str] = []
         self.removed_cards: list[str] = []
+        # Cards whose permanent event effect is live, displayed beside the
+        # board (2.2.5) — see _CARD_EFFECTS. Public state.
+        self.in_play_cards: list[str] = []
         self.hands: dict[str, list[str]] = {"US": [], "USSR": []}
         self.china_card_owner = "USSR"
         self.china_card_available = True  # face-up: playable by its owner this turn
@@ -191,6 +230,7 @@ class Engine:
             draw_pile_size=len(self.draw_pile),
             discard_pile=tuple(self.discard_pile),
             removed_cards=tuple(self.removed_cards),
+            in_play_cards=tuple(self.in_play_cards),
             china_card_owner=Side(self.china_card_owner),
             china_card_available=self.china_card_available,
             space_race=dict(self.space_race),
@@ -233,6 +273,7 @@ class Engine:
             "draw_pile": list(self.draw_pile),
             "discard_pile": list(self.discard_pile),
             "removed_cards": list(self.removed_cards),
+            "in_play_cards": list(self.in_play_cards),
             "hands": {side: list(cards) for side, cards in self.hands.items()},
             "china_card_owner": self.china_card_owner,
             "china_card_available": self.china_card_available,
@@ -281,6 +322,7 @@ class Engine:
         engine.draw_pile = list(data.get("draw_pile", []))
         engine.discard_pile = list(data.get("discard_pile", []))
         engine.removed_cards = list(data.get("removed_cards", []))
+        engine.in_play_cards = list(data.get("in_play_cards", []))
         hands = data.get("hands", {"US": [], "USSR": []})
         engine.hands = {side: list(cards) for side, cards in hands.items()}
         engine.china_card_owner = data.get("china_card_owner", "USSR")
@@ -1397,6 +1439,7 @@ class Engine:
         ev = EVENTS.get(cid)
         if ev is not None and ev.eligible(self, side):
             ev.resolve(self, side)
+            self._park_permanent_card(cid)
 
     def _usable_coup_realign_target(
         self, attacker: Side, cid: str, for_coup: bool = True,
@@ -1951,7 +1994,7 @@ class Engine:
             dropped = self._first_ussr_battleground(region)
             if dropped is not None:
                 ignored.add(dropped)
-            self.game_effects.pop("shuttle_diplomacy", None)  # consumed
+            self._release_in_play("shuttle_diplomacy")  # consumed
         return frozenset(extra_battlegrounds), frozenset(ignored)
 
     def _first_ussr_battleground(self, region: Region) -> str | None:
@@ -2037,7 +2080,7 @@ class Engine:
             # Resolution's printed text nullifies it specifically "when USA
             # plays The China Card" -- not whenever it merely changes hands.
             if side is Side.US:
-                self.game_effects.pop("formosan_resolution", None)
+                self._release_in_play("formosan_resolution")
             self.china_card_owner = side.opponent.value
             self.china_card_available = False
             return
@@ -2052,6 +2095,32 @@ class Engine:
             self.removed_cards.append(cid)
         else:
             self.discard_pile.append(cid)
+
+    def _park_permanent_card(self, cid: str) -> None:
+        """After a fired event, if `cid` is a permanent ("underlined") card
+        whose game-long effect is now live, move it from the discard pile to
+        the table (2.2.5) — outside every pile, so it can never be
+        reshuffled, reclaimed, or re-fired while in effect."""
+        effect = _CARD_EFFECTS.get(cid)
+        if effect is not None and self.game_effects.get(effect) and cid in self.discard_pile:
+            self.discard_pile.remove(cid)
+            self.in_play_cards.append(cid)
+
+    def _release_in_play(self, key: str) -> None:
+        """A persistent effect was cancelled or consumed: its card leaves the
+        table (2.2.5) for the discard pile — or out of the game when the
+        printed card says "then cut from play" — alongside dropping the
+        flag."""
+        self.game_effects.pop(key, None)
+        card = next(
+            (c for c in self.in_play_cards if _CARD_EFFECTS.get(c) == key), None
+        )
+        if card is not None:
+            self.in_play_cards.remove(card)
+            if card in _CUT_ON_RELEASE:
+                self.removed_cards.append(card)
+            else:
+                self.discard_pile.append(card)
 
     # -- dispatch -----------------------------------------------------------
 
@@ -2364,10 +2433,10 @@ class Engine:
                 self._change_defcon(-1, caused_by=side)
 
         # Yuri and Samantha: the USSR scores 1 VP for every US coup attempt,
-        # for the rest of the game.
+        # until end of turn (printed footer: "until end of turn").
         if (
             side is Side.US
-            and self.game_effects.get("yuri_samantha")
+            and self.turn_effects.get("yuri_samantha")
             and not self.is_terminal
         ):
             self._award_vp(Side.USSR, 1)
@@ -2678,7 +2747,7 @@ class Engine:
 
     def _handle_quagmire_roll(self, decision: Decision, action: Action) -> None:
         if action.payload["value"] <= 4:  # 1-4: break free
-            self.game_effects.pop(decision.context["key"], None)
+            self._release_in_play(decision.context["key"])
 
     # -- realignment ---------------------------------------------------------
 

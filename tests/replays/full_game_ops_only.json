@@ -3724,6 +3724,7 @@
           "Romanian_Abdication"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Vietnam_Revolts",
@@ -4895,6 +4896,7 @@
           "Latin_American_Death_Squads"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Truman_Doctrine",
@@ -6044,6 +6046,7 @@
         "removed_cards": [
           "Southeast_Asia_Scoring"
         ],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Wargames"

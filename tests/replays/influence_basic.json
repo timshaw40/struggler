@@ -1061,6 +1061,7 @@
         "draw_pile": [],
         "discard_pile": [],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [],
           "USSR": []
@@ -2428,6 +2429,7 @@
         "draw_pile": [],
         "discard_pile": [],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [],
           "USSR": []

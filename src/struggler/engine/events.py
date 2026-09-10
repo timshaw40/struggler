@@ -386,7 +386,7 @@ def _iron_lady(engine: "Engine", side: Side) -> None:
 @event("An_Evil_Empire")
 def _evil_empire(engine: "Engine", side: Side) -> None:
     engine._award_vp(Side.US, 1)
-    engine.game_effects.pop("flower_power", None)  # cancels Flower Power
+    engine._release_in_play("flower_power")  # cancels Flower Power
     engine.game_effects["evil_empire"] = True
 
 
@@ -421,8 +421,11 @@ def _ortega(engine: "Engine", side: Side) -> None:
 @event("Tear_Down_This_Wall")
 def _tear_down_wall(engine: "Engine", side: Side) -> None:
     # In East Germany: +3 US Influence. In Europe: the US gets 3 Ops for a
-    # free Coup attempt or Realignment (not Influence).
-    engine.game_effects.pop("willy_brandt", None)  # cancels Willy Brandt
+    # free Coup attempt or Realignment (not Influence). Printed footer:
+    # "nullifies Willy Brandt / persists" — the card stays in play for the
+    # rest of the game (nothing in the deck cancels it).
+    engine._release_in_play("willy_brandt")  # cancels Willy Brandt
+    engine.game_effects["tear_down_wall"] = True
     engine.add_influence("East_Germany", Side.US, 3)
     engine.push_free_coup_or_realign(
         Side.US, "Tear_Down_This_Wall", ops=3,
@@ -767,8 +770,9 @@ def _flower_power(engine: "Engine", side: Side) -> None:
 
 @event("Yuri_and_Samantha")
 def _yuri_and_samantha(engine: "Engine", side: Side) -> None:
-    # The USSR scores 1 VP for every US coup attempt for the rest of the game.
-    engine.game_effects["yuri_samantha"] = True
+    # The USSR scores 1 VP for every US coup attempt until end of turn
+    # (printed footer: "until end of turn / then cut from play").
+    engine.turn_effects["yuri_samantha"] = True
 
 
 # -- set-DEFCON branch -------------------------------------------------------
@@ -1647,7 +1651,7 @@ def _bear_trap(engine: "Engine", side: Side) -> None:
 @event("Quagmire")
 def _quagmire(engine: "Engine", side: Side) -> None:
     # Physical card text: nullifies NORAD.
-    engine.game_effects.pop("norad", None)
+    engine._release_in_play("norad")
     engine.game_effects["quagmire"] = True
 
 
