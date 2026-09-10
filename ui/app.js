@@ -504,16 +504,9 @@ function kv(label, value) {
 }
 
 function renderPanel() {
-  const vp = state.vp === 0 ? "tied"
-    : state.vp > 0 ? `US +${state.vp}` : `USSR +${-state.vp}`;
   const status = $("#status");
   status.textContent = "";
   status.append(
-    kv("Turn", `${state.turn} · round ${state.action_round}`),
-    kv("DEFCON", state.defcon),
-    kv("VP", vp),
-    kv("Space race", `US box ${state.space_race.US} / USSR box ${state.space_race.USSR}`),
-    kv("Mil ops", `US ${state.military_ops.US} / USSR ${state.military_ops.USSR}`),
     kv("China card", `${state.china_card_owner}${state.china_card_available ? "" : " (face-down)"}`),
     kv("Opponent", `hand ${state.opponent_hand_size} · draw ${state.draw_pile_size}`),
   );

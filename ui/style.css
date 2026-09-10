@@ -243,7 +243,8 @@ main {
   font-size: 12px;
 }
 
-#feed { margin-top: 12px; }
+#feed { margin-bottom: 12px; }
+#status { margin-top: 8px; }
 
 .feedrow {
   display: flex;
