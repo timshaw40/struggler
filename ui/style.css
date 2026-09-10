@@ -96,8 +96,10 @@ main {
 .marker {
   position: absolute;
   transform: translate(-50%, -50%);
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.9em 1.9em;
   gap: 0.174em;
+  min-height: 1.9em;
   pointer-events: auto;
   z-index: 2;
 }
@@ -107,6 +109,9 @@ main {
   width: 1.9em;
   height: 1.9em;
 }
+
+.marker .pip.us { grid-column: 1; }
+.marker .pip.ussr { grid-column: 2; }
 
 .marker .pip img {
   display: block;
