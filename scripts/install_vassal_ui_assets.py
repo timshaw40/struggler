@@ -3,8 +3,10 @@
 
 Maps VASSAL TNRnTS-NN.svg card numbers to engine card ids via cards.json /
 load_cards(), writes board.png + cards/{id}.svg + cards.json + countries.json
-(country-box centers detected off the board; the browser prefers this over
-the schematic ui/countries.json when present).
+(country-box centers detected off the board, plus stability for the
+control computation; the browser prefers this over the schematic
+ui/countries.json when present). Also copies the four VASSAL influence
+faces (controlled/uncontrolled per side) into markers/ for the map pips.
 
 The TNRnTS faces leave the top banner empty (the VASSAL module overlays the
 ops value / side stripe at runtime), so the install injects that banner —
@@ -370,6 +372,43 @@ def install_boxes(board_png: Path) -> dict[str, tuple[int, int]]:
     return centers
 
 
+# VASSAL influence faces, two-sided per Tim's ask: the white face while a
+# side only has influence, the colored face once it controls the country.
+# The spare *Control/NoInfluence faces stay in third_party (our digits sit
+# on the influence faces VASSAL-style, and 0 shows on the white face).
+MARKER_FACES = {
+    "us_uncontrolled": "AmericanInfluenceUncontrolled.svg",
+    "us_controlled": "AmericanInfluenceControlled.svg",
+    "ussr_uncontrolled": "SovietInfluenceUncontrolled.svg",
+    "ussr_controlled": "SovietInfluenceControlled.svg",
+}
+
+
+def install_markers() -> None:
+    """Copy the influence faces into gitignored ui/assets/markers/."""
+    import shutil
+
+    src = SRC / "markers"
+    out = OUT / "markers"
+    out.mkdir(parents=True, exist_ok=True)
+    for name, face in MARKER_FACES.items():
+        shutil.copyfile(src / face, out / f"{name}.svg")
+    print(f"markers: {len(MARKER_FACES)} -> {out}")
+
+
+def load_stability() -> dict[str, int]:
+    """country id -> stability number, for the browser's control check."""
+    try:
+        from struggler.engine.board import Board
+
+        return {cid: info.stability for cid, info in Board().countries.items()}
+    except Exception:
+        raw = json.loads((ROOT / "src" / "struggler" / "data" / "countries.json").read_text())
+        return {
+            cid: entry["stability"] for cid, entry in raw["countries"].items()
+        }
+
+
 def fetch_board_if_missing(board_jpg: Path) -> None:
     if board_jpg.is_file():
         return
@@ -423,8 +462,11 @@ def main() -> None:
     (OUT / "cards.json").write_text(json.dumps(manifest, indent=1) + "\n")
     ensure_board(board_jpg, OUT / "board.png")
     centers = install_boxes(OUT / "board.png")
+    install_markers()
+    stability = load_stability()
     countries = {
-        cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4)}
+        cid: {"x": round(x / BOARD_W, 4), "y": round(y / BOARD_H, 4),
+              "s": stability[cid]}
         for cid, (x, y) in centers.items()
     }
     (OUT / "countries.json").write_text(json.dumps(countries, indent=1, sort_keys=True) + "\n")
