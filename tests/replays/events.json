@@ -7761,13 +7761,13 @@
           }
         },
         "defcon": 4,
-        "vp": 21,
+        "vp": 31,
         "turn": 10,
         "action_round": 7,
         "next_decision_id": 768,
         "decision_stack": [],
         "winner": "US",
-        "game_over_reason": "vp",
+        "game_over_reason": "final_vp",
         "phase": "complete",
         "include_optional": true,
         "draw_pile": [

@@ -563,13 +563,17 @@ class Engine:
         """End the game after turn 10: final-score every region, then decide
         on total VP (a 0 VP board is a draw).
 
-        Final scoring reuses the same board mechanic as the scoring cards, so
-        every region contributes its Presence/Domination/Control tier once.
-        """
+        10.3.2: every Region's score must be calculated before final victory
+        is determined — reaching 20 VPs during this final scoring is NOT an
+        automatic victory, so the loop applies raw VP deltas and never trips
+        the ±20 check (only Control of Europe still wins outright, inside
+        `_score_region_net`). The China Card's holder then scores its printed
+        +1 end-game VP (rule 12.2 references it)."""
         for region in Region:
-            self._change_vp_by(self._score_region_net(region))
-            if self.is_terminal:  # a VP-20 swing or Europe control ends it here
+            self.vp += self._score_region_net(region)
+            if self.is_terminal:  # Control of Europe ends it outright
                 return
+        self.vp += 1 if self.china_card_owner == "US" else -1
         if self.vp > 0:
             self._win(Side.US, "final_vp")
         elif self.vp < 0:

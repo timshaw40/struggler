@@ -2184,3 +2184,48 @@ def test_europe_scoring_card_auto_victory_on_control_tier():
     engine._score_region_net(Region.EUROPE)
     assert engine.is_terminal and engine.winner is Side.US
     assert engine._game_over_reason == "europe_control"
+
+
+def test_final_scoring_scores_all_regions_before_victory():
+    # 10.3.2: "Every Region's score must be calculated before final victory
+    # is determined. Reaching 20 VPs does not result in Automatic Victory
+    # during scoring at the end of turn 10." The engine used to stop the
+    # loop the moment the running total crossed ±20, which can crown the
+    # wrong winner.
+    engine = Engine(seed=1)
+    engine.events_enabled = True
+    board = engine.board
+    engine.vp = 19  # one moderate US region still crosses 20 mid-loop
+    # Europe: US presence (+3) — pushes the running total past 20.
+    spain = next(c for c in board.countries_in(Region.EUROPE)
+                 if not board.countries[c].battleground
+                 and not board.is_adjacent("USSR", c))
+    board.influence[spain]["US"] = board.countries[spain].stability
+    # Asia + Middle East: USSR Control — swings the total far back to USSR.
+    for region in (Region.ASIA, Region.MIDDLE_EAST):
+        for cid in board.countries_in(region):
+            if board.countries[cid].battleground:
+                board.influence[cid]["USSR"] = board.countries[cid].stability
+        non_bg = next(c for c in board.countries_in(region)
+                      if not board.countries[c].battleground)
+        board.influence[non_bg]["USSR"] = board.countries[non_bg].stability
+    engine._finish_game()
+    assert engine.is_terminal
+    # 19 + 3 (Europe) far exceeds 20 mid-loop, but Asia + Middle East take
+    # the total back to the USSR: the correct winner is the USSR.
+    assert engine.winner is Side.USSR and engine._game_over_reason == "final_vp"
+
+
+def test_final_scoring_awards_china_card_holder_one_vp():
+    # The China Card's printed end-game bonus (+1 VP to its holder; rule 12.2
+    # references "the victory point for possession of the China Card during
+    # end game scoring"). The engine never awarded it.
+    engine = Engine(seed=1)
+    engine.china_card_owner = "US"
+    engine._finish_game()
+    assert engine.winner is Side.US and engine._game_over_reason == "final_vp"
+
+    engine = Engine(seed=1)
+    engine.china_card_owner = "USSR"
+    engine._finish_game()
+    assert engine.winner is Side.USSR and engine._game_over_reason == "final_vp"
