@@ -8,6 +8,22 @@ const META = {};    // card id -> {number, name, ops, side, scoring, event_summa
 const IMAGES = {};  // card id -> card-face filename under /assets/cards/ (optional)
 const POS = {};     // country id -> {x, y} fractions of the board image
 
+const BOARD_W = 5100, BOARD_H = 3300;
+/* Region views: rectangles of the board image (box layout, as measured by
+ * the asset installer). A region renders its slice across the viewport
+ * width; World fits the whole board. Overlapping bounds (Mid-East spans
+ * Africa's latitude band) resolve by lookup order — smaller regions first. */
+const REGIONS = {
+  "World": [0, 0, BOARD_W, BOARD_H],
+  "C. America": [150, 1230, 1420, 1980],
+  "S. America": [850, 1800, 1650, 3000],
+  "Mid-East": [2560, 1080, 3820, 1800],
+  "Europe": [1620, 180, 3060, 1350],
+  "Asia": [3850, 950, 4950, 2700],
+  "Africa": [1700, 1300, 3170, 2850],
+};
+let view = "Europe";
+
 let state = null;
 let busy = false;
 let previewEl = null;
@@ -52,8 +68,8 @@ async function boot() {
   const [cards, manifest, countries] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
-    // VASSAL install ships board-calibrated marker positions; fall back to
-    // the schematic calibration for non-VASSAL art.
+    // VASSAL install ships box centers measured off the board; fall back
+    // to the schematic calibration for non-VASSAL art.
     fetchJson("/assets/countries.json").catch(() => fetchJson("/countries.json")),
   ]);
   Object.assign(META, cards);
@@ -66,20 +82,70 @@ async function boot() {
   document.body.append(preview);
   previewEl = preview;
   enableDragPan();
+  buildViewBar();
   window.addEventListener("resize", layoutBoard);
-  layoutBoard();
+  setView(view);
   await refresh();
   if (state.watch) setTimeout(tick, 400);
 }
 
-/* The map always fills the available width — no zooming. Anything taller
- * than the window is reached by scrolling (or dragging) vertically. The
- * width is still written as one CSS variable so the chip size in CSS can
- * derive from the same number instead of JS juggling two formulas. */
+/* The map renders the current view's slice across the available width. The
+ * width is still written as one CSS variable — --boardw, the only knob —
+ * so the chip size in CSS derives from the same number the map scales by;
+ * they can't disagree. A region is taller than the window at that scale:
+ * vertical scroll (or drag) covers it, as before. */
 function layoutBoard() {
   const wrap = $("#boardwrap");
   if (wrap.classList.contains("noboard")) return;
-  wrap.style.setProperty("--boardw", wrap.clientWidth - 4 + "px");
+  const reg = REGIONS[view];
+  const w = Math.round(wrap.clientWidth * BOARD_W / (reg[2] - reg[0]));
+  wrap.style.setProperty("--boardw", w + "px");
+}
+
+/* View switcher: buttons over the map's top-right corner. */
+function buildViewBar() {
+  const bar = document.createElement("div");
+  bar.id = "viewbar";
+  for (const name of Object.keys(REGIONS)) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.addEventListener("click", () => setView(name));
+    bar.append(b);
+  }
+  $("#boardarea").append(bar);
+}
+
+function setView(name) {
+  view = name;
+  for (const b of document.querySelectorAll("#viewbar button"))
+    b.classList.toggle("active", b.textContent === name);
+  layoutBoard();
+  const wrap = $("#boardwrap");
+  const k = $("#boardbox").offsetWidth / BOARD_W;
+  const [l, t] = REGIONS[name];
+  wrap.scrollLeft = Math.max(0, l * k - 20);
+  wrap.scrollTop = Math.max(0, t * k - 20);
+}
+
+let lastJump = "";
+/* Country-picking decisions target one subregion, so the map follows the
+ * action: switch to the smallest region view containing every legal target
+ * (World when they straddle regions). Re-jumps are skipped for the same
+ * target set, so re-renders never yank the view back. */
+function jumpToTargets(d) {
+  const key = d.options.map((o) => o.index).join(",");
+  if (key === lastJump) return;
+  const pts = d.options
+    .map((o) => POS[o.payload.country])
+    .filter(Boolean)
+    .map((p) => [p.x * BOARD_W, p.y * BOARD_H]);
+  if (!pts.length) return;
+  const inside = (reg) => pts.every(([x, y]) =>
+    reg[0] <= x && x <= reg[2] && reg[1] <= y && y <= reg[3]);
+  if (inside(REGIONS[view])) { lastJump = key; return; }
+  const hit = Object.keys(REGIONS).find((n) => n !== "World" && inside(REGIONS[n]));
+  setView(hit || "World");
+  lastJump = key;
 }
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
@@ -423,8 +489,10 @@ function renderDecision() {
   }
 
   // Country-picking happens on the map: the glowing markers are the options
-  // (every one of this decision's options names a country).
+  // (every one of this decision's options names a country), and the map
+  // follows the action by jumping to the region holding them.
   if (d.options.length && d.options.every((o) => o.payload && o.payload.country)) {
+    jumpToTargets(d);
     const hint = document.createElement("em");
     hint.className = "hint";
     hint.textContent = "Click a glowing country on the map.";

@@ -50,6 +50,38 @@ main {
   width: var(--boardw, 1600px);  /* set by layoutBoard() — the only zoom knob */
 }
 
+#viewbar {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 60%;
+  z-index: 5;
+}
+
+#viewbar button {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #cfd3dc;
+  background: #141a22;
+  border: 1px solid #3a4350;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#viewbar button:hover { border-color: #5a6572; }
+
+#viewbar button.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+#boardwrap.noboard ~ #viewbar { display: none; }
+
 #board {
   width: 100%;
   display: block;
@@ -59,9 +91,9 @@ main {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Chips hold a fixed, readable size (the map no longer zooms, so there is
-   * one size to get right). The boardw/300 term only wins on very wide
-   * displays, where the full-width map is big enough to afford bigger chips. */
+  /* Chips scale with the map (a chip is ~half a country box tall) but hold
+   * a readable floor in World view, where the fit-width map is too small
+   * to afford proportional chips. */
   font-size: max(11.5px, calc(var(--boardw, 1600px) / 300));
 }
 
