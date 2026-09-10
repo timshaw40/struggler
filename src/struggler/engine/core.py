@@ -214,6 +214,16 @@ class Engine:
         if player not in (Side.US, Side.USSR):
             raise ValueError("observe() is only valid for Side.US or Side.USSR")
         opponent = player.opponent
+        pending = self.pending_decision
+        # Decision options and context can name private cards (Grain Sales,
+        # Missile Envy's pick among the giver's hand cards): only the actor
+        # sees the pending decision. CHANCE decisions are resolved by the
+        # physical operator in the open, so both players see those.
+        visible = (
+            pending is None
+            or pending.actor is Side.CHANCE
+            or pending.actor is player
+        )
         return Observation(
             side=player,
             phase=self.phase,
@@ -222,7 +232,7 @@ class Engine:
             turn=self.turn,
             action_round=self.action_round,
             influence=copy.deepcopy(self.board.influence),
-            pending_decision=self.pending_decision,
+            pending_decision=pending if visible else None,
             # Own hand in full; the opponent's hand only as a count (mandate
             # #4). The draw pile is a count too — its order never leaks.
             hand=tuple(self.hands[player.value]),

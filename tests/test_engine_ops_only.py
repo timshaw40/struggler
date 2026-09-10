@@ -261,3 +261,25 @@ def test_headline_cards_revealed_simultaneously_before_resolution():
         assert dict(engine.observe(side).headline_revealed) == {
             "USSR": "Summit", "US": "Duck_and_Cover",
         }
+
+
+def test_observe_hides_the_pending_decision_from_non_actors():
+    # Decision options and context can name private cards (Grain Sales'
+    # revealed card, Missile Envy's pick among the giver's hand cards), so a
+    # non-actor's observation carries no pending decision at all. CHANCE
+    # decisions stay visible to both sides — the physical operator resolves
+    # them in the open.
+    engine = Engine(seed=1)
+    engine.begin_influence_operations(Side.USSR, 2)
+    assert engine.observe(Side.USSR).pending_decision is not None
+    assert engine.observe(Side.US).pending_decision is None
+    engine.step(engine.pending_decision.options[0])
+    engine.step(next(a for a in engine.legal_actions() if a.payload.get("stop")))
+    assert engine.pending_decision is None
+
+    engine.board.influence["Guatemala"]["USSR"] = 1
+    engine.begin_realignment_operations(Side.US, ops=1)
+    engine.step(engine.pending_decision.options[0])  # target -> CHANCE actor roll
+    assert engine.pending_decision.actor is Side.CHANCE
+    assert engine.observe(Side.US).pending_decision is not None
+    assert engine.observe(Side.USSR).pending_decision is not None

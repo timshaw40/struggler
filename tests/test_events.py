@@ -1964,9 +1964,13 @@ def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
     engine = _bare()
     engine.draw_pile = ["Fidel", "Nasser", "Allende"]
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
-    for player in (Side.US, Side.USSR):
-        opts = engine.observe(player).pending_decision.options
-        assert {a.payload["choice"] for a in opts} == {"keep", "remove"}
+    # The actor sees only the generic keep/remove choice; the examined card
+    # lives in private engine state and never enters the decision. The USSR
+    # sees no pending decision at all — only the public `removed_cards`
+    # trail when a card is actually cut.
+    opts = engine.observe(Side.US).pending_decision.options
+    assert {a.payload["choice"] for a in opts} == {"keep", "remove"}
+    assert engine.observe(Side.USSR).pending_decision is None
 
 
 def test_our_man_in_tehran_no_op_with_an_empty_draw_pile():
