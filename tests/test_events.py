@@ -2229,3 +2229,50 @@ def test_final_scoring_awards_china_card_holder_one_vp():
     engine.china_card_owner = "USSR"
     engine._finish_game()
     assert engine.winner is Side.USSR and engine._game_over_reason == "final_vp"
+
+
+def test_ineligible_asterisked_event_played_as_event_is_discarded_not_removed():
+    # 5.2 example 1: "despite being asterisked, the 'NATO' card would not be
+    # removed from play. It would be placed in the discard pile." The event
+    # path used to file it with fired=True before checking eligibility,
+    # permanently removing NATO / Star Wars / OPEC / Solidarity / Wargames
+    # when played while ineligible.
+    engine = _bare()
+    engine.hands = {"USSR": [], "US": ["NATO"]}
+    engine.push_full_card_play(Side.US, "NATO")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "NATO" in engine.discard_pile
+    assert "NATO" not in engine.removed_cards
+    assert engine.game_effects.get("nato") is None  # the event did not occur
+
+    # Once the prerequisite is met the same play fires and removes the card.
+    engine.game_effects["marshall_or_warsaw"] = True
+    engine.hands = {"USSR": [], "US": ["NATO"]}
+    engine.push_full_card_play(Side.US, "NATO")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "NATO" in engine.removed_cards
+    assert engine.game_effects.get("nato") is True
+
+
+def test_ineligible_asterisked_headline_event_is_discarded_not_removed():
+    engine = _bare()
+    _headline_setup(engine, "Duck_and_Cover", "NATO")
+    engine.step(engine.legal_actions()[0])  # USSR headline
+    us_pick = next(a for a in engine.legal_actions() if a.payload["card"] == "NATO")
+    engine.step(us_pick)
+    assert "NATO" in engine.discard_pile
+    assert "NATO" not in engine.removed_cards
+
+
+def test_five_year_plan_discards_ineligible_ussr_event_without_firing():
+    # FYP's discarded USSR event fires only if it can (7.5): OPEC is blocked
+    # while North Sea Oil is in effect, and being asterisked it must NOT be
+    # removed from the game.
+    engine = _bare()
+    engine.game_effects["north_sea_oil"] = True
+    engine.hands = {"USSR": ["OPEC"], "US": []}
+    engine.push_random_discard(Side.USSR, "five_year_plan")
+    engine.step(engine.legal_actions()[0])  # the (only) drawn card
+    assert "OPEC" in engine.discard_pile
+    assert "OPEC" not in engine.removed_cards
+    assert engine.vp == 0

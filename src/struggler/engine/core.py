@@ -887,8 +887,13 @@ class Engine:
             self._resolve_scoring_card(cid)
             self._file_card(side, cid, fired=True, already_removed_from_hand=True)
         elif self.events_enabled and self._has_event(cid):
-            self._file_card(side, cid, fired=True, already_removed_from_hand=True)
-            self._fire_event(side, cid)
+            # Same 5.2 rule as the event mode above: an event that cannot
+            # occur is discarded, not removed, even when asterisked.
+            if EVENTS[cid].eligible(self, side):
+                self._file_card(side, cid, fired=True, already_removed_from_hand=True)
+                self._fire_event(side, cid)
+            else:
+                self._file_card(side, cid, fired=False, already_removed_from_hand=True)
         else:
             self._file_card(side, cid, fired=False, already_removed_from_hand=True)
 
@@ -1082,10 +1087,15 @@ class Engine:
                 self._resolve_scoring_card(cid)
                 self._file_card(side, cid, fired=True)
             elif self.events_enabled and self._has_event(cid):
-                # Playing a card for its (implemented) event: it fires now and
-                # the card leaves play (removed if remove_after_event).
-                self._file_card(side, cid, fired=True)
-                self._fire_event(side, cid)
+                # 5.2: an event that cannot occur (prerequisite unmet, or
+                # prohibited by a superseding event) does not occur — and an
+                # asterisked card then goes to the DISCARD pile, not out of
+                # the game. It is removed only when its event actually fires.
+                if EVENTS[cid].eligible(self, side):
+                    self._file_card(side, cid, fired=True)
+                    self._fire_event(side, cid)
+                else:
+                    self._file_card(side, cid, fired=False)
             else:
                 # An unfired/unimplemented event is a no-op discard.
                 self._file_card(side, cid, fired=False)
@@ -1604,9 +1614,17 @@ class Engine:
         card = action.payload["card"]
         if ctx["purpose"] == "five_year_plan":
             # A discarded USSR-associated event fires (even against the USSR's
-            # own interest); anything else is just discarded.
+            # own interest); anything else is just discarded. An event that
+            # cannot occur (7.5: prohibited, e.g. OPEC under North Sea Oil)
+            # does not fire, and an asterisked card is discarded, not removed.
             info = self.cards[card]
-            if not info.scoring and info.side.value == owner.value and self._has_event(card):
+            ev = EVENTS.get(card)
+            if (
+                not info.scoring
+                and info.side.value == owner.value
+                and ev is not None
+                and ev.eligible(self, owner)
+            ):
                 self._file_card(owner, card, fired=True)
                 self._fire_event(owner, card)
             else:
