@@ -70,9 +70,11 @@ main {
 #boardbox {
   position: relative;
   margin: 0 auto;
+  width: var(--boardw, 1600px);  /* set by layoutBoard() — the only zoom knob */
 }
 
 #board {
+  width: 100%;
   display: block;
 }
 
@@ -80,6 +82,12 @@ main {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Chip size = a fixed fraction of the map's rendered width, so zooming
+   * keeps chips proportionate to the printed country boxes (a box is ~63px
+   * tall on the 5100px board; /300 makes a chip about half a box tall, like
+   * a VASSAL counter sitting in the box). The 11px floor keeps digits
+   * legible at fit zoom, where a strictly proportional chip would be ~5px. */
+  font-size: max(11px, calc(var(--boardw, 1600px) / 300));
 }
 
 .marker {
@@ -278,7 +286,7 @@ main {
 
 #countrytip .chead {
   display: block;
-  width: 340px;
+  width: 289px;  /* 15% under the map-strip's natural 340px so fewer neighbors hide */
   border-radius: 6px;
 }
 

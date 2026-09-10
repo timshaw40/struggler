@@ -78,10 +78,10 @@ async function boot() {
   if (state.watch) setTimeout(tick, 400);
 }
 
-/* The board image is sized in px (base fit × zoom) instead of CSS-capped, so
- * zooming grows the scrollable area and markers — %-anchored inside
- * #boardbox — stay glued to their countries at any zoom. Chip text is em-
- * sized off #markers, so it scales with the map instead of shrinking. */
+/* Zoom has one source of truth: --boardw, the board's rendered width. The
+ * image and the chip font both derive from it in CSS, so they can never
+ * drift apart — no matter how you zoom or resize the window, a chip stays
+ * the same fraction of a country box. */
 function layoutBoard() {
   const wrap = $("#boardwrap");
   const board = $("#board");
@@ -89,8 +89,7 @@ function layoutBoard() {
   const bw = board.naturalWidth || 5100;
   const bh = board.naturalHeight || 3300;
   const base = Math.min(wrap.clientWidth / bw, wrap.clientHeight / bh) * bw - 4;
-  board.style.width = Math.round(base * zoom) + "px";
-  $("#markers").style.fontSize = 11.5 * zoom + "px";
+  wrap.style.setProperty("--boardw", Math.round(base * zoom) + "px");
 }
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
@@ -219,8 +218,8 @@ function showCountryTip(el, cid, inf) {
   const h = countryTip.offsetHeight;
   let left = r.left + r.width / 2 - w / 2;
   left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
-  let top = r.top - h - 10;
-  if (top < 8) top = r.bottom + 10;
+  let top = r.top - h - 12;
+  if (top < 8) top = r.bottom + 12;
   countryTip.style.left = `${left}px`;
   countryTip.style.top = `${top}px`;
 }
