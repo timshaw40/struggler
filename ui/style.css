@@ -170,6 +170,11 @@ main {
   text-shadow: 0 0 0.25em rgba(0, 0, 0, 0.9);
 }
 
+.marker .pip.us b {
+  color: #1c2330;
+  text-shadow: 0 0 0.25em rgba(255, 255, 255, 0.9);
+}
+
 .marker.legal {
   cursor: pointer;
   box-shadow: 0 0 0 2px var(--gold), 0 0 8px 1px rgba(255, 213, 74, 0.45);
