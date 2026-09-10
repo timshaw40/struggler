@@ -208,11 +208,6 @@ function tick() {
 
 async function act(index) {
   if (busy) return;
-  const d = state && state.decision;
-  const opt = d && d.options.find((o) => o.index === index);
-  const cid = opt && opt.payload && opt.payload.country;
-  const side = d && d.context && d.context.side;
-  if (cid && side) flyPip(cid, side);
   busy = true;
   render();
   try {
@@ -247,6 +242,31 @@ function placeSound() {
 
 /* US chits fly in from the left edge, USSR from the right, then a short
  * click. Overlay only — the board already shows the new count. */
+let prevInf = null;
+/* Any influence increase (human or bot) flies a chit. First snapshot is
+ * silent so the opening board doesn't rain counters. Stagger a batch so
+ * a bot dump of 6 doesn't stack on one frame. */
+function flyDiff() {
+  const inf = state.influence || {};
+  if (prevInf) {
+    let delay = 0;
+    for (const [cid, now] of Object.entries(inf)) {
+      const was = prevInf[cid] || { US: 0, USSR: 0 };
+      for (const side of ["US", "USSR"]) {
+        const n = (now[side] || 0) - (was[side] || 0);
+        for (let i = 0; i < n; i++) {
+          const t = delay;
+          setTimeout(() => flyPip(cid, side), t);
+          delay += 120;
+        }
+      }
+    }
+  }
+  prevInf = {};
+  for (const [cid, v] of Object.entries(inf))
+    prevInf[cid] = { US: v.US, USSR: v.USSR };
+}
+
 function flyPip(cid, side) {
   placeSound();
   const p = POS[cid];
@@ -339,6 +359,7 @@ function showCountryTip(el, cid, inf) {
 
 function render() {
   if (!state) return;
+  flyDiff();
   renderBoard();
   renderPanel();
   renderHand();
