@@ -160,7 +160,7 @@ main {
   font-weight: 700;
   line-height: 1;
   color: #1c2330;
-  -webkit-text-stroke: 1.5px #fff;
+  -webkit-text-stroke: 2.5px #fff;
   paint-order: stroke fill;
   text-shadow: none;
 }
@@ -170,6 +170,8 @@ main {
 .marker .pip.controlled b { color: #fff; }
 
 .marker .pip.us b { color: #1c2330; }
+
+.marker .pip.ussr.controlled b { -webkit-text-stroke-color: #000; }
 
 .marker.legal {
   cursor: pointer;
