@@ -166,10 +166,13 @@ function enableDragPan() {
   const wrap = $("#boardwrap");
   wrap.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
+    dragMoved = 0;
     const sx = e.clientX, sy = e.clientY, sl = wrap.scrollLeft, st = wrap.scrollTop;
     let moved = 0;
     const move = (ev) => {
       moved = Math.max(moved, Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy));
+      if (moved <= 6) return;
+      wrap.classList.add("dragging");
       wrap.scrollLeft = sl - (ev.clientX - sx);
       wrap.scrollTop = st - (ev.clientY - sy);
     };
@@ -179,10 +182,8 @@ function enableDragPan() {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
-    wrap.classList.add("dragging");
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
-    e.preventDefault();
   });
 }
 
@@ -207,6 +208,11 @@ function tick() {
 
 async function act(index) {
   if (busy) return;
+  const d = state && state.decision;
+  const opt = d && d.options.find((o) => o.index === index);
+  const cid = opt && opt.payload && opt.payload.country;
+  const side = d && d.context && d.context.side;
+  if (cid && side) flyPip(cid, side);
   busy = true;
   render();
   try {
@@ -222,6 +228,42 @@ async function act(index) {
     busy = false;
     render();
   }
+}
+
+function placeSound() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = placeSound.ctx || (placeSound.ctx = new AC());
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "square";
+  o.frequency.value = 880;
+  g.gain.setValueAtTime(0.07, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+  o.connect(g).connect(ctx.destination);
+  o.start();
+  o.stop(ctx.currentTime + 0.09);
+}
+
+/* US chits fly in from the left edge, USSR from the right, then a short
+ * click. Overlay only — the board already shows the new count. */
+function flyPip(cid, side) {
+  placeSound();
+  const p = POS[cid];
+  if (!p) return;
+  const box = $("#boardbox").getBoundingClientRect();
+  const x = box.left + p.x * box.width;
+  const y = box.top + p.y * box.height;
+  const img = document.createElement("img");
+  img.className = "flypip";
+  img.src = `/assets/markers/${side.toLowerCase()}_uncontrolled.svg`;
+  const startX = side === "USSR" ? innerWidth + 24 : -72;
+  img.style.transform = `translate(${startX}px, ${y - 24}px)`;
+  document.body.append(img);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    img.style.transform = `translate(${x - 24}px, ${y - 24}px)`;
+  }));
+  img.addEventListener("transitionend", () => img.remove());
 }
 
 // -- option helpers ---------------------------------------------------------

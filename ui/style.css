@@ -147,6 +147,17 @@ main {
 
 .marker.legal:hover { transform: translate(-50%, -50%) scale(1.25); }
 
+.flypip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 48px;
+  z-index: 40;
+  pointer-events: none;
+  transition: transform 0.4s ease-out;
+}
+
 /* Grab the map anywhere and drag to pan. */
 #boardwrap { cursor: grab; user-select: none; }
 #boardwrap.dragging { cursor: grabbing; }
