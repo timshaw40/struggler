@@ -100,8 +100,6 @@ class Session:
             self.include_ccw = include_ccw
         self.seed += 1
         self._rebuild()
-        if not self.watch:
-            self.advance()
 
     def forfeit(self) -> str:
         """Opponent wins, then a new game starts. Returns the winner's side."""
@@ -265,6 +263,10 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 with session.lock:
                     if session.watch:
                         session.step_once()
+                    else:
+                        d = session.engine.pending_decision
+                        if d is not None and d.actor is not session.human_side:
+                            session.step_once()
                     self._send_json(200, session.state())
             elif route == "/cards":
                 self._send_json(200, cards_meta)

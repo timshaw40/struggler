@@ -121,7 +121,9 @@ def test_forfeit_starts_a_new_game() -> None:
     assert winner == "USSR"
     assert session.seed == old + 1
     assert not session.engine.is_terminal
+    session.advance()
     assert session.engine.pending_decision is not None
+    assert session.engine.pending_decision.actor is session.human_side
 
 
 def test_restart_can_drop_ccw() -> None:

@@ -850,17 +850,23 @@ async function postGame(path) {
   busy = true;
   render();
   try {
-    const data = await fetch(path, {
+    const res = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ include_ccw: localStorage.getItem("struggler.ccw") !== "0" }),
-    }).then((r) => r.json());
+    });
+    if (!res.ok) throw new Error(path + " " + res.status);
+    const data = await res.json();
     if (data.forfeit && state) bumpRecord(state.human_side, false);
     seenHistory = -1;
     prevInf = null;
     recordedEnd = false;
     state = data;
     $("#settings").hidden = true;
+    while (state && !state.is_terminal && !state.decision) {
+      render();
+      await refresh();
+    }
   } finally {
     busy = false;
     render();
