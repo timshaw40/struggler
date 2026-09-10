@@ -875,6 +875,7 @@ async function postGame(path) {
     });
     if (!res.ok) throw new Error(path + " " + res.status);
     const data = await res.json();
+    if (data.error && !data.influence) throw new Error(data.error);
     if (data.forfeit && state) bumpRecord(state.human_side, false);
     seenHistory = -1;
     prevInf = null;
