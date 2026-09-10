@@ -22,8 +22,10 @@ game. The server mirrors `runner.play_game`'s loop, interactively:
   the public `Event` list, so secrecy holds exactly as it does for bots
   (opponent hand = a count; headline picks hidden until both are in).
 
-Board/card images under ui/assets/ are user-supplied art produced by
-`render_assets.py`; the folder is gitignored and never committed.
+Board/card images under ui/assets/ are optional art, installed from
+`third_party/gmt-vassal/` by `install_vassal_ui_assets.py` (or produced from
+your own PDFs by `render_assets.py`); the folder is gitignored and never
+committed. Without art the UI falls back to plain text cards and no board.
 """
 
 from __future__ import annotations

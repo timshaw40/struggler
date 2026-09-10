@@ -53,7 +53,9 @@ async function boot() {
   const [cards, manifest, countries] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
-    fetchJson("/countries.json"),
+    // VASSAL install ships board-calibrated marker positions; fall back to
+    // the schematic calibration for non-VASSAL art.
+    fetchJson("/assets/countries.json").catch(() => fetchJson("/countries.json")),
   ]);
   Object.assign(META, cards);
   Object.assign(IMAGES, manifest);

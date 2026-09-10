@@ -93,8 +93,8 @@ A local web UI: the map on screen, you click countries and cards, a bot
 thinks and answers.
 
 ```sh
-pip install -e ".[ui]"    # PyMuPDF, used only for the asset step below
-python scripts/render_assets.py --map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"
+pip install -e ".[ui]"    # Pillow, used only for the board conversion
+python scripts/install_vassal_ui_assets.py --fetch-board
 python scripts/serve_ui.py --us human --ussr mcts --seed 1
 ```
 
@@ -115,12 +115,20 @@ game plays out in the browser at the bots' own pace (MCTS think time
 dominates). A Pause/Resume control sits where the decision panel would
 be. Use `--no-open` if you'd rather open the URL yourself.
 
-The board and card faces are **your own** images: `render_assets.py` reads
-your print-and-play PDFs and writes `ui/assets/board.png` plus one image
-per card under `ui/assets/cards/`. That folder is gitignored — user-supplied
-art is never committed — so a fresh clone falls back to plain text cards and
-no board. `scripts/calibrate_countries.py` derives the marker positions
-committed in `ui/countries.json` from the PDF's own label positions.
+The board and card faces come from the official VASSAL Deluxe 3.2 art in
+`third_party/gmt-vassal/`: `install_vassal_ui_assets.py` maps the 110 card
+numbers to engine card ids and writes `ui/assets/board.png`,
+`ui/assets/cards/{id}.svg`, plus marker positions calibrated to that board
+(`ui/assets/countries.json`, preferred by the UI when present).
+`--fetch-board` downloads the board JPG from the official VASSAL module
+when it is missing from the repo. That folder is gitignored — art is never
+committed — so a fresh clone without it falls back to plain text cards and
+no board.
+
+Prefer your own print-and-play PDFs instead? `scripts/render_assets.py
+--map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"` renders the
+same `ui/assets/` layout from them, and `scripts/calibrate_countries.py`
+derives matching marker positions.
 
 ## Add a new bot
 
