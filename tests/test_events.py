@@ -2351,3 +2351,49 @@ def test_awacs_blocks_muslim_revolution():
     engine._fire_event(Side.USSR, "Muslim_Revolution")
     engine.step(engine.legal_actions()[0])  # remove Sudan's US influence
     assert engine.board.influence["Sudan"]["US"] == 0
+
+
+def test_summit_lower_to_defcon_1_loses_the_phasing_player():
+    # 8.1.3 + the Olympic Games example: "The phasing player is responsible
+    # for the status marker moving to DEFCON 1, and loses the game" — even
+    # when the opponent's choice moved the marker. The engine blamed
+    # `_change_defcon`'s caused_by (the chooser) instead.
+    # US headlined Summit (the phasing player); the USSR must win the dice
+    # contest and choose "lower", dropping DEFCON to 1. Find a seed where
+    # the defender (USSR) wins the unmodified contest.
+    for seed in range(60):
+        engine = _bare(seed)
+        engine.defcon = 2
+        _headline_setup(engine, "Asia_Scoring", "Summit")
+        engine.step(engine.legal_actions()[0])  # USSR headline pick
+        engine.step(engine.legal_actions()[0])  # US headline pick; Summit resolves first
+        engine.step(engine.legal_actions()[0])  # the (single) pre-rolled contest
+        dec = engine.pending_decision
+        if dec is None or dec.context.get("event") != "Summit_defcon":
+            continue  # contest tie (washed) or other seed quirk: try again
+        assert dec.kind is DecisionKind.EVENT_CHOICE
+        if dec.actor is not Side.USSR:
+            continue  # US won the contest: not the case under test
+        engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": "lower"}))
+        assert engine.is_terminal
+        # The phasing player (US) loses, even though the USSR rolled the
+        # marker down; the old code made the USSR (the chooser) lose.
+        assert engine.winner is Side.USSR
+        return
+    raise AssertionError("no seed in range produced a USSR-won Summit contest")
+
+
+def test_defcon_1_coup_by_opponent_event_ops_blames_phasing_player():
+    # 8.1.3: an event-granted coup by the opponent during MY action round
+    # (Lone Gunman / CIA Created / Olympic boycott ops) that drops DEFCON to
+    # 1 makes ME lose — the phasing player — not the opponent who rolled.
+    engine = _bare()
+    engine.defcon = 2
+    engine.phasing_side = Side.US  # US's action round
+    engine.board.influence["Cuba"]["US"] = 3
+    engine.push_event_operations(Side.USSR, 1)
+    engine.step(Action(DecisionKind.OPS_TYPE, {"type": "coup"}))
+    engine.step(Action(DecisionKind.COUP_TARGET, {"country": "Cuba"}))
+    engine.step(engine.legal_actions()[0])  # the (single) pre-rolled coup die
+    assert engine.is_terminal
+    assert engine.winner is Side.USSR  # phasing US lost

@@ -1315,6 +1315,7 @@
           "USSR": 2
         },
         "ars_played": 4,
+        "phasing_side": "US",
         "headline": {
           "US": null,
           "USSR": null

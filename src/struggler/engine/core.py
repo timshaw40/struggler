@@ -73,6 +73,14 @@ class Engine:
         self.space_race_attempts: dict[str, int] = {"US": 0, "USSR": 0}  # this turn
         self.military_ops: dict[str, int] = {"US": 0, "USSR": 0}
         self._ars_played = 0  # completed action-round plays this turn (both sides)
+        # The side whose card play is currently resolving (8.1.3: "the phasing
+        # player is responsible for the status marker moving to DEFCON 1, and
+        # loses the game" — even when an opponent-granted choice moves the
+        # marker, e.g. the Summit contest winner's "lower"). Set when an
+        # action round or a headline card resolution begins; None in the
+        # board-only sandbox, where `_change_defcon` falls back to the
+        # directly-causing side.
+        self.phasing_side: Side | None = None
         self._headline: dict[str, str | None] = {"US": None, "USSR": None}
         # Headline resolution is stack-driven so an event fired at the headline
         # can enqueue sub-decisions (e.g. a war's CHANCE roll) that must drain
@@ -221,6 +229,7 @@ class Engine:
             "space_race_attempts": dict(self.space_race_attempts),
             "military_ops": dict(self.military_ops),
             "ars_played": self._ars_played,
+            "phasing_side": self.phasing_side.value if self.phasing_side is not None else None,
             "headline": dict(self._headline),
             "headline_resolving": self._headline_resolving,
             "headline_pending": [list(pair) for pair in self._headline_pending],
@@ -269,6 +278,8 @@ class Engine:
         )
         engine.military_ops = dict(data.get("military_ops", {"US": 0, "USSR": 0}))
         engine._ars_played = data.get("ars_played", 0)
+        phasing = data.get("phasing_side")
+        engine.phasing_side = Side(phasing) if phasing is not None else None
         engine._headline = dict(data.get("headline", {"US": None, "USSR": None}))
         engine._headline_resolving = data.get("headline_resolving", False)
         engine._headline_pending = [list(pair) for pair in data.get("headline_pending", [])]
@@ -876,9 +887,12 @@ class Engine:
             self._award_vp(Side.US, 1)
 
     def _resolve_headline_card(self, side: Side, cid: str) -> None:
-        """Resolve one headlined card for its owner. A scoring card scores; with
+        """Resolve one headlined card for its owner.         A scoring card scores; with
         events on, a card with an implemented event fires it (and may enqueue
-        sub-decisions); otherwise it is a no-op discard."""
+        sub-decisions); otherwise it is a no-op discard. The headlining side
+        is the phasing player for everything this resolution does (8.1.3's
+        headline note), so it is set before the card acts."""
+        self.phasing_side = side
         self._maybe_flower_power(side, cid)
         if self.is_terminal:
             return
@@ -902,6 +916,7 @@ class Engine:
     def _dispatch_action_round(self, side: Side) -> None:
         """`side`'s next action round: a trap step if it's caught in one,
         otherwise its ordinary card play."""
+        self.phasing_side = side
         trap_key = self._trap_key_for(side)
         if trap_key is not None:
             self._push_trap_step(side, trap_key)
@@ -2699,7 +2714,14 @@ class Engine:
         before = self.defcon
         self.defcon = max(1, min(5, self.defcon + delta))
         if self.defcon == 1:
-            self._win(caused_by.opponent, "defcon_1")
+            # 8.1.3: "The phasing player is responsible for the status marker
+            # moving to DEFCON 1, and loses the game" — the phasing player,
+            # NOT whichever side's choice moved the marker (see the Olympic
+            # Games example: the USSR boycotts, but the US as the phasing
+            # player loses). In the board-only sandbox there is no phasing
+            # player; fall back to the directly-causing side.
+            loser = self.phasing_side if self.phasing_side is not None else caused_by
+            self._win(loser.opponent, "defcon_1")
             return
         # NORAD: "If Canada is US-controlled", each time DEFCON MOVES to level
         # 2 the US adds 1 Influence to a country where it already has some.
