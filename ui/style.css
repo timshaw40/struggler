@@ -363,7 +363,7 @@ main {
 
 #countrytip .cname { font-size: 18px; font-weight: 700; padding: 4px 6px; }
 
-#countrytip .cstats { font-size: 15px; margin-top: 4px; padding: 0 2px; }
+#countrytip .cstats { font-size: 17px; margin-top: 4px; padding: 0 2px; text-align: center; }
 
 #countrytip .us { color: #7ea4f5; font-weight: 600; }
 
