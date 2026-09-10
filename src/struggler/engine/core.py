@@ -81,6 +81,11 @@ class Engine:
         # board-only sandbox, where `_change_defcon` falls back to the
         # directly-causing side.
         self.phasing_side: Side | None = None
+        # 4.5-D: a side with no legal play (empty hand, no China Card) sits
+        # out of the remaining Action Rounds while the opposing player
+        # completes the turn — its scheduled rounds transfer to the opponent.
+        # Reset each turn in _begin_action_rounds.
+        self.sat_out: dict[str, bool] = {"US": False, "USSR": False}
         self._headline: dict[str, str | None] = {"US": None, "USSR": None}
         # Headline resolution is stack-driven so an event fired at the headline
         # can enqueue sub-decisions (e.g. a war's CHANCE roll) that must drain
@@ -229,6 +234,7 @@ class Engine:
             "space_race_attempts": dict(self.space_race_attempts),
             "military_ops": dict(self.military_ops),
             "ars_played": self._ars_played,
+            "sat_out": dict(self.sat_out),
             "phasing_side": self.phasing_side.value if self.phasing_side is not None else None,
             "headline": dict(self._headline),
             "headline_resolving": self._headline_resolving,
@@ -278,6 +284,7 @@ class Engine:
         )
         engine.military_ops = dict(data.get("military_ops", {"US": 0, "USSR": 0}))
         engine._ars_played = data.get("ars_played", 0)
+        engine.sat_out = dict(data.get("sat_out", {"US": False, "USSR": False}))
         phasing = data.get("phasing_side")
         engine.phasing_side = Side(phasing) if phasing is not None else None
         engine._headline = dict(data.get("headline", {"US": None, "USSR": None}))
@@ -436,7 +443,16 @@ class Engine:
             if not self._headline_resolving:
                 first, second = self._headline_pick_order()
                 if self._headline[first.value] is None:
+                    stack_before = len(self._decision_stack)
                     self._push_headline(first)
+                    if len(self._decision_stack) > stack_before:
+                        return
+                    # No headline candidates (an empty hand): unreachable in
+                    # a real game — the start-of-turn deal tops hands up and
+                    # the card pool never exhausts — but reachable in sandbox
+                    # states. Record a no-op headline so the director cannot
+                    # spin forever here.
+                    self._headline[first.value] = ""
                     return
                 if self._headline[second.value] is None:
                     self._push_headline(second)
@@ -466,6 +482,13 @@ class Engine:
                 return
             idx = self._ars_played  # 0-based play index within the turn
             side = self._side_for_play_index(idx)
+            # 4.5-D: a side that has sat out of the turn (no legal play, or
+            # it declined the China Card with an empty hand) is replaced in
+            # its remaining scheduled rounds by the opponent — "the opposing
+            # player completes the turn". If neither side can act, the
+            # scheduled round simply burns off.
+            if self.sat_out.get(side.value) and not self.sat_out.get(side.opponent.value):
+                side = side.opponent
             self.action_round = idx // 2 + 1
             self._ars_played += 1
             if self.turn_effects.get("cuban_missile_crisis") == side.value:
@@ -610,6 +633,7 @@ class Engine:
         self.phase = "action_rounds"
         self._ars_played = 0
         self.action_round = 1
+        self.sat_out = {"US": False, "USSR": False}
 
     def _extra_action_round_sides(self) -> tuple[Side, ...]:
         """Sides granted an extra Action Round this turn, beyond the normal
@@ -859,7 +883,7 @@ class Engine:
         which event — and its interrupts — happens first.)"""
         picks = {s: self._headline[s.value] for s in (Side.US, Side.USSR)}
         order = sorted(
-            (Side.US, Side.USSR),
+            (s for s in (Side.US, Side.USSR) if picks[s]),  # "" = no-card headline: skipped
             key=lambda s: (-self.cards[picks[s]].ops, s is not Side.US),
         )
         return [[s.value, picks[s]] for s in order]
@@ -1001,8 +1025,18 @@ class Engine:
             and self.china_card_available
         ):
             options.append(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": RULES["china_card_id"]}))
+            if not self.hands[side.value]:
+                # 9.8: play of The China Card can never be compelled by a
+                # shortage of cards — with an empty hand it is offered
+                # alongside an explicit sit-out, which concedes the
+                # remaining Action Rounds to the opponent (4.5-D).
+                options.append(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "sit_out"}))
         if options:
             self._push(side, DecisionKind.ACTION_ROUND_PLAY, tuple(options), {})
+        else:
+            # No legal play at all: the side sits out (4.5-D); its remaining
+            # scheduled rounds transfer to the opponent in _advance_once.
+            self.sat_out[side.value] = True
 
     def _handle_missile_envy_forced_play(self, side: Side, cid: str) -> None:
         self.game_effects.pop("missile_envy_forced", None)
@@ -1024,6 +1058,11 @@ class Engine:
     def _handle_action_round_play(self, decision: Decision, action: Action) -> None:
         side = decision.actor
         cid = action.payload["card"]
+        if cid == "sit_out":
+            # 9.8 + 4.5-D: declining the China Card concedes the remaining
+            # Action Rounds to the opponent.
+            self.sat_out[side.value] = True
+            return
         if cid == "Missile_Envy" and self.game_effects.get("missile_envy_forced") == side.value:
             self._handle_missile_envy_forced_play(side, cid)
             return

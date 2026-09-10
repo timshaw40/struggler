@@ -2439,3 +2439,57 @@ def test_end_of_turn_scores_stranded_scoring_cards():
     assert "Asia_Scoring" in engine.discard_pile
     assert engine.vp == 3  # US presence in Asia, no bonuses: +3
     assert not engine.is_terminal
+
+
+def test_china_card_not_compelled_when_it_is_the_only_play():
+    # 9.8: play of The China Card can never be compelled "by events or a
+    # shortage of cards". With an empty hand the card used to be the only
+    # option on offer — playing it was compulsory.
+    engine = _bare()
+    engine.phase = "action_rounds"
+    engine.turn = 1
+    engine._decision_stack = []
+    engine._ars_played = 1
+    engine.china_card_owner = "US"
+    engine.hands = {"US": [], "USSR": ["Duck_and_Cover"]}
+    engine._push_action_round_play(Side.US)
+    cards = [a.payload.get("card") for a in engine.legal_actions()]
+    assert "The_China_Card" in cards
+    assert "sit_out" in cards  # 9.8: declining is legal
+
+    # Sitting out concedes the remaining rounds (the USSR completes the
+    # turn) and keeps the China Card.
+    engine.step(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "sit_out"}))
+    assert engine.sat_out["US"] is True
+    assert engine.china_card_owner == "US"
+
+
+def test_cardless_side_sits_out_and_opponent_completes_the_turn():
+    # 4.5-D: "that player must sit out of the remaining Action Rounds while
+    # the opposing player completes the turn." The engine used to simply
+    # skip the cardless side's rounds; the opponent must take them instead.
+    engine = _bare()
+    engine.phase = "action_rounds"
+    engine.turn = 1
+    engine._decision_stack = []
+    engine._ars_played = 0
+    engine.china_card_owner = "US"  # the USSR can't even play the China Card
+    engine.hands = {"US": [], "USSR": []}
+    # The US takes over the USSR's rounds: give it 12 playable cards (the
+    # sandbox ignores the deal-time hand limit; the cards are stepped past,
+    # not played for their text).
+    engine.hands["US"] = ["Duck_and_Cover"] * 12
+    plays = []
+    while len(plays) < 12 and engine.turn == 1:
+        engine._advance_once()
+        while engine.pending_decision is not None and engine.turn == 1:
+            dec = engine.pending_decision
+            if dec.kind is DecisionKind.ACTION_ROUND_PLAY:
+                plays.append(dec.actor)
+            engine.step(dec.options[0])
+    # Slot 0 is where the USSR's empty hand is discovered (the round burns
+    # as it sits out); its remaining five rounds transfer, giving the US
+    # 6 own + 5 transferred = 11 turn-1 plays, all its own. (Turn 2's
+    # reshuffled deal re-arms the USSR; that is not what this test pins.)
+    assert len(plays) == 11
+    assert all(a is Side.US for a in plays)
