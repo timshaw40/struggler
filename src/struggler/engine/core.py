@@ -2282,7 +2282,9 @@ class Engine:
             options.append(Action(DecisionKind.PLACE_INFLUENCE, {"country": cid}))
         return tuple(options)
 
-    def _maybe_push_place_influence(self, side: Side, ops_remaining: int) -> None:
+    def _maybe_push_place_influence(
+        self, side: Side, ops_remaining: int, spent: int = 0
+    ) -> None:
         if self.is_terminal or ops_remaining <= 0:
             self._ops_round_snapshot = None
             return
@@ -2291,11 +2293,19 @@ class Engine:
             # stands right now -- this *is* "the start of the Action Round"
             # for every subsequent point in this same spend (6.1.1).
             self._ops_round_snapshot = copy.deepcopy(self.board.influence)
-        options = self._place_influence_options(side, ops_remaining)
+        options = list(self._place_influence_options(side, ops_remaining))
         if not options:
             self._ops_round_snapshot = None
             return
-        self._push(side, DecisionKind.PLACE_INFLUENCE, options, {"ops_remaining": ops_remaining})
+        if spent:
+            # 6.1.3: Influence is placed "up to" the card's Ops value — the
+            # player may stop early with points unspent (but only after
+            # placing at least one point).
+            options.append(Action(DecisionKind.PLACE_INFLUENCE, {"stop": True}))
+        self._push(
+            side, DecisionKind.PLACE_INFLUENCE, tuple(options),
+            {"ops_remaining": ops_remaining, "spent": spent},
+        )
 
     def _bonus_influence_options(
         self, side: Side, base: int, spent: int, alive: list[str]
@@ -2330,12 +2340,17 @@ class Engine:
             return
         if self._ops_round_snapshot is None:
             self._ops_round_snapshot = copy.deepcopy(self.board.influence)
-        options = self._bonus_influence_options(side, base, spent, alive)
+        options = list(self._bonus_influence_options(side, base, spent, alive))
         if not options:
             self._ops_round_snapshot = None
             return
+        if spent:
+            # "Up to" applies to bonus Ops too: stop early once a point is
+            # down (kills any still-alive bonus for the unspent remainder,
+            # which is simply not spent).
+            options.append(Action(DecisionKind.PLACE_INFLUENCE, {"stop": True}))
         self._push(
-            side, DecisionKind.PLACE_INFLUENCE, options,
+            side, DecisionKind.PLACE_INFLUENCE, tuple(options),
             {"bonus": alive, "base": base, "spent": spent},
         )
 
@@ -2343,10 +2358,13 @@ class Engine:
         if decision.context.get("setup"):
             self._handle_setup_influence(decision, action)
             return
+        if action.payload.get("stop"):
+            # Early stop of an "up to" Ops spend (6.1.3): the unspent points
+            # are simply not spent; the spend's connectivity snapshot lapses.
+            self._ops_round_snapshot = None
+            return
         side = decision.actor
         country = action.payload["country"]
-        if action.payload.get("stop"):
-            return
         cost = self.board.influence_cost(side, country)
         self.board.influence[country][side.value] += 1
         bonus = decision.context.get("bonus")
@@ -2358,7 +2376,11 @@ class Engine:
                 [b for b in bonus if self._in_bonus_region(country, b)],
             )
             return
-        self._maybe_push_place_influence(side, decision.context["ops_remaining"] - cost)
+        self._maybe_push_place_influence(
+            side,
+            decision.context["ops_remaining"] - cost,
+            spent=decision.context.get("spent", 0) + cost,
+        )
 
     def _handle_setup_influence(self, decision: Decision, action: Action) -> None:
         side = decision.actor
@@ -2777,13 +2799,17 @@ class Engine:
             return
         if not spent < card_ops + len(alive):
             return
-        options = self._realignment_target_options(side)
+        options = list(self._realignment_target_options(side))
         if not options:
             return
+        if spent:
+            # 6.2.2: each roll costs one Operations point; a player may stop
+            # early rather than spend them all (never before the first roll).
+            options.append(Action(DecisionKind.REALIGNMENT_TARGET, {"stop": True}))
         self._push(
             side,
             DecisionKind.REALIGNMENT_TARGET,
-            options,
+            tuple(options),
             {"card_ops": card_ops, "spent": spent, "bonus": alive},
         )
 

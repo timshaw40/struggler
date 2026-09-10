@@ -48,7 +48,7 @@ def test_ops_round_snapshot_survives_a_round_trip_mid_placement():
     # Sweden only became reachable via the point just placed in Finland; the
     # restored engine must still refuse it, exactly like the original.
     assert all(
-        a.payload["country"] != "Sweden" for a in restored.pending_decision.options
+        a.payload.get("country") != "Sweden" for a in restored.pending_decision.options
     )
 
 

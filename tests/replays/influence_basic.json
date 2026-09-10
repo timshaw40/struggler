@@ -1047,10 +1047,17 @@
                 "payload": {
                   "country": "North_Korea"
                 }
+              },
+              {
+                "kind": "place_influence",
+                "payload": {
+                  "stop": true
+                }
               }
             ],
             "context": {
-              "ops_remaining": 2
+              "ops_remaining": 2,
+              "spent": 2
             }
           }
         ],

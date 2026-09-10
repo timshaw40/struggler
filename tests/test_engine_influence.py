@@ -66,14 +66,14 @@ def test_placement_within_one_ops_spend_cannot_chain_through_itself():
     engine = Engine(seed=1)
     engine.begin_influence_operations(Side.USSR, 2)
     decision = engine.pending_decision
-    assert all(a.payload["country"] != "Sweden" for a in decision.options)
+    assert all(a.payload.get("country") != "Sweden" for a in decision.options)
     finland = next(a for a in decision.options if a.payload["country"] == "Finland")
     engine.step(finland)
     # Still within the same spend: Sweden remains unreachable even though
     # Finland now has USSR influence.
     decision = engine.pending_decision
     assert decision is not None
-    assert all(a.payload["country"] != "Sweden" for a in decision.options)
+    assert all(a.payload.get("country") != "Sweden" for a in decision.options)
 
 
 def test_placement_reaches_further_in_a_fresh_ops_spend_next_time():
@@ -99,3 +99,20 @@ def test_observe_reflects_influence_and_pending_decision():
 
     with pytest.raises(ValueError):
         engine.observe(Side.CHANCE)
+
+
+def test_influence_spend_may_stop_early_after_the_first_point():
+    # 6.1.3: Influence is placed "up to" the card's Ops value — stopping
+    # early with points unspent is legal. The stop only appears once at
+    # least one point is already on the table.
+    engine = Engine(seed=1)
+    engine.begin_influence_operations(Side.USSR, 4)
+    first = engine.pending_decision
+    assert not any(a.payload.get("stop") for a in first.options)
+    engine.step(first.options[0])
+    second = engine.pending_decision
+    stops = [a for a in second.options if a.payload.get("stop")]
+    assert len(stops) == 1
+    engine.step(stops[0])
+    # The spend is over with 3 Ops unspent — nothing further is pending.
+    assert engine.pending_decision is None

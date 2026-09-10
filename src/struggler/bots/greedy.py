@@ -265,6 +265,8 @@ def _scoring_card_favorability(board: Board, side: Side, cid: str) -> float:
 
 def _score_place_influence(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
+    if action.payload.get("stop"):  # end the "up to" Ops spend (6.1.3)
+        return 0.0
     country = action.payload["country"]
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
@@ -294,6 +296,8 @@ def _score_realignment_target(
 ) -> float:
     side = observation.side
     opponent = side.opponent
+    if action.payload.get("stop"):  # end the Ops spend on realignment rolls
+        return 0.0
     country = action.payload["country"]
     own_bonus = _realignment_bonus(board, side, country)
     opp_bonus = _realignment_bonus(board, opponent, country)
