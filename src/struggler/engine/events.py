@@ -1366,7 +1366,8 @@ def _payable_cards(engine: "Engine", side: Side) -> list[str]:
     return [
         cid
         for cid in source
-        if not engine.cards[cid].scoring and engine.cards[cid].ops >= 3
+        if not engine.cards[cid].scoring
+        and engine._effective_ops(side, engine.cards[cid]) >= 3
     ]
 
 

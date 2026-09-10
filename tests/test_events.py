@@ -2276,3 +2276,59 @@ def test_five_year_plan_discards_ineligible_ussr_event_without_firing():
     assert "OPEC" in engine.discard_pile
     assert "OPEC" not in engine.removed_cards
     assert engine.vp == 0
+
+
+def test_event_granted_ops_gain_ops_modifiers():
+    # 7.4.2 "for all purposes", example 3: "If the US player played
+    # 'Containment' earlier in the turn, he could play 'CIA Created'
+    # subsequently and use 2 Ops."
+    engine = _bare()
+    engine.turn_effects["containment"] = True
+    engine.push_event_operations(Side.US, 1)
+    assert engine.pending_decision.context["ops"] == 2
+
+    # ...and the same floor as card plays: a 1-op grant under Red Scare
+    # still grants 1.
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "US"
+    engine.push_event_operations(Side.US, 1)
+    assert engine.pending_decision.context["ops"] == 1
+
+
+def test_trap_discard_threshold_uses_effective_ops():
+    # 7.4.2 example 2: under Brezhnev Doctrine (+1), a 1-Ops card can pay a
+    # Bear Trap/Quagmire 2+ discard — and under Red Scare (-1) a 2-Ops card
+    # cannot. The threshold used printed Ops.
+    from struggler.engine.types import DecisionKind as DK
+
+    engine = _bare()
+    engine.turn_effects["brezhnev"] = True
+    engine.game_effects["bear_trap"] = True
+    engine.hands = {"US": [], "USSR": ["Lone_Gunman"]}  # 1 Ops USSR card
+    engine._push_trap_step(Side.USSR, "bear_trap")
+    assert engine.pending_decision is not None
+    assert engine.pending_decision.kind is DK.QUAGMIRE_DISCARD
+
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "USSR"
+    engine.game_effects["bear_trap"] = True
+    engine.hands = {"US": [], "USSR": ["Lone_Gunman"]}
+    engine._push_trap_step(Side.USSR, "bear_trap")
+    assert engine.pending_decision is None  # 2 Ops - 1 = 1: not payable
+
+
+def test_blockade_payable_uses_effective_ops():
+    # Blockade's "discard a 3+ Ops card" is an Operations-value requirement,
+    # so a 2-Ops card under Containment (+1) satisfies it (7.4.2), and a
+    # 2-Ops card under Red Scare (-1) does not.
+    from struggler.engine.events import _payable_cards
+
+    engine = _bare()
+    engine.turn_effects["containment"] = True
+    engine.hands = {"USSR": [], "US": ["Nixon_Plays_The_China_Card"]}  # 2 Ops
+    assert "Nixon_Plays_The_China_Card" in _payable_cards(engine, Side.US)
+
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "US"
+    engine.hands = {"USSR": [], "US": ["Nixon_Plays_The_China_Card"]}
+    assert "Nixon_Plays_The_China_Card" not in _payable_cards(engine, Side.US)
