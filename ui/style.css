@@ -76,7 +76,22 @@ main {
   color: var(--gold);
 }
 
-#boardwrap.noboard ~ #viewbar { display: none; }
+#boardwrap.noboard ~ #viewbar,
+#boardwrap.noboard ~ #zoom { display: none; }
+
+#zoom {
+  position: absolute;
+  right: 6px;
+  top: 44px;
+  bottom: 16px;
+  width: 18px;
+  margin: 0;
+  z-index: 5;
+  writing-mode: vertical-lr;
+  direction: rtl;  /* up = zoom in */
+  appearance: slider-vertical;
+  -webkit-appearance: slider-vertical;
+}
 
 #board {
   width: 100%;

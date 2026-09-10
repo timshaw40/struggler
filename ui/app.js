@@ -14,18 +14,19 @@ const BOARD_W = 5100, BOARD_H = 3300;
  * width, so rects run a similar native width (~1600px) for consistent
  * magnification — and each carries ~half a box of margin, so countries on
  * the edge render whole instead of sliced at the scroll boundary. World
- * fits the whole board. Overlapping bounds (Mid-East spans Africa's
+ * fits the whole board. Overlapping bounds (Middle East spans Africa's
  * latitude band) resolve by lookup order — smaller regions first. */
 const REGIONS = {
   "World": [0, 0, BOARD_W, BOARD_H],
-  "C. America": [0, 1140, 1590, 2070],
-  "S. America": [390, 1710, 2060, 3090],
-  "Mid-East": [2370, 960, 4040, 1940],
   "Europe": [1510, 140, 3170, 1390],
+  "Middle East": [2370, 960, 4040, 1940],
   "Asia": [3440, 860, 5100, 2790],
   "Africa": [1590, 1260, 3280, 2890],
+  "Central America": [0, 1140, 1590, 2070],
+  "South America": [390, 1710, 2060, 3090],
 };
 let view = "Europe";
+let zoom = 1;  // 1..1.25, extra on top of the region fit
 
 let state = null;
 let busy = false;
@@ -104,7 +105,7 @@ function layoutBoard() {
   const wrap = $("#boardwrap");
   if (wrap.classList.contains("noboard")) return;
   const reg = REGIONS[view];
-  const w = Math.round($("#boardarea").clientWidth * BOARD_W / (reg[2] - reg[0]));
+  const w = Math.round($("#boardarea").clientWidth * BOARD_W / (reg[2] - reg[0]) * zoom);
   wrap.style.setProperty("--boardw", w + "px");
 }
 
@@ -119,10 +120,32 @@ function buildViewBar() {
     bar.append(b);
   }
   $("#boardarea").append(bar);
+  const slider = document.createElement("input");
+  slider.id = "zoom";
+  slider.type = "range";
+  slider.min = "100";
+  slider.max = "125";
+  slider.value = "100";
+  slider.title = "Zoom";
+  slider.addEventListener("input", () => setZoom(+slider.value / 100));
+  $("#boardarea").append(slider);
+}
+
+function setZoom(z) {
+  const wrap = $("#boardwrap");
+  const old = $("#boardbox").offsetWidth || 1;
+  const cx = wrap.scrollLeft + wrap.clientWidth / 2;
+  const cy = wrap.scrollTop + wrap.clientHeight / 2;
+  zoom = z;
+  layoutBoard();
+  const k = $("#boardbox").offsetWidth / old;
+  wrap.scrollLeft = Math.max(0, cx * k - wrap.clientWidth / 2);
+  wrap.scrollTop = Math.max(0, cy * k - wrap.clientHeight / 2);
 }
 
 function setView(name) {
   view = name;
+  if (countryTip) countryTip.hidden = true;
   for (const b of document.querySelectorAll("#viewbar button"))
     b.classList.toggle("active", b.textContent === name);
   layoutBoard();
@@ -319,6 +342,7 @@ let countryTip = null;
  * plus live influence. Falls back to plain text when a header asset is
  * missing. Positioned above the marker, viewport-clamped. */
 function showCountryTip(el, cid, inf) {
+  if (view !== "World") return;  // region views are close enough
   if (!countryTip) {
     countryTip = document.createElement("div");
     countryTip.id = "countrytip";
