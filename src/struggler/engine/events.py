@@ -521,7 +521,10 @@ def _socialist_governments(engine: "Engine", side: Side) -> None:
     )
 
 
-@event("Muslim_Revolution")
+@event(
+    "Muslim_Revolution",
+    eligible=lambda engine, side: not engine.game_effects.get("awacs"),
+)
 def _muslim_revolution(engine: "Engine", side: Side) -> None:
     countries = ["Sudan", "Iran", "Iraq", "Egypt", "Libya", "Saudi_Arabia",
                  "Syria", "Jordan"]

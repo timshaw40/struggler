@@ -2332,3 +2332,22 @@ def test_blockade_payable_uses_effective_ops():
     engine.turn_effects["red_scare"] = "US"
     engine.hands = {"USSR": [], "US": ["Nixon_Plays_The_China_Card"]}
     assert "Nixon_Plays_The_China_Card" not in _payable_cards(engine, Side.US)
+
+
+def test_awacs_blocks_muslim_revolution():
+    # 7.5: an event prohibited by another event's restriction does not occur
+    # and stays usable for Ops only. AWACS Sale to Saudis "prohibits play of
+    # Muslim Revolution as an event" — the flag was set but never consulted,
+    # so the revolution still fired.
+    engine = _bare()
+    engine.game_effects["awacs"] = True
+    engine.board.influence["Sudan"]["US"] = 2
+    engine._fire_event(Side.USSR, "Muslim_Revolution")
+    assert engine.board.influence["Sudan"]["US"] == 2  # nothing removed
+
+    # Without AWACS the revolution resolves normally.
+    engine = _bare()
+    engine.board.influence["Sudan"]["US"] = 2
+    engine._fire_event(Side.USSR, "Muslim_Revolution")
+    engine.step(engine.legal_actions()[0])  # remove Sudan's US influence
+    assert engine.board.influence["Sudan"]["US"] == 0
