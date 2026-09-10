@@ -98,7 +98,11 @@ async function boot() {
   buildViewBar();
   window.addEventListener("resize", layoutBoard);
   setView(view);
+  busy = true;
   await refresh();
+  await catchUp();
+  busy = false;
+  render();
   if (state.watch) setTimeout(tick, 400);
 }
 
@@ -882,13 +886,23 @@ async function postGame(path) {
     recordedEnd = false;
     state = data;
     $("#settings").hidden = true;
-    while (state && !state.is_terminal && !state.decision) {
-      render();
-      await refresh();
-    }
+    await catchUp();
   } finally {
     busy = false;
     render();
+  }
+}
+
+async function catchUp() {
+  let prev = -1, stall = 0;
+  while (state && !state.is_terminal && !state.decision) {
+    const n = (state.history || []).length;
+    if (n === prev) {
+      if (++stall > 3) break;
+    } else stall = 0;
+    prev = n;
+    render();
+    await refresh();
   }
 }
 

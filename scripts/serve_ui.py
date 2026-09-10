@@ -359,9 +359,6 @@ def main() -> None:
         }
         for cid, card in session.engine.cards.items()
     }
-    if not session.watch:
-        session.advance()  # setup + bot headline pick, up to the human's first decision
-
     handler = make_handler(session, cards_meta)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://localhost:{args.port}"
