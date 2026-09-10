@@ -87,10 +87,10 @@ main {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Chips scale with the map (a chip is ~half a country box tall) but hold
-   * a readable floor in World view, where the fit-width map is too small
-   * to afford proportional chips. */
-  font-size: max(11.5px, calc(var(--boardw, 1600px) / 300));
+  /* Chips scale with the map: a pair runs ~0.9 of a country box tall in
+   * every region view. World keeps the readable floor (fit-width map, so
+   * the proportional term would shrink chips to dots — hover for detail). */
+  font-size: max(11.5px, calc(var(--boardw, 1600px) / 160));
 }
 
 .marker {

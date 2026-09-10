@@ -212,6 +212,9 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            # Dev server with no validators: Safari's heuristic cache kept
+            # serving stale app.js/style.css across pushes. Never store.
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
