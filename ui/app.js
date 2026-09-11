@@ -1013,24 +1013,35 @@ function renderDecision() {
   }
   box.append(head);
 
+  const played = (d.context || {}).card || (d.context || {}).event;
+  const hasCard = played && played !== "none" && played !== "HIDDEN_CARD";
+  const main = document.createElement("div");
+  main.className = "dcol-main";
+  if (hasCard) {
+    const cols = document.createElement("div");
+    cols.className = "dcols";
+    const cardcol = document.createElement("div");
+    cardcol.className = "dcol-card";
+    const cap = document.createElement("div");
+    cap.className = "playedcap";
+    cap.textContent = "Played Card";
+    cardcol.append(cap, cardEl(played, null));
+    cols.append(main, cardcol);
+    box.append(cols);
+  } else {
+    box.append(main);
+  }
+
   const prompt = document.createElement("strong");
   prompt.textContent = PROMPTS[d.kind] || pretty(d.kind);
-  box.append(prompt);
+  main.append(prompt);
 
   const ctxHtml = ctxLine(d);
   if (ctxHtml) {
     const line = document.createElement("div");
     line.className = "ctx";
     line.innerHTML = ctxHtml;
-    box.append(line);
-  }
-
-  const played = (d.context || {}).card || (d.context || {}).event;
-  if (played && played !== "none" && played !== "HIDDEN_CARD") {
-    const cap = document.createElement("div");
-    cap.className = "playedcap";
-    cap.textContent = "Played Card";
-    box.append(cap, cardEl(played, null));
+    main.append(line);
   }
 
   // Country-picking happens on the map: the glowing markers are the options
@@ -1040,14 +1051,14 @@ function renderDecision() {
     const hint = document.createElement("em");
     hint.className = "hint";
     hint.textContent = "Click a glowing country on the map.";
-    box.append(hint);
+    main.append(hint);
     return;
   }
   for (const o of d.options) {
     const b = document.createElement("button");
     b.innerHTML = `<b>${optionLabel(o)}</b>`;
     b.addEventListener("click", () => act(o.index));
-    box.append(b);
+    main.append(b);
   }
 }
 

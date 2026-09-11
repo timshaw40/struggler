@@ -400,7 +400,7 @@ main {
 #decision {
   flex: none;
   order: 2;
-  width: 240px;
+  width: 370px;
   max-height: 300px;
   overflow-y: scroll;
   scrollbar-color: #9aa0ad transparent;
@@ -413,6 +413,9 @@ main {
 #decision::-webkit-scrollbar-track { background: transparent; }
 #decision::-webkit-scrollbar-thumb { background: #9aa0ad; border-radius: 5px; }
 #decision .card { width: 90px; }
+#decision .dcols { display: flex; gap: 10px; }
+#decision .dcol-main { flex: 1; min-width: 0; }
+#decision .dcol-card { flex: none; width: 100px; }
 
 #decision[hidden] { display: none; }
 
