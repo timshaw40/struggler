@@ -402,12 +402,16 @@ main {
   order: 2;
   width: 240px;
   max-height: 240px;
-  overflow-y: auto;
+  overflow-y: scroll;
+  scrollbar-color: #9aa0ad transparent;
   background: var(--panel2);
   border: 1px solid #3a4252;
   border-radius: 10px;
   padding: 10px 12px;
 }
+#decision::-webkit-scrollbar { width: 10px; }
+#decision::-webkit-scrollbar-track { background: transparent; }
+#decision::-webkit-scrollbar-thumb { background: #9aa0ad; border-radius: 5px; }
 #decision .card { width: 110px; }
 
 #decision[hidden] { display: none; }
