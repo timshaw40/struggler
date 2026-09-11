@@ -173,31 +173,7 @@ function setView(name) {
   renderBoard();  // marker sizing is per-view; renderBoard guards null
 }
 
-let lastJump = "";
-/* Country-picking decisions target one subregion, so the map follows the
- * action: switch to the region holding the most legal targets. (Canada is
- * Europe-scoring but sits west of the Europe rect — requiring every target
- * inside a rect sent the setup jump to World.) Same target set is skipped
- * so re-renders never yank the view back. */
-function jumpToTargets(d) {
-  const key = d.options.map((o) => o.index).join(",");
-  if (key === lastJump) return;
-  const pts = d.options
-    .map((o) => POS[o.payload.country])
-    .filter(Boolean)
-    .map((p) => [p.x * BOARD_W + (p.w || 0) / 2, p.y * BOARD_H + (p.h || 0) / 2]);
-  if (!pts.length) return;
-  lastJump = key;
-  const inside = (reg, x, y) =>
-    reg[0] <= x && x <= reg[2] && reg[1] <= y && y <= reg[3];
-  let best = view, bestN = 0;
-  for (const n of Object.keys(REGIONS)) {
-    if (n === "World") continue;
-    const c = pts.filter(([x, y]) => inside(REGIONS[n], x, y)).length;
-    if (c > bestN) { best = n; bestN = c; }
-  }
-  if (best !== view) setView(best);
-}
+
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
  * scrollable #boardwrap follows. A drag never counts as a marker click. */
@@ -924,10 +900,9 @@ function renderDecision() {
   }
 
   // Country-picking happens on the map: the glowing markers are the options
-  // (every one of this decision's options names a country), and the map
-  // follows the action by jumping to the region holding them.
+  // (every one of this decision's options names a country). The view never
+  // moves on its own — it stays where the player put it.
   if (d.options.length && d.options.every((o) => o.payload && o.payload.country)) {
-    jumpToTargets(d);
     const hint = document.createElement("em");
     hint.className = "hint";
     hint.textContent = "Click a glowing country on the map.";
