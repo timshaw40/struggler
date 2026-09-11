@@ -401,7 +401,7 @@ main {
   flex: none;
   order: 2;
   width: 240px;
-  max-height: 240px;
+  max-height: 520px;
   overflow-y: scroll;
   scrollbar-color: #9aa0ad transparent;
   background: var(--panel2);
