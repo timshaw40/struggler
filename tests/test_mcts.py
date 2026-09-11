@@ -16,6 +16,25 @@ def _player(seed: int = 1, sims: int = 3, rollout_depth: int = 6) -> MCTSPlayer:
     return MCTSPlayer(seed=seed, sims=sims, rollout_depth=rollout_depth)
 
 
+def test_mcts_plays_the_standard_ussr_opening():
+    engine = Engine.new_game(seed=1)
+    player = _player(seed=1, sims=3)
+    player.bind_engine(engine)
+    placed: list[str] = []
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.USSR
+        and engine.pending_decision.context.get("setup")
+    ):
+        obs = engine.observe(Side.USSR)
+        action = player.choose_action(obs, [])
+        placed.append(action.payload["country"])
+        engine.step(action)
+    assert placed.count("Poland") == 4
+    assert placed.count("East_Germany") == 1
+    assert placed.count("Yugoslavia") == 1
+
+
 def test_mcts_returns_a_legal_action():
     engine = Engine.new_game(seed=1)
     player = _player()

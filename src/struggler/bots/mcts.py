@@ -141,6 +141,10 @@ class MCTSPlayer:
         options = decision.options
         if len(options) == 1:
             return options[0]
+        # Opening setup is a known line, not a search problem: 16 noisy
+        # rollouts will not rediscover 4 Poland / 4 E.Ger / 1 Yugoslavia.
+        if decision.context.get("setup"):
+            return self._greedy.choose_action(observation, history)
         if self._engine is None:
             raise RuntimeError("MCTSPlayer.bind_engine(engine) must be called before choose_action")
 
