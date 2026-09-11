@@ -387,20 +387,25 @@ main {
 .side-us .cardname { color: #7ea4f5; }
 .side-ussr .cardname { color: #e57373; }
 
-/* Decision popup: pinned over the History section (absolute against the
- * panel, which never scrolls itself), with its own scroll for long lists. */
+/* Decision bar: lives in the bottom card area next to the hand, so the
+ * side panel stays fully visible for History. */
+#playbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+#hand { flex: 1; }
+
 #decision {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--panel2);
-  border-top: 1px solid #3a4252;
-  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.55);
-  padding: 10px 12px;
-  max-height: 70%;
+  flex: none;
+  width: 330px;
+  max-height: 240px;
   overflow-y: auto;
-  z-index: 3;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 #decision[hidden] { display: none; }
