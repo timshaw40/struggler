@@ -889,10 +889,21 @@ function renderDecision() {
     return;
   }
   const side = state.human_side === "USSR" ? "ussr" : "us";
+  const head = document.createElement("div");
+  head.className = "dhead";
   const move = document.createElement("div");
   move.className = `dside ${side}`;
   move.textContent = `${state.human_side} Move`;
-  box.append(move);
+  head.append(move);
+  if (state.can_undo) {
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "backbtn";
+    back.textContent = "← Back";
+    back.addEventListener("click", goBack);
+    head.append(back);
+  }
+  box.append(head);
 
   const prompt = document.createElement("strong");
   prompt.textContent = PROMPTS[d.kind] || pretty(d.kind);
@@ -1035,6 +1046,22 @@ async function catchUp() {
 
 function newGame() { return postGame("/new"); }
 function forfeitGame() { return postGame("/forfeit"); }
+
+async function goBack() {
+  busy = true;
+  render();
+  try {
+    const res = await fetch("/back", { method: "POST" });
+    if (!res.ok) throw new Error("/back " + res.status);
+    state = await res.json();
+    seenHistory = -1;
+    prevInf = null;
+    recordedEnd = false;
+  } finally {
+    busy = false;
+    render();
+  }
+}
 
 function renderWinner() {
   const overlay = $("#winner");

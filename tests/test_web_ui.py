@@ -147,6 +147,27 @@ def test_restart_can_switch_side_and_us_extra() -> None:
     assert d.actor.value == "US" and d.context["remaining"] == 9
 
 
+def test_undo_takes_back_the_last_human_action() -> None:
+    session = make_session()
+    session.advance()
+    before = session.engine.serialize()
+    hist_len = len(session.history.history)
+    hand = list(session.engine.hands[session.human_side.value])
+    session.act(0)
+    assert len(session.history.history) > hist_len
+    session.undo()
+    assert session.engine.serialize() == before
+    assert len(session.history.history) == hist_len
+    assert list(session.engine.hands[session.human_side.value]) == hand
+    assert session.engine.pending_decision.actor is session.human_side
+
+
+def test_undo_without_an_action_fails() -> None:
+    session = make_session()
+    with pytest.raises(RuntimeError, match="nothing to undo"):
+        session.undo()
+
+
 def test_restart_can_drop_ccw() -> None:
     session = make_session()
     assert "Chinese_Civil_War" in session.engine.board.countries

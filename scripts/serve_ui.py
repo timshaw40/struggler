@@ -92,11 +92,9 @@ class Session:
         for side, kind in ((Side.US, self.us), (Side.USSR, self.ussr)):
             if kind != "human":
                 self.players[side] = build_player(kind, seed=self.seed + (1 if side is Side.US else 2))
-        for player in self.players.values():
-            bind = getattr(player, "bind_engine", None)
-            if callable(bind):
-                bind(self.engine)
+        self._rebind()
         self.history = HistoryBuilder()
+        self._undo = None
 
     def restart(self, include_ccw: bool | None = None, side: str | None = None,
                 setup_us_extra: int | None = None) -> None:
@@ -112,6 +110,24 @@ class Session:
                 self.us, self.ussr = self.bot_kind, "human"
         self.seed += 1
         self._rebuild()
+
+    def _rebind(self) -> None:
+        for player in self.players.values():
+            bind = getattr(player, "bind_engine", None)
+            if callable(bind):
+                bind(self.engine)
+
+    def undo(self) -> None:
+        """Take back the human's last action (plus any bot/CHANCE replies
+        after it). Single level: one undo per action."""
+        if self._undo is None:
+            raise RuntimeError("nothing to undo")
+        snap = self._undo
+        self._undo = None
+        self.engine = Engine.deserialize(snap["engine"])
+        del self.history.history[snap["hist_len"]:]
+        del self.history._pending_headline[snap["pending_hl_len"]:]
+        self._rebind()
 
     def forfeit(self, **restart_kw: Any) -> str:
         """Opponent wins, then a new game starts. Returns the winner's side."""
@@ -162,6 +178,12 @@ class Session:
             raise RuntimeError("no pending decision")
         if not 0 <= index < len(decision.options):
             raise ValueError(f"option index {index} out of range")
+        if decision.actor is self.human_side:
+            self._undo = {
+                "engine": self.engine.serialize(),
+                "hist_len": len(self.history.history),
+                "pending_hl_len": len(self.history._pending_headline),
+            }
         self._step(decision.options[index])
         self.advance()
 
@@ -226,6 +248,7 @@ class Session:
             },
             "turn_effects": self._json(obs.turn_effects),
             "game_effects": self._json(obs.game_effects),
+            "can_undo": self._undo is not None and not self.watch,
             "is_terminal": engine.is_terminal,
             "winner": engine.winner.value if engine.winner is not None else None,
             "game_over_reason": engine._game_over_reason,
@@ -327,6 +350,9 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                             return
                         winner = session.forfeit(**_restart_opts(body))
                         self._send_json(200, {"forfeit": True, "winner": winner, **session.state()})
+                    elif self.path == "/back":
+                        session.undo()
+                        self._send_json(200, session.state())
                     else:
                         self._send_json(404, {"error": "not found"})
             except (ValueError, RuntimeError) as exc:

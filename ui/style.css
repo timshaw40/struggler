@@ -421,6 +421,13 @@ main {
 #decision .dside { font-size: 16px; font-weight: 800; margin-bottom: 2px; }
 #decision .dside.us { color: #3b9eff; }
 #decision .dside.ussr { color: #ff2d2d; }
+#decision .dhead { display: flex; justify-content: space-between; align-items: center; }
+#decision .backbtn {
+  width: auto;
+  margin-top: 0;
+  padding: 2px 8px;
+  font-size: 12px;
+}
 
 #decision .ctx { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; }
 #decision .ctx b { color: var(--text); }
