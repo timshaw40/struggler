@@ -1,0 +1,580 @@
+{
+ "source": "bgg-1477640",
+ "title": "Most epic Voice of America ... ever",
+ "format": "playdek",
+ "include_optional": true,
+ "winner": null,
+ "vp_final": 12,
+ "actions": [
+  {
+   "kind": "headline",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Red_Scare_Purge",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 8,
+   "side": "US",
+   "card": "CIA_Created",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 8,
+   "side": "US",
+   "card": null,
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Angola",
+    "roll": 3
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Angola",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Iran_Contra_Scandal",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 8,
+   "side": "US",
+   "card": "Kitchen_Debates",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Haiti",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Haiti",
+     "US",
+     4
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Haiti",
+     "USSR",
+     0
+    ],
+    [
+     "Haiti",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Che",
+   "mode": "event",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Haiti",
+     "US",
+     4
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Haiti",
+     "US",
+     0
+    ],
+    [
+     "Nicaragua",
+     "US",
+     0
+    ],
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Brush_War",
+   "mode": "event",
+   "ops_type": null,
+   "coup": {
+    "country": "Mexico",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2,
+   "war": [
+    {
+     "roll": null
+    }
+   ]
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "U2_Incident",
+   "mode": "event",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Nicaragua",
+     "US",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nicaragua",
+     "USSR",
+     0
+    ],
+    [
+     "Nicaragua",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": -1,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Vietnam_Revolts",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Nicaragua",
+     "US",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nicaragua",
+     "US",
+     0
+    ],
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Pershing_II_Deployed",
+   "mode": "event",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Nicaragua",
+     "US",
+     4
+    ]
+   ],
+   "removals": [
+    [
+     "Nicaragua",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nicaragua",
+     "USSR",
+     0
+    ],
+    [
+     "Nicaragua",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": -2,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Independent_Reds",
+   "mode": "event",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 3
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Italy",
+     "US",
+     3
+    ],
+    [
+     "Greece",
+     "US",
+     1
+    ],
+    [
+     "Romania",
+     "US",
+     3
+    ]
+   ],
+   "removals": [
+    [
+     "Nicaragua",
+     "US",
+     3
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Italy",
+     "US",
+     3
+    ],
+    [
+     "Greece",
+     "US",
+     1
+    ],
+    [
+     "Nicaragua",
+     "US",
+     1
+    ],
+    [
+     "Romania",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "The_Voice_Of_America",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Panama",
+     "USSR",
+     2
+    ],
+    [
+     "Cuba",
+     "USSR",
+     2
+    ],
+    [
+     "Thailand",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Panama",
+     "USSR",
+     2
+    ],
+    [
+     "Cuba",
+     "USSR",
+     2
+    ],
+    [
+     "Thailand",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Central_America_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 2,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": null,
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Asia_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 7,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": null,
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Europe_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 12,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Defectors",
+   "mode": "ops",
+   "ops_type": "realignment",
+   "coup": null,
+   "realignments": [
+    {
+     "country": "Cuba",
+     "rolls": {
+      "US": 2,
+      "USSR": 5
+     }
+    }
+   ],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  }
+ ],
+ "warnings": []
+}
