@@ -91,14 +91,45 @@ def test_greedy_aldrich_ames_remix_discards_the_opponents_highest_ops_card():
     assert action.payload["choice"] == "Duck_and_Cover"
 
 
-def test_ussr_setup_prefers_poland_over_austria():
-    """Opening EE: 1/3 of the way to Poland (BG) beats 1/4 into Austria."""
+def test_ussr_standard_opening_is_four_poland_one_eg_one_yugo():
+    """Twilight Strategy standard USSR setup: 4 E.Ger, 4 Poland, 1 Yugoslavia."""
     engine = Engine.new_game(seed=1)
-    observation = engine.observe(Side.USSR)
-    assert observation.pending_decision.kind is DecisionKind.PLACE_INFLUENCE
-    assert observation.pending_decision.context.get("setup")
-    action = GreedyPlayer().choose_action(observation, [])
-    assert action.payload["country"] == "Poland"
+    greedy = GreedyPlayer()
+    placed: list[str] = []
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.USSR
+        and engine.pending_decision.context.get("setup")
+    ):
+        action = greedy.choose_action(engine.observe(Side.USSR), [])
+        placed.append(action.payload["country"])
+        engine.step(action)
+    assert placed.count("Poland") == 4
+    assert placed.count("East_Germany") == 1
+    assert placed.count("Yugoslavia") == 1
+    assert "Austria" not in placed
+
+
+def test_us_standard_opening_is_four_wg_three_italy():
+    engine = Engine.new_game(seed=1)
+    greedy = GreedyPlayer()
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.USSR
+        and engine.pending_decision.context.get("setup")
+    ):
+        engine.step(greedy.choose_action(engine.observe(Side.USSR), []))
+    placed: list[str] = []
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.US
+        and engine.pending_decision.context.get("setup")
+    ):
+        action = greedy.choose_action(engine.observe(Side.US), [])
+        placed.append(action.payload["country"])
+        engine.step(action)
+    assert placed.count("West_Germany") == 4
+    assert placed.count("Italy") == 3
 
 
 def test_ussr_does_not_headline_a_us_event():
@@ -118,3 +149,42 @@ def test_ussr_does_not_headline_a_us_event():
     )
     action = GreedyPlayer().choose_action(observation, [])
     assert action.payload["card"] == "Socialist_Governments"
+
+
+def test_ussr_t1_headlines_red_scare_over_a_filler_ussr_event():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    observation = dataclasses.replace(observation, turn=1, side=Side.USSR)
+    decision = Decision(
+        id=998,
+        actor=Side.USSR,
+        kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Romanian_Abdication"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Red_Scare_Purge"}),
+        ),
+    )
+    observation = dataclasses.replace(observation, pending_decision=decision)
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["card"] == "Red_Scare_Purge"
+
+
+def test_ussr_t1_prefers_couping_iran_over_italy():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    observation = dataclasses.replace(
+        observation, turn=1, defcon=5, side=Side.USSR,
+    )
+    decision = Decision(
+        id=997,
+        actor=Side.USSR,
+        kind=DecisionKind.COUP_TARGET,
+        options=(
+            Action(DecisionKind.COUP_TARGET, {"country": "Italy"}),
+            Action(DecisionKind.COUP_TARGET, {"country": "Iran"}),
+        ),
+        context={"ops": 4, "bonus": None},
+    )
+    observation = dataclasses.replace(observation, pending_decision=decision)
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["country"] == "Iran"

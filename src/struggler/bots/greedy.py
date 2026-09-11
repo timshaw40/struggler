@@ -111,6 +111,24 @@ class GreedyWeights:
     hold_high_ops_weight: float = 0.5  # prefer headlining a low-Ops card, keeping high-Ops ones for Operations
     opponent_headline_penalty: float = 50.0  # never headline an opponent-side event
     action_round_ops_weight: float = 1.0
+    # Turn-1 USSR headline bonus for the five canonical openings.
+    t1_headline_bonus: float = 40.0
+    t1_iran_coup_bonus: float = 20.0
+
+
+# Standard openings (Twilight Strategy). Targets are influence AFTER setup,
+# including printed at-start (E. Germany already has 3).
+_SETUP_TARGET = {
+    Side.USSR: {"East_Germany": 4, "Poland": 4, "Yugoslavia": 1},
+    Side.US: {"West_Germany": 4, "Italy": 3},
+}
+_USSR_T1_HEADLINES = frozenset({
+    "Red_Scare_Purge",
+    "Suez_Crisis",
+    "Arab_Israeli_War",
+    "Socialist_Governments",
+    "Vietnam_Revolts",
+})
 
 
 # -- board evaluation ---------------------------------------------------------
@@ -269,9 +287,23 @@ def _scoring_card_favorability(board: Board, side: Side, cid: str) -> float:
 # -- per-decision-kind scorers -------------------------------------------------
 
 
+def _score_setup_place(board: Board, side: Side, country: str) -> float:
+    """Fill the standard opening stacks before anywhere else."""
+    want = _SETUP_TARGET[side].get(country)
+    if want is None:
+        return -10.0
+    have = board.influence[country][side.value]
+    if have >= want:
+        return -1.0
+    bg = 100.0 if board.countries[country].battleground else 10.0
+    return bg + (want - have)
+
+
 def _score_place_influence(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     country = action.payload["country"]
+    if observation.pending_decision.context.get("setup"):
+        return _score_setup_place(board, side, country)
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
     return weights.influence_base + gain - (cost - 1) * weights.doubled_cost_penalty
@@ -292,7 +324,15 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
 
     gain = _expected_coup_gain(weights, board, observation, side, country, info, ops)
     caution = weights.defcon_caution * (5 - observation.defcon)
-    return weights.coup_base + gain - caution
+    score = weights.coup_base + gain - caution
+    if (
+        observation.turn == 1
+        and side is Side.USSR
+        and country == "Iran"
+        and observation.defcon >= 4
+    ):
+        score += weights.t1_iran_coup_bonus
+    return score
 
 
 def _score_realignment_target(
@@ -408,7 +448,14 @@ def _score_headline(weights: GreedyWeights, board: Board, observation: Observati
     ):
         return -weights.opponent_headline_penalty
     # Own/neutral: spend a low-Ops card here and keep higher-Ops ones for Ops.
-    return -weights.hold_high_ops_weight * card.ops
+    score = -weights.hold_high_ops_weight * card.ops
+    if (
+        observation.turn == 1
+        and side is Side.USSR
+        and cid in _USSR_T1_HEADLINES
+    ):
+        score += weights.t1_headline_bonus
+    return score
 
 
 def _score_action_round_play(

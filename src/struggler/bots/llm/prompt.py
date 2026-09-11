@@ -153,10 +153,10 @@ _COMMON_GUIDANCE = [
 
 _USSR_GUIDANCE = [
     "USSR-SPECIFIC GUIDANCE:",
-    "  - Standard initial influence: 4 Poland, 1 East Germany, 1 Yugoslavia. Controls both, has access to Yugoslavia.",
+    "  - Standard opening setup: 4 East Germany, 4 Poland, 1 Yugoslavia (overcontrol both battlegrounds; Yugoslavia is Italy/Greece access). Do not open Austria.",
     "  - You act first every round: take the turn's Battleground coup and lock DEFCON at 2 before the US can.",
     "  - Final Scoring favors the US. aim to win by Mid War or a turn-8 Wargames.",
-    "  - Turn 1 AR1 is coup Iran or play for Italy, whichever is weaker -- BEFORE "
+    "  - Turn 1 AR1 is coup Iran (lock western Asia) unless Italy is wide open. BEFORE "
     "any Europe Scoring prep, even though you also hold Europe Scoring this "
     "turn. The coup is the urgent play (see BATTLEGROUND DOCTRINE above); your "
     "Europe position only needs to be locked in by the action round you play "
