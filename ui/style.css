@@ -390,21 +390,18 @@ main {
 /* Decision bar: lives in the bottom card area next to the hand, so the
  * side panel stays fully visible for History. */
 #playbar {
-  position: relative;
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 #hand { flex: 1; }
 
 #decision {
-  position: absolute;
-  right: 14px;
-  bottom: calc(100% + 8px);
-  z-index: 5;
+  flex: none;
+  order: 2;
   width: 240px;
-  max-height: 520px;
+  max-height: 300px;
   overflow-y: scroll;
   scrollbar-color: #9aa0ad transparent;
   background: var(--panel2);
@@ -415,7 +412,7 @@ main {
 #decision::-webkit-scrollbar { width: 10px; }
 #decision::-webkit-scrollbar-track { background: transparent; }
 #decision::-webkit-scrollbar-thumb { background: #9aa0ad; border-radius: 5px; }
-#decision .card { width: 110px; }
+#decision .card { width: 90px; }
 
 #decision[hidden] { display: none; }
 
