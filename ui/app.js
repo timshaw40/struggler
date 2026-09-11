@@ -848,6 +848,27 @@ function renderHand() {
   for (const cid of state.hand) host.append(cardEl(cid, cardOption(cid)));
 }
 
+/* Human-readable decision context: curated keys only. Engine internals
+ * (candidate lists, setup bookkeeping, placed objects) never reach the UI. */
+function ctxLine(d) {
+  const c = d.context || {};
+  const parts = [];
+  const val = (k, v) => {
+    if (k === "card" || k === "event") return cardName(v);
+    if (typeof v === "boolean") return v ? "yes" : "no";
+    if (typeof v === "object") return null;  // placed objects, etc.
+    return pretty(v);
+  };
+  for (const k of ["card", "event", "ops", "ops_remaining", "remaining", "mode", "type", "order", "choice", "subregion", "bonus", "country"]) {
+    if (c[k] === undefined || c[k] === null) continue;
+    if ((k === "card" || k === "event") && (c[k] === "none" || c[k] === "HIDDEN_CARD")) continue;
+    const v = val(k, c[k]);
+    if (v === null) continue;
+    parts.push(`<b>${k === "event" ? "Event" : pretty(k)}</b> ${v}`);
+  }
+  return parts.join(" · ");
+}
+
 function renderDecision() {
   const box = $("#decision");
   box.textContent = "";
@@ -876,18 +897,30 @@ function renderDecision() {
     box.append(note);
     return;
   }
+  const side = state.human_side === "USSR" ? "ussr" : "us";
+  const move = document.createElement("div");
+  move.className = `dside ${side}`;
+  move.textContent = `${state.human_side} Move`;
+  box.append(move);
+
   const prompt = document.createElement("strong");
   prompt.textContent = PROMPTS[d.kind] || pretty(d.kind);
   box.append(prompt);
 
-  const ctx = Object.entries(d.context || {})
-    .map(([k, v]) => `${pretty(k)}: ${typeof v === "boolean" ? (v ? "yes" : "no") : pretty(v)}`)
-    .join(" · ");
-  if (ctx) {
+  const ctxHtml = ctxLine(d);
+  if (ctxHtml) {
     const line = document.createElement("div");
     line.className = "ctx";
-    line.textContent = ctx;
+    line.innerHTML = ctxHtml;
     box.append(line);
+  }
+
+  const played = (d.context || {}).card || (d.context || {}).event;
+  if (played && played !== "none" && played !== "HIDDEN_CARD") {
+    const cap = document.createElement("div");
+    cap.className = "playedcap";
+    cap.textContent = "Played Card";
+    box.append(cap, cardEl(played, null));
   }
 
   // Country-picking happens on the map: the glowing markers are the options
@@ -903,7 +936,7 @@ function renderDecision() {
   }
   for (const o of d.options) {
     const b = document.createElement("button");
-    b.textContent = optionLabel(o);
+    b.innerHTML = `<b>${optionLabel(o)}</b>`;
     b.addEventListener("click", () => act(o.index));
     box.append(b);
   }
