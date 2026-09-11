@@ -266,23 +266,24 @@ let prevInf = null;
  * a bot dump of 6 doesn't stack on one frame. */
 function flyDiff() {
   const inf = state.influence || {};
+  const jobs = [];
   if (prevInf) {
-    let delay = 0;
     for (const [cid, now] of Object.entries(inf)) {
       const was = prevInf[cid] || { US: 0, USSR: 0 };
       for (const side of ["US", "USSR"]) {
         const n = (now[side] || 0) - (was[side] || 0);
-        for (let i = 0; i < n; i++) {
-          const t = delay;
-          setTimeout(() => flyPip(cid, side), t);
-          delay += 120;
-        }
+        for (let i = 0; i < n; i++) jobs.push([cid, side]);
       }
     }
   }
   prevInf = {};
   for (const [cid, v] of Object.entries(inf))
     prevInf[cid] = { US: v.US, USSR: v.USSR };
+  if (!jobs.length) return;
+  // Placements animate after any queued card reveal finishes.
+  fxGate.then(() => {
+    jobs.forEach(([cid, side], i) => setTimeout(() => flyPip(cid, side), i * 120));
+  });
 }
 
 function flyPip(cid, side) {
@@ -311,12 +312,59 @@ const ROLL_KIND = {
 const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 let seenHistory = -1;
 let diceChain = Promise.resolve();
+let fxGate = Promise.resolve();  // opponent card reveals; pips and dice wait on it
+
+function clearDiceBox() {
+  const box = $("#dicebox");
+  box.querySelector(".dice").textContent = "";
+  box.querySelector(".doutcome").textContent = "";
+  const old = box.querySelector(".playcard");
+  if (old) old.remove();
+}
+
+/* Opponent card plays show the card face briefly, then the placements
+ * fly in and the dice/scores follow. Own plays are skipped — the human
+ * already sees their hand and the move box. */
+function showCardPlay(cid, actor) {
+  return new Promise((resolve) => {
+    const box = $("#dicebox");
+    const m = META[cid] || {};
+    clearDiceBox();
+    box.querySelector(".dtitle").textContent = `${actor} plays ${m.name || pretty(cid)}`;
+    if (IMAGES[cid]) {
+      const img = document.createElement("img");
+      img.className = "playcard";
+      img.src = `/assets/cards/${IMAGES[cid]}`;
+      img.alt = m.name || cid;
+      box.querySelector(".dice").append(img);
+    }
+    box.querySelector(".doutcome").textContent = m.event_summary || "";
+    box.hidden = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      box.hidden = true;
+      box.onclick = null;
+      resolve();
+    };
+    box.onclick = finish;
+    setTimeout(finish, 2300);
+  });
+}
 
 function drainRolls() {
   const hist = state.history || [];
   if (seenHistory < 0) { seenHistory = hist.length; return; }
   const fresh = hist.slice(seenHistory);
   seenHistory = hist.length;
+  for (const e of fresh) {
+    if ((e.kind === "action_round_play" || e.kind === "headline_play")
+        && e.payload.card && e.actor !== state.human_side) {
+      fxGate = fxGate.then(() => showCardPlay(e.payload.card, e.actor));
+    }
+  }
+  diceChain = Promise.all([diceChain, fxGate]);
   const items = [];
   for (let i = 0; i < fresh.length; i++) {
     const e = fresh[i];
@@ -341,8 +389,8 @@ function drainRolls() {
 function showScore(e, prev) {
   return new Promise((resolve) => {
     const box = $("#dicebox");
+    clearDiceBox();
     box.querySelector(".dtitle").textContent = cardName(e.payload.card);
-    box.querySelector(".dice").textContent = "";
     const d = prev ? e.vp - prev.vp : 0;
     const swing = d > 0 ? `US +${d}` : d < 0 ? `USSR +${-d}` : "no swing";
     box.querySelector(".doutcome").textContent =
@@ -423,8 +471,8 @@ function rollOutcome(item) {
 function showDice(item) {
   return new Promise((resolve) => {
     const box = $("#dicebox");
+    clearDiceBox();
     box.querySelector(".dtitle").textContent = rollTitle(item);
-    box.querySelector(".doutcome").textContent = "";
     const dice = box.querySelector(".dice");
     const vals = rollValues(item);
     box.hidden = false;
@@ -523,13 +571,13 @@ function showCountryTip(el, cid, inf) {
 
 function render() {
   if (!state) return;
+  drainRolls();  // first: queue card reveals so pips and dice wait on them
   flyDiff();
   renderBoard();
   renderPanel();
   renderHand();
   renderDecision();
   renderWinner();
-  drainRolls();
 }
 
 function renderBoard() {

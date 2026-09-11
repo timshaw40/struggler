@@ -512,6 +512,13 @@ main {
   line-height: 1.1;
   margin: 14px 0 8px;
 }
+#dicebox .playcard {
+  width: 200px;
+  max-height: 44vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
 #dicebox .doutcome {
   margin: 0;
   min-height: 1.4em;
