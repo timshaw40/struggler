@@ -399,7 +399,8 @@ main {
 
 #decision {
   flex: none;
-  width: 330px;
+  order: 2;
+  width: 240px;
   max-height: 240px;
   overflow-y: auto;
   background: var(--panel2);
@@ -407,6 +408,7 @@ main {
   border-radius: 10px;
   padding: 10px 12px;
 }
+#decision .card { width: 110px; }
 
 #decision[hidden] { display: none; }
 
