@@ -353,6 +353,36 @@ function drainRolls() {
     }
   }
   for (const item of items) diceChain = diceChain.then(() => showDice(item));
+  for (let i = 0; i < fresh.length; i++) {
+    const e = fresh[i];
+    if (e.payload.card && /_Scoring$/.test(e.payload.card)) {
+      const prev = hist[seenHistory - fresh.length + i - 1];
+      diceChain = diceChain.then(() => showScore(e, prev));
+    }
+  }
+}
+
+function showScore(e, prev) {
+  return new Promise((resolve) => {
+    const box = $("#dicebox");
+    box.querySelector(".dtitle").textContent = cardName(e.payload.card);
+    box.querySelector(".dice").textContent = "";
+    const d = prev ? e.vp - prev.vp : 0;
+    const swing = d > 0 ? `US +${d}` : d < 0 ? `USSR +${-d}` : "no swing";
+    box.querySelector(".doutcome").textContent =
+      prev ? `${swing} · VP ${prev.vp} → ${e.vp}` : `${swing} · VP ${e.vp}`;
+    box.hidden = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      box.hidden = true;
+      box.onclick = null;
+      resolve();
+    };
+    box.onclick = finish;
+    setTimeout(finish, 3200);
+  });
 }
 
 function rollValues(item) {
@@ -664,17 +694,91 @@ function renderPanel() {
     wait.textContent = "Calculating…";
     feed.append(wait);
   }
-  for (const e of state.history.slice().reverse().slice(0, 25)) {
+  const rows = state.history.slice().reverse().slice(0, 25);
+  rows.forEach((e, i) => {
+    const older = rows[i + 1];  // reversed: next item is earlier in time
     const row = document.createElement("div");
     row.className = "feedrow";
-    const what = e.payload.card ? cardName(e.payload.card)
-      : e.country ? pretty(e.country)
-      : pretty(Object.values(e.payload)[0] ?? e.kind);
     const side = e.actor === "USSR" ? "ussr" : "us";
-    row.innerHTML = `<span>${pretty(e.kind)} · ${what} · T${e.turn} R${e.action_round}</span>`
-      + `<b class="${side}">${e.actor}</b>`;
+    const main = document.createElement("div");
+    main.className = "feedmain";
+    const label = document.createElement("span");
+    label.textContent = feedSummary(e, older);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "feedtoggle";
+    toggle.textContent = "+";
+    const actor = document.createElement("b");
+    actor.className = side;
+    actor.textContent = e.actor;
+    main.append(label, toggle, actor);
+    const detail = document.createElement("div");
+    detail.className = "feeddetail";
+    detail.hidden = true;
+    detail.textContent = "";
+    for (const line of eventDetail(e, older)) {
+      const p = document.createElement("div");
+      p.textContent = line;
+      detail.append(p);
+    }
+    toggle.addEventListener("click", () => {
+      detail.hidden = !detail.hidden;
+      toggle.textContent = detail.hidden ? "+" : "−";
+    });
+    row.append(main, detail);
     feed.append(row);
+  });
+}
+
+function vpSwing(e, older) {
+  if (!older || e.vp === older.vp) return older ? "no swing" : "";
+  const d = e.vp - older.vp;
+  return d > 0 ? `US +${d}` : `USSR +${-d}`;
+}
+
+function feedSummary(e, older) {
+  const t = `T${e.turn} R${e.action_round}`;
+  const inf = e.country_influence;
+  if ((e.kind === "place_influence" || e.kind === "event_influence") && e.country && inf)
+    return `${pretty(e.kind)} · ${pretty(e.country)} → US ${inf.US} / USSR ${inf.USSR} · ${t}`;
+  if (e.kind === "coup_roll" && e.country)
+    return `coup · ${pretty(e.country)} · rolled ${e.payload.value} (ops ${e.context?.ops ?? "?"}) · ${t}`;
+  if (e.kind === "realignment_opponent_roll" && e.country)
+    return `realign · ${pretty(e.country)} · ${e.context?.actor_roll ?? "?"} vs ${e.payload.value} · ${t}`;
+  if (e.payload.card && /Scoring$/.test(e.payload.card))
+    return `${cardName(e.payload.card)} · ${vpSwing(e, older)} · ${t}`;
+  const what = e.payload.card ? cardName(e.payload.card)
+    : e.country ? pretty(e.country)
+    : pretty(Object.values(e.payload)[0] ?? e.kind);
+  return `${pretty(e.kind)} · ${what} · ${t}`;
+}
+
+function eventDetail(e, older) {
+  const lines = [];
+  if (older) {
+    if (e.vp !== older.vp) {
+      const d = e.vp - older.vp;
+      lines.push(`VP ${older.vp} → ${e.vp} (${d > 0 ? `US +${d}` : `USSR +${-d}`})`);
+    }
+    if (e.defcon !== older.defcon) lines.push(`DEFCON ${older.defcon} → ${e.defcon}`);
   }
+  if (e.country && e.country_influence) {
+    const inf = e.country_influence;
+    const ctrl = e.country_control ? `, ${e.country_control} controls` : "";
+    lines.push(`${pretty(e.country)}: US ${inf.US} / USSR ${inf.USSR}${ctrl}`);
+  }
+  const c = e.context || {};
+  if (c.ops !== undefined) lines.push(`Ops spent: ${c.ops}`);
+  if (c.card && c.card !== (e.payload.card || null)) lines.push(`Card: ${cardName(c.card)}`);
+  for (const k of ["mode", "type", "order", "choice"]) {
+    if (c[k] !== undefined && c[k] !== null) lines.push(`${pretty(k)}: ${pretty(c[k])}`);
+  }
+  const p = e.payload || {};
+  if (p.value !== undefined) lines.push(`Rolled: ${p.value}`);
+  if (p.sponsor_roll !== undefined)
+    lines.push(`Sponsor ${p.sponsor_roll} vs defender ${p.defender_roll}`);
+  if (!lines.length) lines.push("No further detail.");
+  return lines;
 }
 
 function cardEl(cid, actionIndex) {

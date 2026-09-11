@@ -288,18 +288,48 @@ main {
 #status { margin-top: 8px; }
 
 .feedrow {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
   padding: 3px 0;
   border-bottom: 1px solid #262c37;
   font-size: 12.5px;
   color: var(--muted);
 }
 
-.feedrow b { font-weight: 700; }
-.feedrow b.us { color: #3b9eff; }
-.feedrow b.ussr { color: #ff2d2d; }
+.feedmain {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.feedmain span { flex: 1; min-width: 0; }
+
+.feedtoggle {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  background: none;
+  border: 1px solid #3a4252;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.feedtoggle:hover { color: var(--text); border-color: #5a6572; }
+
+.feedmain b { font-weight: 700; }
+.feedmain b.us { color: #3b9eff; }
+.feedmain b.ussr { color: #ff2d2d; }
+
+.feeddetail {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid #3a4252;
+  font-size: 12px;
+  color: var(--text);
+}
+.feeddetail[hidden] { display: none; }
 
 .feedrow.wait {
   color: var(--gold);
