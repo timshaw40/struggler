@@ -691,7 +691,7 @@ function renderPanel() {
   if (busy) {
     const wait = document.createElement("div");
     wait.className = "feedrow wait";
-    wait.textContent = "Calculating…";
+    wait.textContent = "Thinking…";
     feed.append(wait);
   }
   const rows = state.history.slice().reverse().slice(0, 25);
