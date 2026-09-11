@@ -390,6 +390,7 @@ main {
 /* Decision bar: lives in the bottom card area next to the hand, so the
  * side panel stays fully visible for History. */
 #playbar {
+  position: relative;
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -398,8 +399,10 @@ main {
 #hand { flex: 1; }
 
 #decision {
-  flex: none;
-  order: 2;
+  position: absolute;
+  right: 14px;
+  bottom: calc(100% + 8px);
+  z-index: 5;
   width: 240px;
   max-height: 520px;
   overflow-y: scroll;
