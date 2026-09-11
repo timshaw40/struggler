@@ -322,6 +322,59 @@ function clearDiceBox() {
   if (old) old.remove();
 }
 
+/* Headline reveal: both cards center-screen in resolution order (higher
+ * Ops first, ties US-first — the engine's own rule). A US Defectors
+ * cancels the USSR headline outright. */
+function showHeadlines(usCid, ussrCid) {
+  return new Promise((resolve) => {
+    const box = $("#dicebox");
+    clearDiceBox();
+    box.querySelector(".dtitle").textContent = "Headline Phase";
+    const wrap = document.createElement("div");
+    wrap.className = "hcards";
+    const cancelled = usCid === "Defectors";
+    const order = cancelled ? ["US"] : headlineOrder(usCid, ussrCid);
+    for (const side of ["USSR", "US"]) {
+      const cid = side === "US" ? usCid : ussrCid;
+      const cell = document.createElement("div");
+      const tag = document.createElement("div");
+      tag.className = "htag";
+      tag.textContent = side + (cancelled && side === "USSR" ? " — cancelled"
+        : order[0] === side ? " — resolves first" : "");
+      cell.append(tag);
+      if (IMAGES[cid]) {
+        const img = document.createElement("img");
+        img.src = `/assets/cards/${IMAGES[cid]}`;
+        img.alt = cardName(cid);
+        cell.append(img);
+      } else {
+        const name = document.createElement("div");
+        name.textContent = cardName(cid);
+        cell.append(name);
+      }
+      wrap.append(cell);
+    }
+    box.querySelector(".dice").append(wrap);
+    box.hidden = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      box.hidden = true;
+      box.onclick = null;
+      resolve();
+    };
+    box.onclick = finish;
+    setTimeout(finish, 3200);
+  });
+}
+
+function headlineOrder(usCid, ussrCid) {
+  const ops = (cid) => (META[cid] && META[cid].ops) || 0;
+  if (ops(usCid) === ops(ussrCid)) return ["US", "USSR"];
+  return ops(usCid) > ops(ussrCid) ? ["US", "USSR"] : ["USSR", "US"];
+}
+
 /* Opponent card plays show the card face briefly, then the placements
  * fly in and the dice/scores follow. Own plays are skipped — the human
  * already sees their hand and the move box. */
@@ -358,8 +411,15 @@ function drainRolls() {
   if (seenHistory < 0) { seenHistory = hist.length; return; }
   const fresh = hist.slice(seenHistory);
   seenHistory = hist.length;
+  const headlines = fresh.filter((e) => e.kind === "headline_play" && e.payload.card);
+  if (headlines.length >= 2) {
+    const bySide = {};
+    for (const e of headlines) bySide[e.actor] = e.payload.card;
+    if (bySide.US && bySide.USSR)
+      fxGate = fxGate.then(() => showHeadlines(bySide.US, bySide.USSR));
+  }
   for (const e of fresh) {
-    if ((e.kind === "action_round_play" || e.kind === "headline_play")
+    if (e.kind === "action_round_play"
         && e.payload.card && e.actor !== state.human_side) {
       fxGate = fxGate.then(() => showCardPlay(e.payload.card, e.actor));
     }

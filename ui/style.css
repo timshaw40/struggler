@@ -519,6 +519,17 @@ main {
   border-radius: 8px;
   background: #fff;
 }
+#dicebox .hcards { display: flex; gap: 18px; justify-content: center; }
+#dicebox .hcards > div { width: 180px; flex: none; }
+#dicebox .htag { white-space: nowrap; }
+#dicebox .hcards img {
+  width: 170px;
+  max-height: 40vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+#dicebox .htag { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 #dicebox .doutcome {
   margin: 0;
   min-height: 1.4em;
