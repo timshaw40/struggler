@@ -89,3 +89,32 @@ def test_greedy_aldrich_ames_remix_discards_the_opponents_highest_ops_card():
     action = GreedyPlayer().choose_action(observation, [])
 
     assert action.payload["choice"] == "Duck_and_Cover"
+
+
+def test_ussr_setup_prefers_poland_over_austria():
+    """Opening EE: 1/3 of the way to Poland (BG) beats 1/4 into Austria."""
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(Side.USSR)
+    assert observation.pending_decision.kind is DecisionKind.PLACE_INFLUENCE
+    assert observation.pending_decision.context.get("setup")
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["country"] == "Poland"
+
+
+def test_ussr_does_not_headline_a_us_event():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    decision = Decision(
+        id=999,
+        actor=Side.USSR,
+        kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "CIA_Created"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Socialist_Governments"}),
+        ),
+    )
+    observation = dataclasses.replace(
+        observation, pending_decision=decision, side=Side.USSR,
+    )
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["card"] == "Socialist_Governments"

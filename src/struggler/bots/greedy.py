@@ -35,8 +35,9 @@ branch order:
      other weight).
   2. A safe Coup with a good expected margin outscores placing Influence
      (`coup_base` plus the expected board-value swing).
-  3. Among Influence targets, Battlegrounds and control flips dominate
-     (`battleground_control` in `board_value`).
+    3. Among Influence targets, Battlegrounds and progress toward control
+       dominate (`battleground_control` in `board_value`, including partial
+       stacks — 1/3 in Poland beats 1/4 in Austria).
   4. A card not worth spending on Ops gets sent to the Space Race instead
      (low `ops_mode_per_point` score vs `space_race_base`).
 """
@@ -48,6 +49,7 @@ from typing import Callable, Sequence
 
 from struggler.engine import (
     Action,
+    CardSide,
     Decision,
     DecisionKind,
     Observation,
@@ -107,6 +109,7 @@ class GreedyWeights:
     event_mode_penalty: float = 30.0  # events off / unimplemented event: playing "event" is a no-op discard
     scoring_card_weight: float = 2.0  # per net VP the region would score, signed favorably/unfavorably
     hold_high_ops_weight: float = 0.5  # prefer headlining a low-Ops card, keeping high-Ops ones for Operations
+    opponent_headline_penalty: float = 50.0  # never headline an opponent-side event
     action_round_ops_weight: float = 1.0
 
 
@@ -115,19 +118,25 @@ class GreedyWeights:
 
 def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
     """A static heuristic value of the current board for `side` (higher is
-    better): regional Presence/Domination/Control tiers plus a flat bonus
-    per country Controlled, weighted extra for Battlegrounds."""
+    better): regional Presence/Domination/Control tiers plus progress
+    toward control in every country (full credit at control, partial
+    before — so 1/3 in Poland outranks 1/4 in Austria). Battlegrounds
+    use `battleground_control`, others `country_control`."""
     opponent = side.opponent
     value = 0.0
     for region in Region:
         value += _TIER_VALUE[board.region_tier(side, region)] * weights.region_tier
         value -= _TIER_VALUE[board.region_tier(opponent, region)] * weights.region_tier
     for cid, info in board.countries.items():
-        controller = board.control(cid)
-        if controller is None:
-            continue
-        per_country = weights.battleground_control if info.battleground else weights.country_control
-        value += per_country if controller is side else -per_country
+        own = board.influence[cid][side.value]
+        opp = board.influence[cid][opponent.value]
+        per = weights.battleground_control if info.battleground else weights.country_control
+        need = opp + info.stability
+        opp_need = own + info.stability
+        if need:
+            value += per * min(1.0, own / need)
+        if opp_need:
+            value -= per * min(1.0, opp / opp_need)
     return value
 
 
@@ -393,9 +402,12 @@ def _score_headline(weights: GreedyWeights, board: Board, observation: Observati
     card = _CARDS[cid]
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
-    # Non-scoring: headlining is a no-op discard while its event is unfired
-    # (events off, or an unimplemented event) -- spend a low-Ops card here and
-    # keep higher-Ops ones for Operations.
+    # Headlining an opponent-side event fires it *for them*. Never do that.
+    if (card.side is CardSide.US and side is Side.USSR) or (
+        card.side is CardSide.USSR and side is Side.US
+    ):
+        return -weights.opponent_headline_penalty
+    # Own/neutral: spend a low-Ops card here and keep higher-Ops ones for Ops.
     return -weights.hold_high_ops_weight * card.ops
 
 
