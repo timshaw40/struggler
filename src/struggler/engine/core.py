@@ -1856,6 +1856,57 @@ class Engine:
                 return cid
         return None
 
+    def preview_scoring(self, cid: str) -> dict:
+        """What playing scoring card `cid` would do right now, without
+        doing it: per-side tier and VP, net swing, resulting VP. Read-only
+        (Shuttle Diplomacy is *not* consumed) so hovering is free."""
+        if cid == "Southeast_Asia_Scoring":
+            us = ussr = 0
+            for cid2, info in self.board.countries.items():
+                if Subregion.SOUTHEAST_ASIA in info.subregions:
+                    value = 2 if cid2 == "Thailand" else 1
+                    controller = self.board.control(cid2)
+                    if controller is Side.US:
+                        us += value
+                    elif controller is Side.USSR:
+                        ussr += value
+            net = us - ussr
+            return {"region": "Southeast Asia", "us": {"tier": None, "vp": us},
+                    "ussr": {"tier": None, "vp": ussr}, "net": net,
+                    "vp_after": self.vp + net, "wins": None}
+        region = SCORING_CARD_REGION[cid]
+        if region is Region.EUROPE:
+            controller = self.board.controls_all_of_europe()
+            if controller is not None:
+                return {"region": "Europe", "us": {"tier": None, "vp": 0},
+                        "ussr": {"tier": None, "vp": 0}, "net": 0,
+                        "vp_after": self.vp,
+                        "wins": controller.value}
+        had_shuttle = "shuttle_diplomacy" in self.game_effects
+        extra_bg, ignored = self._scoring_overrides(region)
+        # _scoring_overrides consumes Shuttle Diplomacy; a preview must not.
+        if had_shuttle:
+            self.game_effects["shuttle_diplomacy"] = True
+        presence, domination, control = RULES["scoring"][region.name]
+        tier_value = {ScoringTier.NONE: 0, ScoringTier.PRESENCE: presence,
+                      ScoringTier.DOMINATION: domination}
+
+        def value_for(s: Side) -> tuple[str, int]:
+            tier = self.board.region_tier(s, region, extra_bg, ignored)
+            base = control if tier is ScoringTier.CONTROL and control is not None else tier_value[tier]
+            if tier is ScoringTier.CONTROL and control is None:
+                base = domination
+            total = base + self.board.region_bonus_vp(s, region, extra_bg, ignored)
+            return tier.name.capitalize(), total
+
+        us_tier, us_vp = value_for(Side.US)
+        ussr_tier, ussr_vp = value_for(Side.USSR)
+        net = us_vp - ussr_vp
+        return {"region": region.name.replace("_", " ").title(),
+                "us": {"tier": us_tier, "vp": us_vp},
+                "ussr": {"tier": ussr_tier, "vp": ussr_vp}, "net": net,
+                "vp_after": self.vp + net, "wins": None}
+
     def _score_region_net(self, region: Region) -> int:
         # Controlling all of Europe when Europe is scored wins outright.
         if region is Region.EUROPE:

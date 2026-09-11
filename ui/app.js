@@ -796,6 +796,21 @@ function showPreview(cid, card) {
   } else {
     fillCardText(previewEl, m, cid);
   }
+  const pv = (state.score_preview || {})[cid];
+  if (m.scoring && pv) {
+    const box = document.createElement("div");
+    box.className = "scorepreview";
+    if (pv.wins) {
+      box.innerHTML = `If played: <b>${pv.wins} wins outright</b> (${pretty(pv.region)} control)`;
+    } else {
+      const side = pv.net > 0 ? "us" : pv.net < 0 ? "ussr" : "";
+      const swing = pv.net > 0 ? `US +${pv.net}` : pv.net < 0 ? `USSR +${-pv.net}` : "even";
+      const tier = (s) => s.tier ? `${s.tier} ${s.vp}` : `${s.vp}`;
+      box.innerHTML = `If played: <b class="${side}">${swing}</b> · `
+        + `US ${tier(pv.us)} vs USSR ${tier(pv.ussr)} · VP ${state.vp} → ${pv.vp_after}`;
+    }
+    previewEl.append(box);
+  }
   previewEl.hidden = false;
   const r = card.getBoundingClientRect();
   const w = previewEl.offsetWidth;

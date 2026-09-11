@@ -220,6 +220,10 @@ class Session:
             "space_race": obs.space_race,
             "space_race_attempts": obs.space_race_attempts,
             "military_ops": obs.military_ops,
+            "score_preview": {
+                cid: engine.preview_scoring(cid) for cid in obs.hand
+                if engine.cards[cid].scoring
+            },
             "turn_effects": self._json(obs.turn_effects),
             "game_effects": self._json(obs.game_effects),
             "is_terminal": engine.is_terminal,

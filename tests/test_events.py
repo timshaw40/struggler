@@ -33,6 +33,41 @@ MAX_INT32 = 2**31 - 1
 REPLAY_DIR = Path(__file__).parent / "replays"
 
 
+# -- scoring preview (hover) --------------------------------------------------
+
+
+def _europe_setup(engine):
+    for cid in ("UK", "West_Germany", "France", "Italy"):
+        engine.board.influence[cid]["US"] = engine.board.countries[cid].stability
+
+
+def test_preview_scoring_matches_real_resolution():
+    engine = _bare()
+    _europe_setup(engine)
+    pv = engine.preview_scoring("Europe_Scoring")
+    before = engine.vp
+    engine._resolve_scoring_card("Europe_Scoring")
+    assert pv["net"] == engine.vp - before
+    assert pv["vp_after"] == engine.vp
+
+
+def test_preview_scoring_does_not_consume_shuttle():
+    engine = _bare()
+    engine.game_effects["shuttle_diplomacy"] = True
+    pv1 = engine.preview_scoring("Asia_Scoring")
+    pv2 = engine.preview_scoring("Asia_Scoring")
+    assert pv1 == pv2
+    assert "shuttle_diplomacy" in engine.game_effects
+
+
+def test_preview_scoring_europe_control_is_a_win():
+    engine = _bare()
+    for cid in engine.board.countries_in(Region.EUROPE):
+        engine.board.influence[cid]["US"] = engine.board.countries[cid].stability
+    pv = engine.preview_scoring("Europe_Scoring")
+    assert pv["wins"] == "US"
+
+
 # -- tier 1: immediate state change -----------------------------------------
 
 

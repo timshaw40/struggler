@@ -547,6 +547,15 @@ main {
 
 #cardpreview .cardops { font-size: 15px; padding: 0 12px 12px; }
 
+#cardpreview .scorepreview {
+  font-size: 14px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid #3a4252;
+  color: var(--text);
+}
+#cardpreview .scorepreview b.us { color: #3b9eff; }
+#cardpreview .scorepreview b.ussr { color: #ff2d2d; }
+
 #winner .cardbig {
   background: var(--panel);
   border: 1px solid #3a4252;
