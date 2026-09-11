@@ -1138,15 +1138,17 @@ def test_grain_sales_reveals_exactly_one_ussr_card():
     assert choice.actor is Side.US
     assert {a.payload["choice"] for a in choice.options} == {"take", "return"}
     engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": "take"}))
-    # "play the card": the US gets the normal Event/Ops choice for it, not
-    # just its fixed Ops value -- it moved to the US hand, not filed away yet.
+    # "play the card": the US gets the normal choice for it, not just its
+    # fixed Ops value -- it moved to the US hand, not filed away yet. A
+    # taken USSR card is still a USSR card, so (like any opponent card)
+    # "event" is not offered: its event fires on an Ops play, if at all.
     assert revealed not in engine.hands["USSR"] and revealed not in engine.discard_pile
     assert revealed in engine.hands["US"]
     play = engine.pending_decision
     assert play.kind is DecisionKind.PLAY_MODE and play.actor is Side.US
     assert play.context["card"] == revealed
     assert "ops" in {a.payload["mode"] for a in play.options}
-    assert "event" in {a.payload["mode"] for a in play.options}
+    assert "event" not in {a.payload["mode"] for a in play.options}
 
 
 def test_grain_sales_with_empty_ussr_hand_grants_the_us_two_ops():

@@ -1019,8 +1019,16 @@ class Engine:
         # exists as the 'un_intervention' combo mode offered on a different,
         # qualifying card (below); played directly it has no standalone event, so
         # it is Ops-only too -- offering "event" here would just be a legal-looking
-        # but nonsensical no-op discard.
-        if cid not in (RULES["china_card_id"], RULES["un_intervention_id"]):
+        # but nonsensical no-op discard. With events on, an opponent's card is
+        # likewise never offered "event": you cannot voluntarily fire their
+        # event (it fires on its own when you play the card for Ops, or not at
+        # all via Space Race / UN Intervention) -- same rule Missile Envy
+        # already applies to taken cards. With events off nothing can fire, so
+        # the no-op-discard enumeration stays uniform. Headline picks are
+        # unaffected: headlining is always the event.
+        if cid not in (RULES["china_card_id"], RULES["un_intervention_id"]) and not (
+            self.events_enabled and self._is_opponent_event(side, card)
+        ):
             modes.append("event")
         if self._can_space_race(side, card):
             modes.append("space_race")
