@@ -40,6 +40,7 @@ const VP_AT = [[3160, 2523], [3361, 2523], [3495, 2523], [3629, 2523], [3763, 25
 let state = null;
 let busy = false;
 let previewEl = null;
+let actionBar = null;
 let playing = true;   // watch mode playback
 let winnerFocused = false;
 let inFlight = false; // one poll chain at a time
@@ -162,6 +163,7 @@ async function bootInner() {
   preview.hidden = true;
   document.body.append(preview);
   previewEl = preview;
+  actionBar = $("#actionbar");
   enableDragPan();
   buildViewBar();
   window.addEventListener("resize", layoutBoard);
@@ -496,7 +498,13 @@ function drainRolls() {
   // `hist` is a truncated window of the server's history, so use the
   // monotonic `history_len` as the cursor, not hist.length.
   const total = state.history_len ?? hist.length;
-  if (seenTotal < 0) { seenTotal = total; return; }
+  if (seenTotal < 0) {
+    seenTotal = total;
+    // On a fresh load show the most recent action immediately (no replay of
+    // the whole batch), so the banner has context before the next move.
+    if (hist.length) showAction(hist[hist.length - 1], hist[hist.length - 2]);
+    return;
+  }
   const freshCount = Math.max(0, Math.min(total - seenTotal, hist.length));
   seenTotal = total;
   const fresh = hist.slice(hist.length - freshCount);
@@ -549,6 +557,12 @@ function drainRolls() {
       const prev = hist[start + i - 1];
       diceChain = diceChain.then(() => showScore(e, prev));
     }
+  }
+  // Center-of-map caption: one update per fresh event, in cursor order.
+  // Driven by `fresh` (not `items`, which re-emits a buffered realignment
+  // actor roll) so it never double-shows.
+  for (let i = 0; i < fresh.length; i++) {
+    showAction(fresh[i], hist[start + i - 1]);
   }
 }
 
@@ -734,6 +748,126 @@ function showCountryTip(el, cid, inf) {
     countryTip.prepend(name);
     place();
   });
+}
+
+/* The side actually acting: CHANCE decisions carry the real side in their
+ * context (side/owner/attacker/sponsor), never on `actor`. */
+function actorOf(e) {
+  if (e.actor && e.actor !== "CHANCE") return e.actor;
+  const c = e.context || {};
+  return c.side || c.owner || c.attacker || c.sponsor || "CHANCE";
+}
+
+const TRAP_NAMES = { bear_trap: "Bear Trap", quagmire: "Quagmire" };
+const CHOICE_WORDS = {
+  none: "nothing", stop: "stop", done: "done", skip: "skip", refuse: "refuse",
+  decline: "decline", participate: "participate", boycott: "boycott",
+  end_game: "end the game", reshuffle_now: "reshuffle",
+};
+const choiceWord = (c) => CHOICE_WORDS[c] || pretty(c);
+
+/* The center-of-map caption for one resolved event. Returns "" for internal
+ * steps (keep the previous caption up). Covers every DecisionKind; anything
+ * unforeseen falls back to `feedSummary`. */
+function actionText(e, prev) {
+  const who = actorOf(e);
+  const c = e.context || {};
+  const p = e.payload || {};
+  const kind = e.kind;
+  if (kind === "event_resume" || kind === "deal_card") return "";
+
+  let line;
+  if (kind === "headline_play") {
+    if (!p.card || p.card === "reshuffle_now") return "";
+    line = `${who} headlines ${cardName(p.card)}`;
+  } else if (kind === "action_round_play") {
+    if (!p.card) return "";
+    line = `${who} plays ${cardName(p.card)}`;
+    if (/_Scoring$/.test(p.card)) line += ` — ${vpSwing(e, prev)}`;
+  } else if (kind === "play_mode") {
+    if (!c.card) return "";
+    const mode = p.mode === "un_intervention"
+      ? "with UN Intervention (event cancelled)"
+      : (MODE_LABELS[p.mode] || pretty(p.mode));
+    line = `${who} plays ${cardName(c.card)} ${mode}`;
+  } else if (kind === "ops_type") {
+    const ops = c.ops != null ? ` ${c.ops}` : "";
+    line = `${who} spends${ops} ops on ${pretty(p.type)}`;
+    if (c.bonus) line += ` (+1 ${pretty(c.bonus)})`;
+  } else if (kind === "coup_target") {
+    line = `${who} targets ${pretty(p.country)} for a coup`;
+  } else if (kind === "coup_roll") {
+    line = `${who} coups ${pretty(c.country)} — rolled ${p.value}`;
+  } else if (kind === "realignment_target") {
+    line = `${who} targets a realignment in ${pretty(p.country)}`;
+  } else if (kind === "realignment_actor_roll") {
+    line = `${who} realigns ${pretty(c.country)} — rolled ${p.value}`;
+  } else if (kind === "realignment_opponent_roll") {
+    line = `${who} realigns ${pretty(c.country)} — ${c.actor_roll} vs ${p.value}`;
+  } else if (kind === "space_race_roll") {
+    line = `${who} attempts the space race — rolled ${p.value}`;
+  } else if (kind === "event_ops_order") {
+    const order = p.order === "event_first" ? "their event first" : "ops first";
+    line = `${who} plays ${cardName(c.card)} for ops — ${order}`;
+  } else if (kind === "war_target") {
+    line = `${who} plays ${cardName(c.card)} — attacks ${pretty(p.country)}`;
+  } else if (kind === "war_roll") {
+    line = `${cardName(c.card)}: ${who} attacks ${pretty(c.target)} — rolled ${p.value}`;
+  } else if (kind === "event_influence") {
+    const verb = c.op === "remove" ? "removes influence from" : "adds influence to";
+    line = `${cardName(c.event)}: ${who} ${verb} ${pretty(p.country)}`;
+  } else if (kind === "event_choice") {
+    const label = c.event ? `${cardName(c.event)}: ` : "";
+    line = `${label}${who} chooses ${choiceWord(p.choice)}`;
+  } else if (kind === "random_discard") {
+    const owner = c.owner || who;
+    if (c.purpose === "five_year_plan")
+      line = `Five Year Plan: USSR discards ${cardName(p.card)} at random`;
+    else if (c.purpose === "grain_sales")
+      line = `Grain Sales: USSR reveals ${cardName(p.card)} to the US`;
+    else if (c.purpose === "terrorism")
+      line = `Terrorism: ${owner} discards ${cardName(p.card)}`;
+    else
+      line = `${owner} discards ${cardName(p.card)}`;
+  } else if (kind === "contest_roll") {
+    line = `${cardName(c.event)}: sponsor ${p.sponsor_roll} vs defender ${p.defender_roll}`;
+  } else if (kind === "quagmire_discard") {
+    const trap = TRAP_NAMES[c.key] || pretty(c.key);
+    line = c.forced_scoring
+      ? `${who} must play ${cardName(p.card)} (${trap})`
+      : `${who} discards ${cardName(p.card)} to ${trap}`;
+  } else if (kind === "quagmire_roll") {
+    const trap = TRAP_NAMES[c.key] || pretty(c.key);
+    line = `${who} rolls ${p.value} to escape ${trap} — ${p.value <= 4 ? "free" : "still trapped"}`;
+  } else if (kind === "held_card_discard") {
+    line = (!p.card || p.card === "none")
+      ? `${who} keeps their held card`
+      : `${who} discards held card ${cardName(p.card)}`;
+  } else if (kind === "place_influence") {
+    line = c.setup
+      ? `${who} sets up ${pretty(p.country)}`
+      : `${who} adds influence to ${pretty(p.country)}`;
+  } else {
+    line = feedSummary(e, prev);  // safe fallback for anything unforeseen
+  }
+
+  if (prev && e.defcon !== prev.defcon) line += ` · DEFCON ${prev.defcon} → ${e.defcon}`;
+  return line;
+}
+
+function showAction(e, prev) {
+  if (!actionBar) return;
+  const text = actionText(e, prev);
+  if (!text) return;  // internal step: leave the current caption up
+  actionBar.textContent = text;
+  actionBar.hidden = false;
+  actionBar.classList.remove("bump");
+  void actionBar.offsetWidth;  // restart the pop
+  actionBar.classList.add("bump");
+}
+
+function clearAction() {
+  if (actionBar) { actionBar.hidden = true; actionBar.textContent = ""; }
 }
 
 function render() {
@@ -1272,6 +1406,7 @@ async function postGame(path) {
     seenTotal = -1;
     pendingRealignActor = null;
     prevInf = null;
+    clearAction();
     state = data;
     $("#settings").hidden = true;
     await catchUp();
@@ -1319,6 +1454,7 @@ async function goBack() {
     seenTotal = -1;
     pendingRealignActor = null;
     prevInf = null;
+    clearAction();
   } catch (err) {
     console.error(err);
     showError("Could not undo that move.");
@@ -1335,6 +1471,7 @@ function renderWinner() {
     winnerFocused = false;
     return;
   }
+  clearAction();  // nothing should linger behind the game-over overlay
   // Record once per game, keyed by the (monotonic) seed: a browser reload of
   // the final screen must not pad the record with the same result again.
   if (state.winner && !state.watch) {

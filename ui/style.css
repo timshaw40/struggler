@@ -651,3 +651,36 @@ main {
 }
 
 #decision button:disabled { opacity: 0.5; cursor: default; }
+
+/* Persistent "most recent action" caption, bottom-center of the map.
+ * Horizontally centered but clear of the centered #dicebox popups so the
+ * action stays readable while dice/card animations play. pointer-events:none
+ * so it never steals marker clicks or drag-pan. */
+#actionbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;  /* over the map (2/3) and viewbar (5); under #winner/#dicebox */
+  pointer-events: none;
+  max-width: min(92%, 760px);
+  padding: 8px 18px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(20, 22, 26, 0.9);
+  border: 1px solid #3a4252;
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#actionbar[hidden] { display: none; }
+
+#actionbar.bump { animation: actionbump 0.18s ease-out; }
+@keyframes actionbump {
+  from { transform: translateX(-50%) scale(0.96); opacity: 0.55; }
+  to   { transform: translateX(-50%) scale(1);    opacity: 1; }
+}
