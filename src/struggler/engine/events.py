@@ -392,8 +392,11 @@ def _evil_empire(engine: "Engine", side: Side) -> None:
 
 @event("U2_Incident")
 def _u2_incident(engine: "Engine", side: Side) -> None:
-    # (The extra VP if UN Intervention is later played this turn is not modeled.)
     engine._award_vp(Side.USSR, 1)
+    if not engine.is_terminal:
+        # "If the #32 UN Intervention Event is played later this turn ... the
+        # USSR receives an additional 1 VP." Turn-scoped; consumed on the play.
+        engine.turn_effects["u2_incident"] = True
 
 
 @event("Cultural_Revolution")
@@ -521,7 +524,12 @@ def _socialist_governments(engine: "Engine", side: Side) -> None:
     )
 
 
-@event("Muslim_Revolution")
+@event(
+    "Muslim_Revolution",
+    # AWACS Sale to Saudis: "prevents the Muslim Revolution card from being
+    # played as an Event."
+    eligible=lambda engine, side: not engine.game_effects.get("awacs"),
+)
 def _muslim_revolution(engine: "Engine", side: Side) -> None:
     countries = ["Sudan", "Iran", "Iraq", "Egypt", "Libya", "Saudi_Arabia",
                  "Syria", "Jordan"]
@@ -764,8 +772,9 @@ def _flower_power(engine: "Engine", side: Side) -> None:
 
 @event("Yuri_and_Samantha")
 def _yuri_and_samantha(engine: "Engine", side: Side) -> None:
-    # The USSR scores 1 VP for every US coup attempt for the rest of the game.
-    engine.game_effects["yuri_samantha"] = True
+    # The USSR scores 1 VP for every US coup attempt "during the remainder of
+    # the Turn" -- turn-scoped, so it lives in turn_effects and expires.
+    engine.turn_effects["yuri_samantha"] = True
 
 
 # -- set-DEFCON branch -------------------------------------------------------
@@ -782,7 +791,7 @@ def _how_i_learned(engine: "Engine", side: Side) -> None:
 def _how_i_learned_choice(engine: "Engine", side: Side, choice: str, context: dict) -> None:
     engine.set_defcon(int(choice), caused_by=side)
     if not engine.is_terminal:
-        engine.military_ops[side.value] += 5
+        engine._add_military_ops(side, 5)
 
 
 # -- influence then an optional free operation (Junta) ----------------------
@@ -999,7 +1008,10 @@ def _push_ask_not(engine: "Engine", side: Side, discarded: int) -> None:
         if engine._declares(side)
         else engine.hands[side.value]
     )
-    choices = tuple(cid for cid in source if not engine.cards[cid].scoring) + ("stop",)
+    # Card text explicitly allows discarding scoring cards too, so every card
+    # in hand is offered (the physical side's source is placeholders, which is
+    # fine -- we never index cards[] here).
+    choices = tuple(source) + ("stop",)
     if len(choices) == 1:  # nothing left to discard -> draw and finish
         engine.draw_cards_to_hand(side, discarded)
         return
@@ -1575,20 +1587,20 @@ def _nixon_plays_the_china_card(engine: "Engine", side: Side) -> None:
         engine.china_card_available = False  # face down: not usable this turn
 
 
-@event("Nixon_Plays_The_China_Card")
-def _nixon_plays_the_china_card(engine: "Engine", side: Side) -> None:
-    # Physical card text, confirmed: "If USA has The China Card: +2 VP for
-    # USA. If CCCP has The China Card: USA gets the card, face down and
-    # unavailable for immediate play." Two exhaustive, unconditional
-    # branches -- no discard-to-keep option exists on the card.
-    if engine.china_card_owner == "US":
-        engine._award_vp(Side.US, 2)
-    else:
-        engine.china_card_owner = "US"
-        engine.china_card_available = False  # face down: not usable this turn
+def _us_controls_a_middle_east_country(engine: "Engine") -> bool:
+    return any(
+        engine.board.control(cid) is Side.US
+        for cid, info in engine.board.countries.items()
+        if info.region is Region.MIDDLE_EAST
+    )
 
 
-@event("Our_Man_In_Tehran")
+@event(
+    "Our_Man_In_Tehran",
+    # "If the US controls at least one Middle East country, the US player
+    # uses this Event..." (otherwise it is unplayable as an Event, rule 7.5).
+    eligible=lambda engine, side: _us_controls_a_middle_east_country(engine),
+)
 def _our_man_in_tehran(engine: "Engine", side: Side) -> None:
     # The US (regardless of who phases this) looks at the top 5 cards of the
     # draw pile one at a time, removing or keeping each; kept cards return to

@@ -2413,7 +2413,7 @@
           "USSR": 0
         },
         "military_ops": {
-          "US": 6,
+          "US": 5,
           "USSR": 4
         },
         "ars_played": 3,
@@ -3542,8 +3542,8 @@
           "USSR": 0
         },
         "military_ops": {
-          "US": 6,
-          "USSR": 8
+          "US": 5,
+          "USSR": 5
         },
         "ars_played": 6,
         "headline": {
@@ -4616,8 +4616,8 @@
           "USSR": 0
         },
         "military_ops": {
-          "US": 6,
-          "USSR": 12
+          "US": 5,
+          "USSR": 5
         },
         "ars_played": 11,
         "headline": {

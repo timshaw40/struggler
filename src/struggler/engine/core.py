@@ -806,12 +806,16 @@ class Engine:
     # -- headline phase -----------------------------------------------------
 
     def _push_headline(self, side: Side) -> None:
-        # The China Card cannot be headlined; scoring cards can.
+        # The China Card cannot be headlined; scoring cards can. UN
+        # Intervention's own text forbids headlining it either.
+        # (Physical mode's candidates are placeholders, so there is nothing
+        # to filter there.)
         physical_turn = self._declares(side)
         candidates = (
             self._physical_hand_candidates(side)
             if physical_turn
-            else list(self.hands[side.value])
+            else [cid for cid in self.hands[side.value]
+                  if cid != RULES["un_intervention_id"]]
         )
         options = tuple(
             Action(DecisionKind.HEADLINE_PLAY, {"card": cid}) for cid in candidates
@@ -1153,6 +1157,12 @@ class Engine:
             self._hand_remove_known(side, un_id)
             self.discard_pile.append(un_id)
             self._file_card(side, cid, fired=False)  # event cancelled: normal discard
+            # U2 Incident: UN Intervention "played as an Event" (by either
+            # side) this turn hands the USSR the extra 1 VP.
+            if self.turn_effects.pop("u2_incident", None):
+                self._award_vp(Side.USSR, 1)
+                if self.is_terminal:
+                    return
             self._push_ops_type(side, self._effective_ops(side, card))
             return
 
@@ -1247,7 +1257,7 @@ class Engine:
             # Coups count toward the turn's required military operations. A
             # region-bonus coup gets its +1 only against a target in that region
             # (resolved at target selection, in _handle_coup_target).
-            self.military_ops[side.value] += ops
+            self._add_military_ops(side, ops)
             self.begin_coup(side, ops, bonus=bonus)
         else:  # realignment
             # Region-bonus play (China Card -> Asia, Vietnam Revolts -> SE
@@ -1786,10 +1796,15 @@ class Engine:
         win_from: int,
         vp: int,
         military_ops: int,
-        count_target_control: bool = True,
+        count_target_control: bool = False,
     ) -> None:
         """A war whose attacker chooses the target (Brush War, Indo-Pakistani
-        War, Iran-Iraq War). Resolves to begin_war once the target is picked."""
+        War, Iran-Iraq War). Resolves to begin_war once the target is picked.
+
+        All three printed texts apply their -1 penalty only to *adjacent*
+        opponent-controlled countries, never the target itself (unlike
+        Arab-Israeli War, which passes count_target_control=True and is run
+        through begin_war directly)."""
         options = tuple(
             Action(DecisionKind.WAR_TARGET, {"country": c}) for c in candidates
         )
@@ -1828,7 +1843,7 @@ class Engine:
     ) -> None:
         """Start a war event: it always counts toward the attacker's required
         military operations, then a logged CHANCE roll decides the outcome."""
-        self.military_ops[attacker.value] += military_ops
+        self._add_military_ops(attacker, military_ops)
         self._push(
             Side.CHANCE,
             DecisionKind.WAR_ROLL,
@@ -2019,6 +2034,10 @@ class Engine:
             self._win(Side.US, "vp")
         elif self.vp <= -RULES["vp_to_win"]:
             self._win(Side.USSR, "vp")
+
+    def _add_military_ops(self, side: Side, amount: int) -> None:
+        """Rule 8.2: a side may never have more than 5 Military Operations."""
+        self.military_ops[side.value] = min(5, self.military_ops[side.value] + amount)
 
     def _win(self, side: Side, reason: str) -> None:
         if not self.is_terminal:
@@ -2324,7 +2343,7 @@ class Engine:
         bonus = decision.context.get("bonus")
         if bonus and self._in_bonus_region(country, bonus):
             ops += 1
-            self.military_ops[side.value] += 1
+            self._add_military_ops(side, 1)
         self._push(
             Side.CHANCE,
             DecisionKind.COUP_ROLL,
@@ -2362,11 +2381,11 @@ class Engine:
             if not nuclear_subs:
                 self._change_defcon(-1, caused_by=side)
 
-        # Yuri and Samantha: the USSR scores 1 VP for every US coup attempt,
-        # for the rest of the game.
+        # Yuri and Samantha: the USSR scores 1 VP for every US coup attempt
+        # for the remainder of the turn (turn_effects clears at end of turn).
         if (
             side is Side.US
-            and self.game_effects.get("yuri_samantha")
+            and self.turn_effects.get("yuri_samantha")
             and not self.is_terminal
         ):
             self._award_vp(Side.USSR, 1)
@@ -2571,7 +2590,9 @@ class Engine:
                 self._fire_event(taker, cid)
         else:  # ops
             self.discard_pile.append(cid)
-            self.push_event_operations(taker, card.ops)
+            # The taken card is used for Operations, so the phasing side's
+            # per-turn Ops modifiers (Containment/Brezhnev/Red Scare) apply.
+            self.push_event_operations(taker, self._effective_ops(taker, card))
 
     # -- Bear Trap / Quagmire — a persistent per-player operating lock ------
     #
@@ -2786,10 +2807,15 @@ class Engine:
             self._win(caused_by.opponent, "defcon_1")
             return
         # NORAD: "If Canada is US-controlled", each time DEFCON MOVES to level
-        # 2 the US adds 1 Influence to a country where it already has some.
+        # 2 *during an Action Round* the US adds 1 Influence to a country where
+        # it already has some. Restricting to the action-rounds phase keeps a
+        # headline/end-of-turn DEFCON drop from triggering it.
+        # ponytail: fires when DEFCON reaches 2 rather than at the round's
+        # literal end; the influence just lands a beat early.
         if (
             self.defcon == 2
             and before != 2
+            and self.phase == "action_rounds"
             and self.game_effects.get("norad")
             and self.board.control("Canada") is Side.US
         ):

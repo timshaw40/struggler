@@ -957,7 +957,7 @@ def test_tear_down_this_wall_free_op_ignores_defcon_region_restriction():
 def test_yuri_and_samantha_scores_ussr_on_us_coups():
     engine = _bare(seed=1)
     engine.defcon = 5
-    engine.game_effects["yuri_samantha"] = True
+    engine.turn_effects["yuri_samantha"] = True  # turn-scoped, not game-long
     engine.board.influence["Cuba"] = {"US": 0, "USSR": 1}
     _resolve_coup_roll(engine, Side.US, "Cuba", ops=3, value=1)
     assert engine.vp == -1  # 1 VP to the USSR for the US coup attempt
@@ -965,6 +965,15 @@ def test_yuri_and_samantha_scores_ussr_on_us_coups():
     engine.vp = 0
     _resolve_coup_roll(engine, Side.USSR, "Cuba", ops=3, value=1)
     assert engine.vp == 0
+
+
+def test_yuri_and_samantha_expires_at_end_of_turn():
+    engine = Engine.new_game(seed=1, events=True)
+    engine._fire_event(Side.USSR, "Yuri_and_Samantha")
+    assert engine.turn_effects.get("yuri_samantha") is True
+    assert "yuri_samantha" not in engine.game_effects
+    engine._end_of_turn()
+    assert "yuri_samantha" not in engine.turn_effects
 
 
 def test_iran_contra_penalises_only_us_realignment():
@@ -1888,6 +1897,7 @@ def test_glasnost_scores_and_grants_ops_only_after_the_reformer():
 
 def test_norad_fires_only_when_defcon_moves_to_two():
     engine = _bare()
+    engine.phase = "action_rounds"  # card text: only during an Action Round
     engine.defcon = 5
     engine._fire_event(Side.US, "NORAD")
     engine.board.influence["Canada"]["US"] = 4  # "If Canada is US-controlled"
@@ -1900,6 +1910,18 @@ def test_norad_fires_only_when_defcon_moves_to_two():
     assert "France" in offered  # only countries the US already has Influence in
     engine.step(Action(DecisionKind.EVENT_INFLUENCE, {"country": "France"}))
     assert engine.board.influence["France"]["US"] == 3
+
+
+def test_norad_does_not_fire_on_a_headline_defcon_drop():
+    engine = _bare()
+    engine.phase = "headline"  # not an Action Round
+    engine.defcon = 5
+    engine._fire_event(Side.US, "NORAD")
+    engine.board.influence["Canada"]["US"] = 4
+    engine.board.influence["France"] = {"US": 2, "USSR": 0}
+    engine._change_defcon(-3, caused_by=Side.US)  # 5 -> 2 during the headline
+    assert engine.defcon == 2
+    assert engine.pending_decision is None  # NORAD did not trigger
 
 
 def test_norad_inactive_without_us_controlling_canada():
@@ -1985,6 +2007,7 @@ def test_nixon_plays_the_china_card_two_unconditional_branches():
 
 def test_our_man_in_tehran_examines_up_to_five_cards_without_leaking_identity():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}  # precondition: US controls a ME country
     engine.draw_pile = ["Fidel", "Nasser", "Allende", "COMECON", "Duck_and_Cover", "Blockade"]
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     assert len(engine._our_man_queue) == 5  # only the top 5 are examined
@@ -2002,6 +2025,7 @@ def test_our_man_in_tehran_examines_up_to_five_cards_without_leaking_identity():
 
 def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}
     engine.draw_pile = ["Fidel", "Nasser", "Allende"]
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     for player in (Side.US, Side.USSR):
@@ -2011,9 +2035,19 @@ def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
 
 def test_our_man_in_tehran_no_op_with_an_empty_draw_pile():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}
     engine.draw_pile = []
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     assert engine.pending_decision is None
+
+
+def test_our_man_in_tehran_requires_us_control_of_a_middle_east_country():
+    engine = _bare()
+    engine.board.influence["Iran"] = {"US": 0, "USSR": 4}  # no US control in the ME
+    engine.draw_pile = ["Fidel", "Nasser", "Allende"]
+    assert not EVENTS["Our_Man_In_Tehran"].eligible(engine, Side.US)
+    engine._fire_event(Side.US, "Our_Man_In_Tehran")
+    assert engine.pending_decision is None  # unplayable as an Event (rule 7.5)
 
 
 def test_defectors_cancels_the_ussr_headline():
@@ -2273,3 +2307,85 @@ def test_golden_events_replay_actually_fires_events():
         for a in log["actions"]
     )
     assert fired
+
+
+# -- Tier 2 rules-gap fixes --------------------------------------------------
+
+
+def test_target_choice_wars_do_not_count_the_target_itself():
+    # Brush War / Indo-Pakistani War / Iran-Iraq War penalise only *adjacent*
+    # enemy-controlled countries, never the target (card texts).
+    for card in ("Brush_War", "Indo_Pakistani_War", "Iran_Iraq_War"):
+        engine = _bare()
+        engine._fire_event(Side.USSR, card)
+        assert engine.pending_decision.kind is DecisionKind.WAR_TARGET, card
+        engine.step(engine.pending_decision.options[0])
+        assert engine.pending_decision.kind is DecisionKind.WAR_ROLL
+        assert engine.pending_decision.context["count_target_control"] is False
+
+
+def test_arab_israeli_war_counts_the_target_itself():
+    # Its printed text explicitly subtracts for Israel if US-controlled.
+    engine = _bare()
+    engine._fire_event(Side.USSR, "Arab_Israeli_War")
+    assert engine.pending_decision.kind is DecisionKind.WAR_ROLL
+    assert engine.pending_decision.context["count_target_control"] is True
+
+
+def test_awacs_blocks_muslim_revolution():
+    engine = _bare()
+    engine._fire_event(Side.US, "AWACS_Sale_to_Saudis")
+    assert not EVENTS["Muslim_Revolution"].eligible(engine, Side.USSR)
+    engine._fire_event(Side.USSR, "Muslim_Revolution")
+    assert engine.pending_decision is None  # unplayable as an Event (rule 7.5)
+
+
+def test_u2_incident_extra_vp_when_un_intervention_played_this_turn():
+    engine = _bare()
+    engine._fire_event(Side.USSR, "U2_Incident")
+    assert engine.vp == -1
+    assert engine.turn_effects.get("u2_incident") is True
+
+    engine.hands["US"] = ["UN_Intervention", "Fidel"]
+    engine.push_full_card_play(Side.US, "Fidel")
+    assert "un_intervention" in {a.payload["mode"] for a in engine.pending_decision.options}
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "un_intervention"}))
+    assert engine.vp == -2  # the extra U2 VP
+
+
+def test_missile_envy_ops_respect_per_turn_modifiers():
+    engine = _bare()
+    engine.turn_effects["containment"] = True  # US Ops +1 (cap 4)
+    engine.missile_envy_use(Side.US, "Fidel", "ops")  # Fidel is 2 Ops
+    assert engine.pending_decision.kind is DecisionKind.OPS_TYPE
+    assert engine.pending_decision.context["ops"] == 3
+
+
+def test_un_intervention_cannot_be_headlined():
+    engine = _bare()
+    engine.hands["US"] = ["UN_Intervention", "Duck_and_Cover"]
+    engine._push_headline(Side.US)
+    cards = {a.payload["card"] for a in engine.pending_decision.options}
+    assert "UN_Intervention" not in cards
+    assert "Duck_and_Cover" in cards
+
+
+def test_military_ops_never_exceed_five():
+    engine = _bare()
+    engine.military_ops["US"] = 5
+    engine._add_military_ops(Side.US, 4)
+    assert engine.military_ops["US"] == 5
+    engine.military_ops["US"] = 3
+    engine._add_military_ops(Side.US, 1)
+    assert engine.military_ops["US"] == 4
+
+
+def test_ask_not_offers_scoring_cards():
+    # Card text: "discard up to their entire hand of cards (including scoring
+    # cards)".
+    engine = _bare()
+    engine.hands["US"] = ["Asia_Scoring", "Duck_and_Cover"]
+    engine._fire_event(Side.US, "Ask_Not_What_Your_Country_Can_Do_For_You")
+    offered = {a.payload["choice"] for a in engine.pending_decision.options}
+    assert "Asia_Scoring" in offered
+    assert "Duck_and_Cover" in offered
