@@ -191,3 +191,31 @@ def test_restart_can_drop_ccw() -> None:
     session.restart(include_ccw=False)
     assert "Chinese_Civil_War" not in session.engine.board.countries
     assert "Chinese_Civil_War" not in session.engine.board.neighbors("USSR")
+
+
+def test_restart_opts_tolerates_bad_setup_us_extra() -> None:
+    # Tampered/legacy localStorage can send null or a string; the restart must
+    # not 500, and the value is clamped 0-6.
+    assert serve_ui._restart_opts({"setup_us_extra": None}) == {}
+    assert serve_ui._restart_opts({"setup_us_extra": "nope"}) == {}
+    assert serve_ui._restart_opts({"setup_us_extra": 99})["setup_us_extra"] == 6
+    assert serve_ui._restart_opts({"setup_us_extra": -3})["setup_us_extra"] == 0
+
+
+def test_http_forfeit_reports_the_winner_and_starts_fresh() -> None:
+    session = make_session()  # human = US
+    session.advance()
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        reply = json.load(urllib.request.urlopen(urllib.request.Request(
+            base + "/forfeit", data=b"{}", headers={"Content-Type": "application/json"},
+        )))
+        assert reply["forfeit"] is True
+        assert reply["winner"] == "USSR"  # not null (state()'s fresh-game winner)
+        assert reply["is_terminal"] is False  # forfeit also starts a new game
+    finally:
+        server.shutdown()

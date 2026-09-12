@@ -422,9 +422,6 @@ class Replay:
         self.errors.append(f"unhandled decision kind: {kind}")
         return dec.options[0]
 
-    def _started(self) -> bool:
-        return self.ri > 0 or (self.cur() or {}).get("kind") != "setup"
-
     # -- main loop --------------------------------------------------------------
 
     def run(self, max_steps: int | None = None) -> dict:

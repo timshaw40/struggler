@@ -84,7 +84,13 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from struggler.bots.llm import conversation_log
-from struggler.bots.llm.client import LLMClient, LLMClientError, LLMMessage, LLMRequest
+from struggler.bots.llm.client import (
+    LLMClient,
+    LLMClientError,
+    LLMMessage,
+    LLMRequest,
+    redact_secrets,
+)
 from struggler.bots.llm.conversation_log import ConversationSnapshot, JournalEntry
 from struggler.bots.llm.prompt import (
     build_history_entry,
@@ -146,6 +152,11 @@ def _find_matching_option(options: Sequence[Action], payload: dict) -> Action | 
     """The first live option whose payload agrees with `payload` on every
     key `payload` specifies -- a subset match, since `payload` only ever
     carries the one key relevant to its decision kind (see schema.py)."""
+    if not payload:
+        # An empty payload would vacuously match the first option; refuse it
+        # rather than silently playing an arbitrary move (schema.py already
+        # rejects these, but this is the last line of defense).
+        return None
     for action in options:
         if all(action.payload.get(k) == v for k, v in payload.items()):
             return action
@@ -432,7 +443,9 @@ class LLMPlayer:
             try:
                 response = client.complete(request)
             except LLMClientError as exc:
-                last_error = str(exc)
+                # Redact again here: this string is persisted to the journal,
+                # and a provider auth error can echo the API key.
+                last_error = redact_secrets(str(exc))
                 raw_responses.append(f"[client error: {last_error}]")
                 retry_after(f"[invalid response: {last_error}]", _RETRY_NUDGE)
                 continue  # no response received -- nothing to add to total_usage

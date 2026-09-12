@@ -77,6 +77,18 @@ def test_determinize_does_not_copy_hidden_identities():
     assert filled_a["draw_pile"] == filled_b["draw_pile"]
 
 
+def test_determinize_keeps_a_known_box4_opponent_headline():
+    # Space Race box 4 reveals the opponent's committed headline to its
+    # holder, so determinize must not resample it as if it were secret.
+    engine = Engine.new_game(seed=3)
+    engine._headline["USSR"] = "Fidel"
+    engine.game_effects["space_race_headline_reveal_holder"] = "US"
+
+    filled = determinize(engine.serialize(), "US", random.Random(0))
+
+    assert filled["headline"]["USSR"] == "Fidel"
+
+
 def test_same_seed_picks_the_same_action():
     engine = Engine.new_game(seed=4)
     observation = engine.observe(engine.pending_decision.actor)

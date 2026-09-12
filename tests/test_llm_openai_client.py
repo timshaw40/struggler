@@ -12,7 +12,15 @@ import pytest
 
 pytest.importorskip("openai")
 
-from struggler.bots.llm.client import LLMClientError, LLMMessage, LLMRequest, StructuredOutputSpec
+from struggler.bots.llm.client import (
+    LLMClientError,
+    LLMMessage,
+    LLMRequest,
+    LLMTruncatedError,
+    StructuredOutputSpec,
+    redact_secrets,
+    strip_json_fence,
+)
 from struggler.bots.llm.openai_client import OpenAIClient, _to_openai_strict_schema
 from struggler.bots.llm.schema import PLAN_SCHEMA
 
@@ -124,7 +132,11 @@ def test_constructor_forwards_base_url(monkeypatch):
 
     monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
     OpenAIClient(model="qwen/qwen3.8-27b", api_key="local", base_url="http://192.168.10.91:1234/v1")
-    assert captured == {"api_key": "local", "base_url": "http://192.168.10.91:1234/v1"}
+    assert captured == {
+        "api_key": "local",
+        "base_url": "http://192.168.10.91:1234/v1",
+        "timeout": 600.0,
+    }
 
 
 def test_build_llm_client_openai_compatible_uses_base_url(monkeypatch):
@@ -160,3 +172,50 @@ def test_to_openai_strict_schema_marks_optional_payload_keys_nullable_and_requir
     for key in payload_keys:
         prop_type = payload_schema["properties"][key]["type"]
         assert "null" in prop_type
+    # Strict mode also rejects a nullable enum that doesn't list null.
+    for key in ("mode", "type", "order"):
+        enum = payload_schema["properties"][key].get("enum")
+        assert enum is not None and None in enum
+
+
+def test_complete_raises_truncated_on_finish_reason_length(monkeypatch):
+    client = _client()
+    truncated = SimpleNamespace(
+        finish_reason="length",
+        message=SimpleNamespace(content='{"a": 1}', reasoning_content=None),
+    )
+    monkeypatch.setattr(
+        client._client.chat.completions, "create",
+        lambda **kw: SimpleNamespace(choices=[truncated], usage=None),
+    )
+    request = LLMRequest(
+        system="s", messages=(),
+        output=StructuredOutputSpec(name="x", description="y", schema={"type": "object"}),
+    )
+    with pytest.raises(LLMTruncatedError):
+        client.complete(request)
+
+
+def test_complete_strips_a_json_code_fence(monkeypatch):
+    client = _client()
+    fenced = SimpleNamespace(
+        finish_reason="stop",
+        message=SimpleNamespace(content='```json\n{"a": 1}\n```', reasoning_content=None),
+    )
+    monkeypatch.setattr(
+        client._client.chat.completions, "create",
+        lambda **kw: SimpleNamespace(choices=[fenced], usage=None),
+    )
+    request = LLMRequest(
+        system="s", messages=(),
+        output=StructuredOutputSpec(name="x", description="y", schema={"type": "object"}),
+    )
+    assert client.complete(request).structured == {"a": 1}
+
+
+def test_strip_json_fence_and_redact_secrets():
+    assert strip_json_fence('```json\n{"a": 1}\n```') == '{"a": 1}'
+    assert strip_json_fence('{"a": 1}') == '{"a": 1}'
+    assert "sk-abc12345" not in redact_secrets("bad key: sk-abc12345")
+    assert "supersecret" not in redact_secrets('api_key="supersecret"')
+    assert "leakedtok" not in redact_secrets("Authorization: Bearer leakedtok123")

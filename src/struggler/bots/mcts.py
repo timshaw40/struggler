@@ -54,15 +54,28 @@ def _entered_ids(turn: int, include_optional: bool) -> list[str]:
 
 def _frozen_ids(data: dict, me: str) -> list[str]:
     """Cards whose identities stay put so the decision stack stays consistent."""
+    opp = "USSR" if me == "US" else "US"
     frozen: list[str] = []
     headline = data.get("headline") or {}
     if headline.get(me):
         frozen.append(headline[me])
+    # Space Race box 4 lets its holder see the opponent's committed headline:
+    # that card is known information, so freeze it rather than resample.
+    if headline.get(opp) and _opponent_headline_is_known(data, me):
+        frozen.append(headline[opp])
     for pair in data.get("headline_pending") or []:
         frozen.append(pair[1])
     frozen.extend(data.get("our_man_queue") or [])
     frozen.extend(data.get("our_man_kept") or [])
     return frozen
+
+
+def _opponent_headline_is_known(data: dict, me: str) -> bool:
+    """Whether `me` has legitimately seen the opponent's headline (Space Race
+    box 4)."""
+    return (
+        data.get("game_effects", {}).get("space_race_headline_reveal_holder") == me
+    )
 
 
 def determinize(data: dict, me: str, rng: random.Random) -> dict:
@@ -73,7 +86,11 @@ def determinize(data: dict, me: str, rng: random.Random) -> dict:
     opp = "USSR" if me == "US" else "US"
     n_hand = len(data["hands"][opp])
     n_draw = len(data["draw_pile"])
-    secret_hl = bool(data.get("headline", {}).get(opp)) and not data.get("headline_resolving")
+    secret_hl = (
+        bool(data.get("headline", {}).get(opp))
+        and not data.get("headline_resolving")
+        and not _opponent_headline_is_known(data, me)
+    )
 
     used = set(data["hands"][me])
     used.update(data["discard_pile"])

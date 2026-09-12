@@ -543,6 +543,12 @@ class GreedyPlayer:
 
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
         decision: Decision = observation.pending_decision
+        if not decision.options:
+            # An engine-stuck state: fail loudly with the kind, rather than a
+            # bare IndexError/ValueError from options[0]/max().
+            raise RuntimeError(
+                f"no legal options for {decision.kind.value} (engine stuck state)"
+            )
         scorer = _SCORERS.get(decision.kind)
         if scorer is None:
             return decision.options[0]

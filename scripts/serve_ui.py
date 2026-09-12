@@ -282,8 +282,12 @@ def _restart_opts(body: dict) -> dict[str, Any]:
         opts["include_ccw"] = bool(body["include_ccw"])
     if body.get("side") in ("US", "USSR"):
         opts["side"] = body["side"]
-    if "setup_us_extra" in body:
-        opts["setup_us_extra"] = int(body["setup_us_extra"])
+    raw_extra = body.get("setup_us_extra")
+    if raw_extra is not None:
+        try:
+            opts["setup_us_extra"] = max(0, min(6, int(raw_extra)))
+        except (TypeError, ValueError):
+            pass  # a tampered/legacy null must not 500 the restart
     return opts
 
 
@@ -310,19 +314,31 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             if not path.is_file() or UI_DIR not in path.parents:
                 self._send_json(404, {"error": "not found"})
                 return
-            self._send(200, path.read_bytes(), CONTENT_TYPES[path.suffix])
+            self._send(
+                200, path.read_bytes(),
+                CONTENT_TYPES.get(path.suffix, "application/octet-stream"),
+            )
 
         def do_GET(self) -> None:
             route = self.path.split("?")[0]
             if route == "/state":
-                with session.lock:
-                    if session.watch:
-                        session.step_once()
-                    else:
-                        d = session.engine.pending_decision
-                        if d is not None and d.actor is not session.human_side:
+                # Compute under the lock, then write the socket *outside* it:
+                # a slow client (or a slow LLM step) must not block every other
+                # request behind the response write.
+                try:
+                    with session.lock:
+                        if session.watch:
                             session.step_once()
-                    self._send_json(200, session.state())
+                        else:
+                            d = session.engine.pending_decision
+                            if d is not None and d.actor is not session.human_side:
+                                session.step_once()
+                        payload = session.state()
+                except Exception as exc:  # a bot/provider failure must not drop the socket
+                    print(f"/state error: {exc!r}")
+                    self._send_json(500, {"error": str(exc)})
+                    return
+                self._send_json(200, payload)
             elif route == "/cards":
                 self._send_json(200, cards_meta)
             elif route in ("/", "/index.html"):
@@ -338,31 +354,37 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length) or b"{}")
-            except json.JSONDecodeError:
+            except (ValueError, TypeError, json.JSONDecodeError):
                 self._send_json(400, {"error": "bad json"})
                 return
-            try:
-                with session.lock:
+            # Resolve the whole request under ONE lock acquisition and write the
+            # socket afterwards: the previous code re-locked on the error path
+            # (a mutation window) and wrote the response while holding the lock.
+            with session.lock:
+                try:
                     if self.path == "/action":
                         session.act(int(body.get("index", -1)))
-                        self._send_json(200, session.state())
+                        code, payload = 200, session.state()
                     elif self.path == "/new":
                         session.restart(**_restart_opts(body))
-                        self._send_json(200, session.state())
+                        code, payload = 200, session.state()
                     elif self.path == "/forfeit":
                         if session.watch:
-                            self._send_json(409, {"error": "watch mode"})
-                            return
-                        winner = session.forfeit(**_restart_opts(body))
-                        self._send_json(200, {"forfeit": True, "winner": winner, **session.state()})
+                            code, payload = 409, {"error": "watch mode"}
+                        else:
+                            winner = session.forfeit(**_restart_opts(body))
+                            payload = session.state()
+                            payload["forfeit"] = True
+                            payload["winner"] = winner  # state()'s winner is the fresh game's
+                            code = 200
                     elif self.path == "/back":
                         session.undo()
-                        self._send_json(200, session.state())
+                        code, payload = 200, session.state()
                     else:
-                        self._send_json(404, {"error": "not found"})
-            except (ValueError, RuntimeError) as exc:
-                with session.lock:
-                    self._send_json(409, {"error": str(exc), "state": session.state()})
+                        code, payload = 404, {"error": "not found"}
+                except (ValueError, TypeError, RuntimeError) as exc:
+                    code, payload = 409, {"error": str(exc), "state": session.state()}
+            self._send_json(code, payload)
 
     return Handler
 

@@ -71,7 +71,11 @@ def build_llm_client(provider: str | None = None, model: str | None = None):
         )
     else:
         from struggler.bots.llm.openai_client import OpenAIClient
-        client = OpenAIClient(model=model)
+        # Honor STRUGGLER_LLM_API_KEY here too; when unset, the SDK falls back
+        # to OPENAI_API_KEY as before.
+        client = OpenAIClient(
+            model=model, api_key=os.environ.get("STRUGGLER_LLM_API_KEY")
+        )
     return client
 
 
@@ -147,7 +151,7 @@ def main() -> None:
         help=(
             "Resume an LLM player from its existing log file instead of "
             "starting with fresh memory. Requires --us-log-path and/or "
-            "--ussr-log-path (log filenames are timestamped at creation"
+            "--ussr-log-path (log filenames are timestamped at creation)."
         ),
     )
     parser.add_argument(
