@@ -95,13 +95,23 @@ def build_player(
     if kind == "random":
         return RandomPlayer(seed=seed)
     if kind == "greedy":
-        return GreedyPlayer()
+        from struggler.bots.checkpoint import load_weights
+
+        path = os.environ.get("STRUGGLER_GREEDY_WEIGHTS")
+        return GreedyPlayer(weights=load_weights(path) if path else None)
     if kind == "mcts":
+        value = None
+        value_path = os.environ.get("STRUGGLER_MCTS_VALUE")
+        if value_path:
+            from struggler.bots.value import LinearValue
+
+            value = LinearValue.load(value_path)
         return MCTSPlayer(
             seed=seed,
             sims=int(os.environ.get("STRUGGLER_MCTS_SIMS", "16")),
             rollout_depth=int(os.environ.get("STRUGGLER_MCTS_ROLLOUT_DEPTH", "16")),
             uct_c=float(os.environ.get("STRUGGLER_MCTS_UCT_C", "1.4")),
+            value=value,
         )
     if kind == "llm":
         client = build_llm_client()

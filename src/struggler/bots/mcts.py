@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Sequence
+from typing import Any, Sequence
 
 from struggler.bots.greedy import GreedyPlayer, board_value
 from struggler.engine import Action, Engine, Observation, Period, Side
@@ -115,7 +115,9 @@ def determinize(data: dict, me: str, rng: random.Random) -> dict:
     return data
 
 
-def _position_value(engine: Engine, side: Side, greedy: GreedyPlayer) -> float:
+def _position_value(
+    engine: Engine, side: Side, greedy: GreedyPlayer, value: Any = None
+) -> float:
     if engine.is_terminal:
         winner = engine.winner
         if winner is side:
@@ -123,6 +125,10 @@ def _position_value(engine: Engine, side: Side, greedy: GreedyPlayer) -> float:
         if winner is None:
             return 0.5
         return 0.0
+    if value is not None:
+        # A learned value over the same public board replaces the hand heuristic
+        # (and lets `rollout_depth` drop sharply for the same strength).
+        return value.value_for_engine(engine, side)
     return 0.5 + 0.5 * math.tanh(board_value(greedy.weights, engine.board, side) / _VALUE_SCALE)
 
 
@@ -135,12 +141,14 @@ class MCTSPlayer:
         sims: int = 16,
         rollout_depth: int = 16,
         uct_c: float = 1.4,
+        value: Any = None,
     ) -> None:
         self._rng = random.Random(seed)
         self.sims = sims
         self.rollout_depth = rollout_depth
         self.uct_c = uct_c
         self._greedy = GreedyPlayer()
+        self._value = value
         self._engine: Engine | None = None
 
     def bind_engine(self, engine: Engine) -> None:
@@ -207,6 +215,6 @@ class MCTSPlayer:
                     obs = clone.observe(pending.actor)
                     clone.step(self._greedy.choose_action(obs, ()))
                 steps += 1
-            return _position_value(clone, side, self._greedy)
+            return _position_value(clone, side, self._greedy, self._value)
         except (ValueError, RuntimeError, KeyError):
             return 0.5
