@@ -7,6 +7,8 @@
   --us: #2f6fed;
   --ussr: #d43a3a;
   --gold: #ffd54a;
+  /* The log and the decision box share this exact width (the right column). */
+  --sidebar-w: 320px;
 }
 
 * { box-sizing: border-box; }
@@ -27,10 +29,21 @@ main {
   min-height: 0;
 }
 
+/* Left column: the map grows to fill, and the hand is a fixed-height bar
+ * flush underneath it (no reserved gap from a bottom decision bar). */
+#leftcol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 #boardarea {
   flex: 1;
   display: flex;
   min-width: 0;
+  min-height: 0;
   position: relative;
 }
 
@@ -209,7 +222,8 @@ main {
 /* The panel scrolls inside #panelscroll so #decision can pin to the panel's
  * bottom edge — a popup floating over the History section. */
 #panel {
-  width: 260px;
+  flex: none;
+  width: var(--sidebar-w);
   background: var(--panel);
   padding: 12px 14px;
   border-left: 1px solid #000;
@@ -219,9 +233,11 @@ main {
   overflow: hidden;
 }
 
+/* The log fills what the decision box doesn't need; it shrinks as the
+ * decision grows, so the two always share this one column's width. */
 #panelscroll {
   flex: 1;
-  min-height: 0;
+  min-height: 90px;
   overflow-y: auto;
 }
 
@@ -342,21 +358,19 @@ main {
   50% { opacity: 0.4; }
 }
 
-/* The hand owns the whole bar and sits flush against the bottom edge. */
-#playbar {
-  background: var(--panel);
-  border-top: 1px solid #000;
-  padding: 10px 14px;
-}
-
-/* The hand is always a single row: cards scroll horizontally instead of
- * wrapping, so the row's height never grows the playbar. */
+/* The hand is a fixed-height bar flush under the map. It is always a single
+ * row: cards scroll horizontally instead of wrapping, and the card width (and
+ * so the bar height) never changes as the decision box grows. */
 #hand {
+  flex: none;
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
   overflow-x: auto;
   min-width: 0;
+  background: var(--panel);
+  border-top: 1px solid #000;
+  padding: 10px 14px;
 }
 
 .card {
@@ -387,27 +401,19 @@ main {
 .side-us .cardname { color: #7ea4f5; }
 .side-ussr .cardname { color: #e57373; }
 
-/* Decision bar: lives in the bottom card area next to the hand, so the
- * side panel stays fully visible for History. */
-#playbar {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-
-#hand { flex: 1; }
-
+/* Decision box: the bottom of the right column, directly under the log and
+ * sharing its width. It takes only the height it needs (up to a cap), so the
+ * log above shrinks to make room instead of the map changing size. */
 #decision {
   flex: none;
-  order: 2;
-  width: 370px;
-  max-height: 300px;
-  overflow-y: scroll;
+  max-height: 65%;
+  overflow-y: auto;
   scrollbar-color: #9aa0ad transparent;
   background: var(--panel2);
   border: 1px solid #3a4252;
   border-radius: 10px;
   padding: 10px 12px;
+  margin-top: 10px;
 }
 #decision::-webkit-scrollbar { width: 10px; }
 #decision::-webkit-scrollbar-track { background: transparent; }

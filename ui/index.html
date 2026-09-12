@@ -8,19 +8,22 @@
 </head>
 <body>
 <main>
-  <div id="boardarea">
-    <div id="boardwrap">
-      <div id="boardbox">
-        <img id="board" src="/assets/board.png" alt="Twilight Struggle board" draggable="false">
-        <div id="boardload">Loading board…</div>
-        <div id="markers"></div>
+  <div id="leftcol">
+    <div id="boardarea">
+      <div id="boardwrap">
+        <div id="boardbox">
+          <img id="board" src="/assets/board.png" alt="Twilight Struggle board" draggable="false">
+          <div id="boardload">Loading board…</div>
+          <div id="markers"></div>
+        </div>
+      </div>
+      <div id="dicebox" hidden aria-live="polite">
+        <p class="dtitle"></p>
+        <div class="dice"></div>
+        <p class="doutcome"></p>
       </div>
     </div>
-    <div id="dicebox" hidden aria-live="polite">
-      <p class="dtitle"></p>
-      <div class="dice"></div>
-      <p class="doutcome"></p>
-    </div>
+    <div id="hand"></div>
   </div>
   <aside id="panel">
     <h1>Struggler<button id="cog" type="button" title="Settings" aria-label="Settings" onclick="toggleSettings()">⚙</button></h1>
@@ -31,12 +34,9 @@
       <div id="piles"></div>
       <div id="effects"></div>
     </div>
+    <div id="decision" hidden></div>
   </aside>
 </main>
-<footer id="playbar">
-  <div id="decision" hidden></div>
-  <div id="hand"></div>
-</footer>
 <div id="winner" hidden role="dialog" aria-modal="true" aria-label="Game over"></div>
 <div id="toast" hidden onclick="this.hidden = true"></div>
 <script src="/app.js"></script>
