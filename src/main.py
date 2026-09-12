@@ -113,6 +113,15 @@ def build_player(
             uct_c=float(os.environ.get("STRUGGLER_MCTS_UCT_C", "1.4")),
             value=value,
         )
+    if kind == "rl":
+        from struggler.bots.rl.player import RLPlayer
+
+        path = os.environ.get("STRUGGLER_RL_POLICY")
+        if not path:
+            raise ValueError("kind 'rl' requires STRUGGLER_RL_POLICY=<policy .pt>")
+        return RLPlayer.from_path(
+            path, device=os.environ.get("STRUGGLER_RL_DEVICE", "cpu"), seed=seed
+        )
     if kind == "llm":
         client = build_llm_client()
         plan_provider = os.environ.get("STRUGGLER_LLM_PROVIDER", DEFAULT_LLM_PROVIDER)
@@ -135,7 +144,9 @@ def build_player(
             log_path=log_path,
             resume=resume,
         )
-    raise ValueError(f"unknown player kind: {kind!r} (expected human/first/random/greedy/mcts/llm)")
+    raise ValueError(
+        f"unknown player kind: {kind!r} (expected human/first/random/greedy/mcts/rl/llm)"
+    )
 
 
 def main() -> None:

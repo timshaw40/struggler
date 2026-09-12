@@ -32,19 +32,24 @@ class PlayerSpec:
     """A named, reconstructible player, small enough to pickle to a worker."""
 
     name: str
-    kind: str = "greedy"  # greedy | mcts | random | first
+    kind: str = "greedy"  # greedy | mcts | random | first | rl
     weights: Mapping[str, float] | None = None
     sims: int = 16
     player_seed: int = 0
+    net_path: str | None = None  # for kind == "rl"
 
     def with_name(self, name: str) -> "PlayerSpec":
-        return PlayerSpec(name, self.kind, self.weights, self.sims, self.player_seed)
+        return PlayerSpec(name, self.kind, self.weights, self.sims, self.player_seed, self.net_path)
 
 
 def make_player(spec: PlayerSpec):
     if spec.kind == "greedy":
         w = GreedyWeights(**dict(spec.weights)) if spec.weights else GreedyWeights()
         return GreedyPlayer(weights=w)
+    if spec.kind == "rl":
+        from struggler.bots.rl.player import RLPlayer
+
+        return RLPlayer.from_path(spec.net_path, device="cpu", seed=spec.player_seed)
     if spec.kind == "mcts":
         from struggler.bots.mcts import MCTSPlayer
 

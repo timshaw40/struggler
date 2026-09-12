@@ -16,6 +16,7 @@ ui = ["pymupdf>=1.24", "pillow>=10"]
 llm-anthropic = ["anthropic>=0.68"]
 llm-openai = ["openai>=1.0"]
 llm = ["anthropic>=0.68", "openai>=1.0"]
+rl = ["numpy>=1.26", "torch>=2.2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

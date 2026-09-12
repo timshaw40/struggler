@@ -579,3 +579,41 @@ The intended sequence: build the arena first, tune the linear greedy with CEM,
 learn the value and cheapen MCTS, then move to PPO self-play with league
 anchors and H2H Elo gates (tier 5). Behavior cloning from the small expert
 corpus is only an opening prior — it plateaus near the teacher.
+
+### Neural self-play (PPO) — tier 5, first cut
+
+`bots/rl/` is the self-play stack, opt-in via the `rl` extra
+(`pip install 'struggler[rl]'`: numpy + torch; MPS used when available).
+
+- `encode.py` — fixed-size vectors for the acting side's `Observation` and
+  each legal `Action`. Nothing hidden is encoded (mandate #4); the state is
+  side-scoped, so one shared net plays both seats. `STATE_DIM`/`OPTION_DIM`
+  are ~523/246.
+- `net.py` — `ActorCritic`: a pointer-style policy (dot product of a state
+  embedding and each option embedding, so it handles variable branching) plus
+  a value head. `save_policy`/`load_policy`.
+- `selfplay.py` — one self-play episode per side; a fraction of seats is
+  played by the greedy **anchor** so the opponent pool is non-stationary.
+  Episodes are split by side (the value is side-scoped), always.
+- `ppo.py` — GAE per side, padded option batches, clipped PPO with value +
+  entropy losses. Sparse ±1 terminal reward.
+- `scripts/train_ppo.py` — the autonomous loop: snapshot the policy, collect
+  self-play games in a spawn pool (workers on CPU), PPO-update on the training
+  device, periodically evaluate head-to-head vs greedy with the arena, save
+  `latest`/`best`.
+- `RLPlayer` plays a checkpoint; `build_player("rl")` reads
+  `STRUGGLER_RL_POLICY` (and `STRUGGLER_RL_DEVICE`).
+
+```
+pip install 'struggler[rl]'
+python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
+STRUGGLER_RL_POLICY=data/ppo_best.pt python src/main.py --us rl --ussr greedy
+```
+
+First-cut caveats: pure-Python self-play is the throughput ceiling (the fast
+`arena.py` numbers apply only to greedy rollouts, not the net), the win rate
+vs greedy is noisy until many games, and promotion should gate on H2H Elo
+(see `arena.py`) rather than the single greedy matchup. Likely next steps:
+bigger batches with a persistent actor pool, potential-based shaping from
+`board_value`, a league of past checkpoints + greedy, and a tournament runner
+for H2H Elo.
