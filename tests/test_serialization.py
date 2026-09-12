@@ -33,6 +33,25 @@ def test_round_trip_preserves_full_state_including_rng():
     assert engine.serialize() == restored.serialize()
 
 
+def test_round_trip_preserves_setup_us_extra():
+    # new_game(setup_us_extra=N) must survive a save/load or an undo during
+    # the opening setup, which still reads the value to size the US placement.
+    engine = Engine.new_game(seed=1, setup_us_extra=3)
+    restored = Engine.deserialize(engine.serialize())
+    assert restored.setup_us_extra == 3
+    assert restored.serialize() == engine.serialize()
+
+
+def test_round_trip_preserves_a_no_ccw_board():
+    # The Chinese Civil War is a Board construction flag, not Board state; a
+    # deserialize must not silently reintroduce the country.
+    engine = Engine.new_game(seed=1, include_ccw=False)
+    assert "Chinese_Civil_War" not in engine.board.countries
+    restored = Engine.deserialize(engine.serialize())
+    assert "Chinese_Civil_War" not in restored.board.countries
+    assert restored.serialize() == engine.serialize()
+
+
 def test_ops_round_snapshot_survives_a_round_trip_mid_placement():
     # The start-of-Action-Round snapshot (rule 6.1.1) must itself round-trip,
     # or a deserialized-and-resumed game would re-freeze from the *current*

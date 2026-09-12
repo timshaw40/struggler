@@ -35,6 +35,19 @@ HIDDEN_CARD = "?"
 # looks like this either.
 RESHUFFLE_NOW = "reshuffle_now"
 
+# Decision kinds whose options enumerate a side's hidden hand (or, in physical
+# mode, its candidate pool). `observe()` must never hand these options to the
+# non-actor: the card ids are exactly the secret the opponent may not see
+# (mandate #4). The actor keeps them in full; `RANDOM_DISCARD` is deliberately
+# NOT here -- its single drawn card is public at the table.
+_SECRET_HAND_KINDS = frozenset({
+    DecisionKind.ACTION_ROUND_PLAY,
+    DecisionKind.HEADLINE_PLAY,
+    DecisionKind.QUAGMIRE_DISCARD,
+    DecisionKind.HELD_CARD_DISCARD,
+    DecisionKind.DEAL_CARD,
+})
+
 # Which region each scoring card scores, keyed by card id.
 SCORING_CARD_REGION: dict[str, Region] = {
     "Asia_Scoring": Region.ASIA,
@@ -155,6 +168,12 @@ class Engine:
         if player not in (Side.US, Side.USSR):
             raise ValueError("observe() is only valid for Side.US or Side.USSR")
         opponent = player.opponent
+        pending = self.pending_decision
+        if pending is not None and pending.actor is not player and pending.kind in _SECRET_HAND_KINDS:
+            # The actor's hand is the private part, not the fact that they are
+            # deciding: keep id/actor/kind/context (so `phasing` and "a choice
+            # is pending" stay correct) but drop the hand-derived options.
+            pending = Decision(pending.id, pending.actor, pending.kind, (), pending.context)
         return Observation(
             side=player,
             phase=self.phase,
@@ -163,7 +182,7 @@ class Engine:
             turn=self.turn,
             action_round=self.action_round,
             influence=copy.deepcopy(self.board.influence),
-            pending_decision=self.pending_decision,
+            pending_decision=pending,
             # Own hand in full; the opponent's hand only as a count (mandate
             # #4). The draw pile is a count too — its order never leaks.
             hand=tuple(self.hands[player.value]),
@@ -209,6 +228,7 @@ class Engine:
             # -- full-game state --
             "phase": self.phase,
             "include_optional": self.include_optional,
+            "setup_us_extra": self.setup_us_extra,
             "draw_pile": list(self.draw_pile),
             "discard_pile": list(self.discard_pile),
             "removed_cards": list(self.removed_cards),
@@ -240,9 +260,15 @@ class Engine:
 
     @classmethod
     def deserialize(cls, data: dict) -> "Engine":
-        engine = cls(seed=data["seed"])
+        # The Chinese Civil War (optional rule) is a Board construction flag,
+        # not Board state: recover it from whether the dumped influence map
+        # has that country, so a no-CCW game round-trips instead of silently
+        # reintroducing it. Old logs lacking the key behave exactly as before.
+        board_data = data["board"]
+        include_ccw = "Chinese_Civil_War" in board_data.get("influence", {})
+        engine = cls(seed=data["seed"], board=Board(include_ccw=include_ccw))
         engine._rng.setstate(_decode_rng_state(data["rng_state"]))
-        engine.board.load_influence(data["board"])
+        engine.board.load_influence(board_data)
         engine.defcon = data["defcon"]
         engine.vp = data["vp"]
         engine.turn = data["turn"]
@@ -254,6 +280,7 @@ class Engine:
         # -- full-game state (absent in board-only logs: fall back to the sandbox) --
         engine.phase = data.get("phase", "idle")
         engine.include_optional = data.get("include_optional", False)
+        engine.setup_us_extra = data.get("setup_us_extra", 0)
         engine.draw_pile = list(data.get("draw_pile", []))
         engine.discard_pile = list(data.get("discard_pile", []))
         engine.removed_cards = list(data.get("removed_cards", []))
@@ -882,14 +909,23 @@ class Engine:
         sub-decisions); otherwise it is a no-op discard."""
         self._maybe_flower_power(side, cid)
         if self.is_terminal:
+            # Flower Power's 2 VP can reach the 20-VP autovictory before the
+            # card is filed. It left the hand when headlined, so file it now
+            # or it is tracked in no location (card-conservation invariant).
+            self._file_card(side, cid, fired=True, already_removed_from_hand=True)
             return
         card = self.cards[cid]
         if card.scoring:
             self._resolve_scoring_card(cid)
             self._file_card(side, cid, fired=True, already_removed_from_hand=True)
         elif self.events_enabled and self._has_event(cid):
-            self._file_card(side, cid, fired=True, already_removed_from_hand=True)
-            self._fire_event(side, cid)
+            # An ineligible event does not fire, so an asterisked card is
+            # discarded rather than removed from the game (same pattern as
+            # play_card_from_discard / missile_envy_use).
+            implemented = EVENTS[cid].eligible(self, side)
+            self._file_card(side, cid, fired=implemented, already_removed_from_hand=True)
+            if implemented:
+                self._fire_event(side, cid)
         else:
             self._file_card(side, cid, fired=False, already_removed_from_hand=True)
 
@@ -1089,10 +1125,15 @@ class Engine:
                 self._resolve_scoring_card(cid)
                 self._file_card(side, cid, fired=True)
             elif self.events_enabled and self._has_event(cid):
-                # Playing a card for its (implemented) event: it fires now and
-                # the card leaves play (removed if remove_after_event).
-                self._file_card(side, cid, fired=True)
-                self._fire_event(side, cid)
+                # Playing a card for its event: it fires now and the card
+                # leaves play (removed if remove_after_event). An event whose
+                # precondition is unmet (NATO before Marshall/Warsaw, Star Wars
+                # without the lead, ...) does NOT fire, so the card is only
+                # discarded -- an asterisked card is not removed from the game.
+                implemented = EVENTS[cid].eligible(self, side)
+                self._file_card(side, cid, fired=implemented)
+                if implemented:
+                    self._fire_event(side, cid)
             else:
                 # An unfired/unimplemented event is a no-op discard.
                 self._file_card(side, cid, fired=False)
@@ -1286,12 +1327,15 @@ class Engine:
 
     def _effective_ops(self, side: Side, card: Card) -> int:
         """The card's Ops value for `side` after persistent per-turn modifiers
-        (Containment/Brezhnev +1, Red Scare -1). Never below 1."""
+        (Containment/Brezhnev +1 to a maximum of 4, Red Scare -1). Never
+        below 1."""
         ops = card.ops
+        # "+1 ... to a maximum of 4 Operations per card" (Containment /
+        # Brezhnev Doctrine): a 4-Op card gains nothing from the +1.
         if self.turn_effects.get("containment") and side is Side.US:
-            ops += 1
+            ops = min(ops + 1, 4)
         if self.turn_effects.get("brezhnev") and side is Side.USSR:
-            ops += 1
+            ops = min(ops + 1, 4)
         if self.turn_effects.get("red_scare") == side.value:
             ops -= 1
         return max(1, ops)
@@ -1610,14 +1654,22 @@ class Engine:
         owner = Side(ctx["owner"])
         card = action.payload["card"]
         if ctx["purpose"] == "five_year_plan":
-            # A discarded USSR-associated event fires (even against the USSR's
-            # own interest); anything else is just discarded.
+            # Five Year Plan's own text is an explicit exception to rule 5.4:
+            # if the USSR's random discard is a *US*-associated Event, that
+            # event occurs immediately (against the USSR's own interest); a
+            # USSR or dual event is discarded without triggering. `owner` (the
+            # USSR) is passed as the phasing side, the same convention as an
+            # opponent event fired for Ops, so DEFCON blame lands on the USSR.
             info = self.cards[card]
-            if not info.scoring and info.side.value == owner.value and self._has_event(card):
-                self._file_card(owner, card, fired=True)
+            implemented = (
+                not info.scoring
+                and info.side.value == owner.opponent.value
+                and self._has_event(card)
+                and EVENTS[card].eligible(self, owner)
+            )
+            self._file_card(owner, card, fired=implemented)
+            if implemented:
                 self._fire_event(owner, card)
-            else:
-                self._file_card(owner, card, fired=False)
         elif ctx["purpose"] == "grain_sales":
             # The revealed card is not filed yet: the opponent (US) decides to
             # take it (use its Ops, then discard) or return it (use Grain Sales'

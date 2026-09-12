@@ -2352,6 +2352,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": true,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Independent_Reds",
           "Asia_Scoring",
@@ -3479,6 +3480,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": true,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Independent_Reds",
           "Asia_Scoring",
@@ -4552,6 +4554,7 @@
         "game_over_reason": "defcon_1",
         "phase": "complete",
         "include_optional": true,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Independent_Reds",
           "Asia_Scoring",

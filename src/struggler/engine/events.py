@@ -692,7 +692,7 @@ def _independent_reds_choice(engine: "Engine", side: Side, choice: str, context:
 
 @event("Five_Year_Plan")
 def _five_year_plan(engine: "Engine", side: Side) -> None:
-    # The USSR randomly discards a card; if it is a USSR event, that event fires.
+    # The USSR randomly discards a card; if it is a US event, that event fires.
     engine.push_random_discard(Side.USSR, "five_year_plan")
 
 
@@ -1625,7 +1625,9 @@ def _our_man_in_tehran_choice(engine: "Engine", side: Side, choice: str, context
     if choice == "keep":
         engine._our_man_kept.append(card)
     else:
-        engine.removed_cards.append(card)
+        # "Discard", not remove-from-the-game: the card goes to the discard
+        # pile and will be reshuffled as normal (the card is not asterisked).
+        engine.discard_pile.append(card)
     _push_our_man_step(engine)
 
 

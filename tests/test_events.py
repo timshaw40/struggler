@@ -664,27 +664,31 @@ def test_puppet_governments_only_targets_empty_countries():
 # -- forced random discard subsystem (CHANCE) -------------------------------
 
 
-def test_five_year_plan_fires_a_discarded_ussr_event():
+def test_five_year_plan_fires_a_discarded_us_event():
+    # Card text: "If the card has a US associated Event, the Event occurs
+    # immediately. If the card has a USSR associated Event or an Event
+    # applicable to both players, then the card must be discarded without
+    # triggering the Event."
     engine = _bare(seed=2)
-    engine.hands["USSR"] = ["Fidel"]  # single card -> deterministic draw
-    engine.board.influence["Cuba"] = {"US": 2, "USSR": 0}
+    engine.hands["USSR"] = ["Duck_and_Cover"]  # a US event
+    engine.defcon = 5
     engine._fire_event(Side.US, "Five_Year_Plan")
     d = engine.pending_decision
     assert d.kind is DecisionKind.RANDOM_DISCARD and d.actor is Side.CHANCE
     assert len(d.options) == 1  # only the drawn card, never the rest of the hand
     engine.step(d.options[0])
-    assert engine.board.control("Cuba") is Side.USSR  # Fidel fired
-    assert "Fidel" in engine.removed_cards
+    assert engine.defcon == 4  # Duck and Cover fired
+    assert engine.vp == 1  # ...and awarded the US 5 - 4 VP
 
 
-def test_five_year_plan_just_discards_a_non_ussr_card():
+def test_five_year_plan_just_discards_a_non_us_card():
     engine = _bare(seed=2)
-    engine.hands["USSR"] = ["Duck_and_Cover"]  # a US event: discarded, not fired
-    engine.defcon = 5
+    engine.hands["USSR"] = ["Fidel"]  # a USSR event: discarded, not fired
+    engine.board.influence["Cuba"] = {"US": 2, "USSR": 0}
     engine._fire_event(Side.US, "Five_Year_Plan")
     engine.step(engine.pending_decision.options[0])
-    assert engine.defcon == 5  # Duck and Cover did NOT fire
-    assert "Duck_and_Cover" in engine.discard_pile
+    assert engine.board.control("Cuba") is not Side.USSR  # Fidel did NOT fire
+    assert "Fidel" in engine.discard_pile
 
 
 def test_random_discard_leaks_only_the_drawn_card():
@@ -1990,7 +1994,8 @@ def test_our_man_in_tehran_examines_up_to_five_cards_without_leaking_identity():
     for choice in ("keep", "remove", "keep", "keep", "remove"):
         engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": choice}))
     assert engine.pending_decision is None
-    assert len(engine.removed_cards) == 2
+    assert len(engine.discard_pile) == 2  # "remove" means discard, not remove-from-game
+    assert len(engine.removed_cards) == 0
     assert len(engine.draw_pile) == 4  # 1 untouched + 3 kept, reshuffled back in
     assert engine._our_man_queue == [] and engine._our_man_kept == []
 
@@ -2171,6 +2176,71 @@ def test_quagmire_nullifies_norad():
     engine._fire_event(Side.US, "Quagmire")
     assert "norad" not in engine.game_effects
     assert engine.game_effects.get("quagmire") is True
+
+
+# -- event eligibility gates what a card does when played --------------------
+
+
+def test_ineligible_remove_after_event_is_discarded_not_removed():
+    # NATO is asterisked (remove-after-event) but unplayable before Marshall
+    # Plan / Warsaw Pact. Its event must not fire, and the card must be
+    # discarded rather than removed from the game.
+    engine = _bare()
+    engine.hands["US"] = ["NATO"]
+    engine.push_full_card_play(Side.US, "NATO")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "NATO" in engine.discard_pile
+    assert "NATO" not in engine.removed_cards
+    assert "nato" not in engine.game_effects
+
+    # Once eligible it fires and *is* removed.
+    eligible = _bare()
+    eligible.hands["US"] = ["NATO"]
+    eligible.game_effects["marshall_or_warsaw"] = True
+    eligible.push_full_card_play(Side.US, "NATO")
+    eligible.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "NATO" in eligible.removed_cards
+    assert eligible.game_effects.get("nato") is True
+
+
+def test_ineligible_remove_after_event_headlined_is_discarded_not_removed():
+    engine = _bare()
+    engine.hands["US"] = ["NATO"]
+    engine._resolve_headline_card(Side.US, "NATO")
+    assert "NATO" in engine.discard_pile
+    assert "NATO" not in engine.removed_cards
+
+
+# -- Ops-modifier caps (Containment / Brezhnev) ------------------------------
+
+
+def test_containment_and_brezhnev_cap_ops_at_four():
+    engine = _bare()
+    four_op = next(c for c in engine.cards.values() if c.ops == 4 and not c.scoring)
+    one_op = next(c for c in engine.cards.values() if c.ops == 1 and not c.scoring)
+
+    engine.turn_effects["containment"] = True
+    assert engine._effective_ops(Side.US, four_op) == 4  # +1 does not exceed the cap
+    assert engine._effective_ops(Side.US, one_op) == 2
+    # The modifier is side-specific: the USSR gains nothing from Containment.
+    assert engine._effective_ops(Side.USSR, four_op) == 4
+
+    engine.turn_effects.clear()
+    engine.turn_effects["brezhnev"] = True
+    assert engine._effective_ops(Side.USSR, four_op) == 4
+
+
+def test_flower_power_headline_that_ends_the_game_still_files_the_card():
+    # Flower Power's 2 VP can reach the 20-VP autovictory before the
+    # headlined war card is filed; the card must still end up in a tracked
+    # location, not nowhere (card-conservation invariant).
+    engine = _bare()
+    engine.game_effects["flower_power"] = True
+    engine.vp = -18
+    engine.hands["US"] = ["Korean_War"]
+    engine._resolve_headline_card(Side.US, "Korean_War")
+    assert engine.is_terminal and engine.winner is Side.USSR
+    assert "Korean_War" in engine.removed_cards or "Korean_War" in engine.discard_pile
 
 
 # -- golden replay -----------------------------------------------------------
