@@ -41,6 +41,7 @@ let state = null;
 let busy = false;
 let previewEl = null;
 let playing = true;   // watch mode playback
+let winnerFocused = false;
 let inFlight = false; // one poll chain at a time
 
 const $ = (sel) => document.querySelector(sel);
@@ -70,6 +71,10 @@ const MODE_LABELS = {
 
 const pretty = (s) => String(s).replace(/_/g, " ");
 const cardName = (cid) => (META[cid] && META[cid].name) || pretty(cid);
+// Escape any string interpolated into innerHTML: engine ids are safe today,
+// but this closes the injection seam if a future value is free-form.
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 async function fetchJson(url) {
   const res = await fetch(url);
@@ -88,6 +93,40 @@ function showError(msg) {
   showError._t = setTimeout(() => { t.hidden = true; }, 8000);
 }
 
+/* Global shortcuts: 1–9 / Enter pick a decision option, Esc closes overlays,
+ * arrows pan the map. Ignored while typing in a control or a modifier is held. */
+function installKeyboard() {
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (e.key === "Escape") {
+      const s = $("#settings");
+      if (s && !s.hidden) { s.hidden = true; return; }
+      if (previewEl) previewEl.hidden = true;
+      return;
+    }
+    if (e.key.startsWith("Arrow")) {
+      const wrap = $("#boardwrap");
+      const step = 80;
+      if (e.key === "ArrowLeft") wrap.scrollLeft -= step;
+      else if (e.key === "ArrowRight") wrap.scrollLeft += step;
+      else if (e.key === "ArrowUp") wrap.scrollTop -= step;
+      else if (e.key === "ArrowDown") wrap.scrollTop += step;
+      else return;
+      e.preventDefault();
+      return;
+    }
+    if (busy) return;
+    const btns = [...document.querySelectorAll("#decision .dcol-main > button:not(.backbtn)")];
+    if (!btns.length) return;
+    if (e.key === "Enter") { btns[0].click(); e.preventDefault(); return; }
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= btns.length) { btns[n - 1].click(); e.preventDefault(); }
+  });
+}
+
 async function boot() {
   try {
     await bootInner();
@@ -100,6 +139,13 @@ async function boot() {
 }
 
 async function bootInner() {
+  // The board is ~13 MB: keep a placeholder up until it has decoded.
+  const boardImg = $("#board");
+  const hideBoardLoad = () => { const l = $("#boardload"); if (l) l.hidden = true; };
+  if (boardImg && boardImg.complete) hideBoardLoad();
+  else if (boardImg) boardImg.addEventListener("load", hideBoardLoad);
+  installKeyboard();
+
   const [cards, manifest, countries] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
@@ -162,6 +208,7 @@ function buildViewBar() {
   slider.max = "180";
   slider.value = "100";
   slider.title = "Zoom";
+  slider.setAttribute("aria-label", "Zoom");
   slider.addEventListener("input", () => setZoom(+slider.value / 100));
   $("#boardarea").append(slider);
 }
@@ -199,11 +246,16 @@ function setView(name) {
 
 /* Click-and-drag panning: hold the mouse anywhere on the map and drag; the
  * scrollable #boardwrap follows. A drag never counts as a marker click. */
+let dragCleanup = null;
+
 function enableDragPan() {
   const wrap = $("#boardwrap");
   wrap.addEventListener("dragstart", (e) => e.preventDefault());
   wrap.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
+    // If a previous drag ended off-window (no mouseup), its listeners are
+    // still attached; drop them before adding a fresh pair.
+    if (dragCleanup) dragCleanup();
     dragMoved = 0;
     const sx = e.clientX, sy = e.clientY, sl = wrap.scrollLeft, st = wrap.scrollTop;
     let moved = 0;
@@ -215,14 +267,18 @@ function enableDragPan() {
       wrap.scrollLeft = sl - (ev.clientX - sx);
       wrap.scrollTop = st - (ev.clientY - sy);
     };
-    const up = () => {
+    const cleanup = () => {
       dragMoved = moved;
       wrap.classList.remove("dragging");
       window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
+      window.removeEventListener("mouseup", cleanup);
+      window.removeEventListener("blur", cleanup);
+      dragCleanup = null;
     };
+    dragCleanup = cleanup;
     window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
+    window.addEventListener("mouseup", cleanup);
+    window.addEventListener("blur", cleanup);  // released outside the window
   });
 }
 
@@ -315,9 +371,9 @@ function flyDiff() {
 }
 
 function flyPip(cid, side) {
-  placeSound();
   const p = POS[cid];
   if (!p) return;
+  placeSound();  // only for a placement that actually hits the board
   const box = $("#boardbox").getBoundingClientRect();
   const x = box.left + (p.x + (p.w || 0) / 2 / BOARD_W) * box.width;
   const y = box.top + (p.y + 0.62 * (p.h || 0) / BOARD_H) * box.height;
@@ -339,6 +395,7 @@ const ROLL_KIND = {
 };
 const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 let seenTotal = -1;
+let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
 let diceChain = Promise.resolve();
 let fxGate = Promise.resolve();  // opponent card reveals; pips and dice wait on it
 
@@ -461,13 +518,29 @@ function drainRolls() {
   const items = [];
   for (let i = 0; i < fresh.length; i++) {
     const e = fresh[i];
-    if (!ROLL_KIND[e.kind]) continue;
-    if (e.kind === "realignment_actor_roll" && fresh[i + 1] && fresh[i + 1].kind === "realignment_opponent_roll") {
-      items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev: hist[start + i - 1] });
-      i++;
-    } else {
-      items.push({ kind: e.kind, e, prev: hist[start + i - 1] });
+    const prev = hist[start + i - 1];
+    if (e.kind === "realignment_actor_roll") {
+      if (pendingRealignActor) {  // a prior actor roll never got its opponent roll
+        items.push({ kind: "realignment_actor_roll", e: pendingRealignActor.actor, prev: pendingRealignActor.prev });
+        pendingRealignActor = null;
+      }
+      if (fresh[i + 1] && fresh[i + 1].kind === "realignment_opponent_roll") {
+        items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev });
+        i++;
+      } else {
+        // Watch mode resolves one step per poll, so the two rolls arrive in
+        // separate batches: hold the actor roll for its opponent roll.
+        pendingRealignActor = { kind: "realignment", actor: e, prev };
+      }
+      continue;
     }
+    if (e.kind === "realignment_opponent_roll" && pendingRealignActor) {
+      pendingRealignActor.opp = e;
+      items.push(pendingRealignActor);
+      pendingRealignActor = null;
+      continue;
+    }
+    if (ROLL_KIND[e.kind]) items.push({ kind: e.kind, e, prev });
   }
   for (const item of items) diceChain = diceChain.then(() => showDice(item));
   for (let i = 0; i < fresh.length; i++) {
@@ -623,7 +696,8 @@ let countryTip = null;
  * plus live influence. Falls back to plain text when a header asset is
  * missing. Positioned above the marker, viewport-clamped. */
 function showCountryTip(el, cid, inf) {
-  if (view !== "World") return;  // region views are close enough
+  // Works in every view: markers are positioned in board coordinates and the
+  // tip is placed from the element's viewport rect, so region views are fine.
   if (!countryTip) {
     countryTip = document.createElement("div");
     countryTip.id = "countrytip";
@@ -678,6 +752,7 @@ function renderBoard() {
   $("#board").onerror = () => $("#boardwrap").classList.add("noboard");
   const host = $("#markers");
   host.textContent = "";
+  host.classList.toggle("busy", busy);  // no map picks while submitting
   if ($("#boardwrap").classList.contains("noboard")) return;
   const d = state.decision;
   for (const [cid, inf] of Object.entries(state.influence)) {
@@ -703,12 +778,19 @@ function renderBoard() {
     }
     const ctrl = controlOf(cid, inf);
     el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
+    el.setAttribute("aria-label", `${pretty(cid)} — US ${inf.US} / USSR ${inf.USSR}`);
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
     el.addEventListener("mouseleave", () => { if (countryTip) countryTip.hidden = true; });
     if (target !== null) {
+      el.classList.add("actionable");
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
       el.addEventListener("click", () => {
         if (dragMoved > 6) return;  // that was a map drag, not a click
         act(target);
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (dragMoved <= 6) act(target); }
       });
     }
     host.append(el);
@@ -718,28 +800,32 @@ function renderBoard() {
 
 function renderTracks(host) {
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n | 0));
-  const tok = (name, xy, off) => {
+  const tok = (name, xy, off, label) => {
     if (!xy) return;
     const el = document.createElement("img");
     el.className = "tracktok";
     el.src = `/assets/markers/${name}.svg`;
+    el.alt = label || "";
+    el.title = label || "";
+    el.setAttribute("aria-label", label || "");
     el.style.left = ((xy[0] + (off || 0)) / BOARD_W * 100) + "%";
     el.style.top = ((xy[1] + (off || 0)) / BOARD_H * 100) + "%";
     host.append(el);
   };
-  tok("defcon", DEFCON_AT[clamp(state.defcon, 1, 5)]);
-  tok("vp", VP_AT[clamp(state.vp, -20, 20) + 20]);
-  tok("turn", TURN_AT[clamp(state.turn, 1, 10)]);
+  tok("defcon", DEFCON_AT[clamp(state.defcon, 1, 5)], 0, `DEFCON ${state.defcon}`);
+  tok("vp", VP_AT[clamp(state.vp, -20, 20) + 20], 0, `VP ${state.vp}`);
+  tok("turn", TURN_AT[clamp(state.turn, 1, 10)], 0, `Turn ${state.turn}`);
   const mil = state.military_ops || {};
-  tok("milops_us", MILOPS_AT[clamp(mil.US, 0, 5)], 10);
-  tok("milops_ussr", MILOPS_AT[clamp(mil.USSR, 0, 5)], -10);
+  tok("milops_us", MILOPS_AT[clamp(mil.US, 0, 5)], 10, `US military ops ${mil.US}`);
+  tok("milops_ussr", MILOPS_AT[clamp(mil.USSR, 0, 5)], -10, `USSR military ops ${mil.USSR}`);
   const sp = state.space_race || {};
-  tok("space_us", SPACE_AT[clamp(sp.US, 0, 8)], 10);
-  tok("space_ussr", SPACE_AT[clamp(sp.USSR, 0, 8)], -10);
+  tok("space_us", SPACE_AT[clamp(sp.US, 0, 8)], 10, `US space race box ${sp.US}`);
+  tok("space_ussr", SPACE_AT[clamp(sp.USSR, 0, 8)], -10, `USSR space race box ${sp.USSR}`);
   const hl = state.phase === "headline" || state.phase === "setup" || state.phase === "predeal";
-  if (hl) tok("ar_headline", ROUND_AT[0]);
+  if (hl) tok("ar_headline", ROUND_AT[0], 0, "Headline phase");
   else tok((state.phasing || state.human_side) === "US" ? "ar_us" : "ar_ussr",
-           ROUND_AT[clamp(state.action_round, 1, 8)]);
+           ROUND_AT[clamp(state.action_round, 1, 8)], 0,
+           `${(state.phasing || state.human_side)} action round`);
 }
 
 /* Which side (if any) controls the country: influence margin >= stability —
@@ -767,7 +853,7 @@ function pip(side, n, controlled) {
 function kv(label, value) {
   const row = document.createElement("div");
   row.className = "kv";
-  row.innerHTML = `<span>${label}</span><b>${value}</b>`;
+  row.innerHTML = `<span>${esc(label)}</span><b>${esc(value)}</b>`;
   return row;
 }
 
@@ -791,13 +877,17 @@ function renderPanel() {
 
   const piles = $("#piles");
   piles.textContent = "";
-  if (state.discard_pile.length) {
+  const pileRow = (label, cards) => {
+    if (!cards.length) return;
     const row = document.createElement("div");
     row.className = "kv";
-    const names = state.discard_pile.slice(-4).map(cardName).join(", ");
-    row.innerHTML = `<span>Discard (${state.discard_pile.length})</span><b>${names}</b>`;
+    const names = cards.slice(-4).map(cardName).join(", ");
+    row.title = cards.map(cardName).join(", ");  // hover for the whole pile
+    row.innerHTML = `<span>${esc(label)} (${cards.length})</span><b>${esc(names)}</b>`;
     piles.append(row);
-  }
+  };
+  pileRow("Discard", state.discard_pile);
+  pileRow("Removed", state.removed_cards || []);
 
   const feed = $("#feed");
   feed.textContent = "";
@@ -811,7 +901,7 @@ function renderPanel() {
     wait.textContent = "Thinking…";
     feed.append(wait);
   }
-  const rows = state.history.slice().reverse().slice(0, 25);
+  const rows = state.history.slice().reverse().slice(0, 60);  // server sends 60
   rows.forEach((e, i) => {
     const older = rows[i + 1];  // reversed: next item is earlier in time
     const row = document.createElement("div");
@@ -919,7 +1009,15 @@ function cardEl(cid, actionIndex) {
   if (m.event_summary) el.title = m.event_summary;
   el.addEventListener("mouseenter", () => showPreview(cid, el));
   el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
-  if (actionIndex !== null) el.addEventListener("click", () => act(actionIndex));
+  if (actionIndex !== null) {
+    el.tabIndex = 0;
+    el.setAttribute("role", "button");
+    el.setAttribute("aria-label", `Play ${cardName(cid)}`);
+    el.addEventListener("click", () => act(actionIndex));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(actionIndex); }
+    });
+  }
   return el;
 }
 
@@ -996,7 +1094,7 @@ function ctxLine(d) {
     if ((k === "card" || k === "event") && (c[k] === "none" || c[k] === "HIDDEN_CARD")) continue;
     const v = val(k, c[k]);
     if (v === null) continue;
-    parts.push(`<b>${k === "event" ? "Event" : pretty(k)}</b> ${v}`);
+    parts.push(`<b>${esc(k === "event" ? "Event" : pretty(k))}</b> ${esc(v)}`);
   }
   return parts.join(" · ");
 }
@@ -1089,7 +1187,8 @@ function renderDecision() {
   }
   for (const o of d.options) {
     const b = document.createElement("button");
-    b.innerHTML = `<b>${optionLabel(o)}</b>`;
+    b.innerHTML = `<b>${esc(optionLabel(o))}</b>`;
+    b.disabled = busy;  // a stale option while an action is in flight
     b.addEventListener("click", () => act(o.index));
     main.append(b);
   }
@@ -1126,10 +1225,10 @@ function fillSettings() {
     `<p>Seed ${state ? state.seed : "—"}</p>` +
     `<label><input type="checkbox" id="set-sound"${localStorage.getItem("struggler.sound") !== "0" ? " checked" : ""}> Sound</label>` +
     `<label><input type="checkbox" id="set-ccw"${localStorage.getItem("struggler.ccw") !== "0" ? " checked" : ""}> Chinese Civil War (next game)</label>` +
-    `<p>Play as</p>` +
+    `<p>Play as <em>(next game)</em></p>` +
     `<label><input type="radio" name="set-side" value="US"${play !== "USSR" ? " checked" : ""}> US</label>` +
     `<label><input type="radio" name="set-side" value="USSR"${play === "USSR" ? " checked" : ""}> USSR</label>` +
-    `<label>US extra setup +<b id="set-extra-n">${extra}</b>` +
+    `<label>US extra setup <em>(next game)</em> +<b id="set-extra-n">${extra}</b>` +
     `<input type="range" id="set-extra" min="0" max="6" value="${extra}"></label>` +
     `<div>` +
     (state && !state.watch ? `<button type="button" id="set-forfeit">Forfeit</button>` : "") +
@@ -1171,6 +1270,7 @@ async function postGame(path) {
     if (data.error && !data.influence) throw new Error(data.error);
     if (data.forfeit && state) bumpRecord(state.human_side, false);
     seenTotal = -1;
+    pendingRealignActor = null;
     prevInf = null;
     state = data;
     $("#settings").hidden = true;
@@ -1197,8 +1297,16 @@ async function catchUp() {
   }
 }
 
-function newGame() { return postGame("/new"); }
-function forfeitGame() { return postGame("/forfeit"); }
+function newGame() {
+  // No prompt once the game is already over (the winner screen's own link).
+  if (state && !state.is_terminal && !confirm("Start a new game? The current game is abandoned.")) return;
+  return postGame("/new");
+}
+
+function forfeitGame() {
+  if (busy || !confirm("Forfeit this game? Your opponent wins.")) return;
+  return postGame("/forfeit");
+}
 
 async function goBack() {
   if (busy) return;  // a second click must not fire a second /back (409)
@@ -1209,6 +1317,7 @@ async function goBack() {
     if (!res.ok) throw new Error("/back " + res.status);
     state = await res.json();
     seenTotal = -1;
+    pendingRealignActor = null;
     prevInf = null;
   } catch (err) {
     console.error(err);
@@ -1223,6 +1332,7 @@ function renderWinner() {
   const overlay = $("#winner");
   if (!state.is_terminal) {
     overlay.hidden = true;
+    winnerFocused = false;
     return;
   }
   // Record once per game, keyed by the (monotonic) seed: a browser reload of
@@ -1236,9 +1346,13 @@ function renderWinner() {
   }
   overlay.hidden = false;
   const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
-  overlay.innerHTML = `<div class="cardbig">${name} wins<br><small>${state.game_over_reason || ""}
+  overlay.innerHTML = `<div class="cardbig">${esc(name)} wins<br><small>${esc(state.game_over_reason || "")}
     <br><a href="#" id="again">new game</a></small></div>`;
   $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
+  if (!winnerFocused) {  // move focus into the dialog once, not every render
+    winnerFocused = true;
+    $("#again").focus();
+  }
 }
 
 function toggleSettings() {

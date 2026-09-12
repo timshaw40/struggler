@@ -617,3 +617,31 @@ main {
   font-size: 20px;
   text-align: center;
 }
+
+/* Board loading placeholder (the board art is ~13 MB). */
+#boardload {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b94a3;
+  font-size: 15px;
+  background: #12161d;
+}
+#boardload[hidden] { display: none; }
+
+/* No map picks while an action is in flight. */
+#markers.busy .marker { pointer-events: none; cursor: default; }
+
+/* Visible keyboard focus on the interactive elements that are divs. */
+.marker.actionable:focus-visible,
+.card.playable:focus-visible,
+#viewbar button:focus-visible,
+#decision button:focus-visible,
+#cog:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+#decision button:disabled { opacity: 0.5; cursor: default; }
