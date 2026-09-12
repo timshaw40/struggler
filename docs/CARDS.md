@@ -158,10 +158,11 @@ the public discard back to hand.
 sanctioned by the card, so surfacing the involved cards as decision options
 is correct, not a leak. Aldrich Ames Remix (USSR discards a chosen US
 card), Grain Sales to Soviets (one random USSR card revealed via a CHANCE
-step; the US plays it in full — Event or Ops, via
-`Engine.push_full_card_play` — or returns it for 2 Ops of its own, and an
-empty USSR hand grants the US 2 Ops directly), Ask Not… (discard any own
-cards and redraw as many, via `draw_cards_to_hand`), The Cambridge Five
+step; the US plays it for its Ops via `Engine.push_full_card_play` — a USSR
+card is an opponent card, so its Event is never offered — or returns it for
+2 Ops of its own, and an empty USSR hand grants the US 2 Ops directly),
+Ask Not… (discard any own cards and redraw as many, via
+`draw_cards_to_hand`), The Cambridge Five
 (place in a region whose scoring card the US holds; blocked during Late
 War).
 

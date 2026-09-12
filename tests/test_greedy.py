@@ -57,6 +57,29 @@ def test_greedy_avoids_coup_as_an_ops_type_at_defcon_2():
     assert action.payload["type"] != "coup"
 
 
+def test_greedy_scores_southeast_asia_scoring():
+    from struggler.bots.greedy import _scoring_card_favorability
+
+    board = Board()
+    board.influence["Thailand"] = {"US": board.countries["Thailand"].stability, "USSR": 0}
+    board.influence["Vietnam"] = {"US": 0, "USSR": board.countries["Vietnam"].stability}
+
+    us = _scoring_card_favorability(board, Side.US, "Southeast_Asia_Scoring")
+    ussr = _scoring_card_favorability(board, Side.USSR, "Southeast_Asia_Scoring")
+    assert us > 0 and ussr < 0 and us == -ussr  # Thailand 2 - Vietnam 1 = +1 net US
+
+
+def test_greedy_avoids_playing_an_opponent_event_for_ops():
+    # Warsaw Pact Formed (USSR, 3 Ops) vs Duck and Cover (US, 3 Ops): equal
+    # Ops, but the USSR card would fire its Event for the opponent on an Ops
+    # play, so Greedy picks the US card.
+    engine = Engine(seed=1)
+    engine.hands["US"] = ["Warsaw_Pact_Formed", "Duck_and_Cover"]
+    engine._push_action_round_play(Side.US)
+    action = GreedyPlayer().choose_action(engine.observe(Side.US), [])
+    assert action.payload["card"] == "Duck_and_Cover"
+
+
 def test_greedy_avoids_coup_under_cuban_missile_crisis():
     """Cuban Missile Crisis: any Coup by the flagged side this turn loses the
     game outright, so Greedy must refuse "coup" at OPS_TYPE even with a good

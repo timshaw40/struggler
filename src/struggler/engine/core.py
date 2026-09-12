@@ -1038,12 +1038,12 @@ class Engine:
         self.push_full_card_play(side, cid)
 
     def push_full_card_play(self, side: Side, cid: str) -> None:
-        """Offer `side` the ordinary Event/Ops/Space-Race choice for `cid`,
-        exactly as if it were their action-round card play. Used both for a
-        normal action round and for Grain Sales to Soviets' "play the card"
-        outcome (a card taken from the opponent's hand is played in full,
-        not just for a fixed Ops amount) -- the card need not already be in
-        `side`'s hand; `_file_card` tolerates that."""
+        """Offer `side` the modes `_play_modes` allows for `cid`, exactly as
+        if it were their action-round card play. Used both for a normal
+        action round and for Grain Sales to Soviets' "play the card" outcome
+        (a card taken from the opponent's hand is used for its Ops like any
+        opponent card -- its Event is never offered) -- the card need not
+        already be in `side`'s hand; `_file_card` tolerates that."""
         modes = self._play_modes(side, cid)
         options = tuple(Action(DecisionKind.PLAY_MODE, {"mode": m}) for m in modes)
         self._push(side, DecisionKind.PLAY_MODE, options, {"card": cid})
@@ -1063,13 +1063,20 @@ class Engine:
         # likewise never offered "event": you cannot voluntarily fire their
         # event (it fires on its own when you play the card for Ops, or not at
         # all via Space Race / UN Intervention) -- same rule Missile Envy
-        # already applies to taken cards. With events off nothing can fire, so
-        # the no-op-discard enumeration stays uniform. Headline picks are
-        # unaffected: headlining is always the event.
-        if cid not in (RULES["china_card_id"], RULES["un_intervention_id"]) and not (
-            self.events_enabled and self._is_opponent_event(side, card)
-        ):
-            modes.append("event")
+        # already applies to taken cards. An own/neutral implemented event
+        # whose precondition is unmet is unplayable as an Event (rule 7.5: it
+        # may still be used for Ops), so "event" is hidden there too. With
+        # events off nothing can fire, so the no-op-discard enumeration stays
+        # uniform. Headline picks are unaffected: headlining is always the event.
+        if cid not in (RULES["china_card_id"], RULES["un_intervention_id"]):
+            opponent_event = self.events_enabled and self._is_opponent_event(side, card)
+            unplayable_own_event = (
+                self.events_enabled
+                and self._has_event(cid)
+                and not EVENTS[cid].eligible(self, side)
+            )
+            if not opponent_event and not unplayable_own_event:
+                modes.append("event")
         if self._can_space_race(side, card):
             modes.append("space_race")
         # UN Intervention: if this is an opponent's (implemented, eligible) event

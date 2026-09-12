@@ -17,6 +17,7 @@ import json
 import random
 from pathlib import Path
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -2215,23 +2216,24 @@ def test_quagmire_nullifies_norad():
 # -- event eligibility gates what a card does when played --------------------
 
 
-def test_ineligible_remove_after_event_is_discarded_not_removed():
+def test_ineligible_remove_after_event_is_not_offered_as_an_event():
     # NATO is asterisked (remove-after-event) but unplayable before Marshall
-    # Plan / Warsaw Pact. Its event must not fire, and the card must be
-    # discarded rather than removed from the game.
+    # Plan / Warsaw Pact: rule 7.5 lets it be used for Ops but not as an
+    # Event, so "event" is not offered and is not a legal action.
     engine = _bare()
     engine.hands["US"] = ["NATO"]
     engine.push_full_card_play(Side.US, "NATO")
-    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
-    assert "NATO" in engine.discard_pile
-    assert "NATO" not in engine.removed_cards
-    assert "nato" not in engine.game_effects
+    modes = {a.payload["mode"] for a in engine.pending_decision.options}
+    assert "event" not in modes
+    with pytest.raises(ValueError):
+        engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
 
-    # Once eligible it fires and *is* removed.
+    # Once eligible it is offered, fires, and *is* removed.
     eligible = _bare()
     eligible.hands["US"] = ["NATO"]
     eligible.game_effects["marshall_or_warsaw"] = True
     eligible.push_full_card_play(Side.US, "NATO")
+    assert "event" in {a.payload["mode"] for a in eligible.pending_decision.options}
     eligible.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
     assert "NATO" in eligible.removed_cards
     assert eligible.game_effects.get("nato") is True

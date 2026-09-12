@@ -110,6 +110,9 @@ class GreedyWeights:
     scoring_card_weight: float = 2.0  # per net VP the region would score, signed favorably/unfavorably
     hold_high_ops_weight: float = 0.5  # prefer headlining a low-Ops card, keeping high-Ops ones for Operations
     opponent_headline_penalty: float = 50.0  # never headline an opponent-side event
+    # Playing an opponent-side card for Ops hands the opponent its Event (5.2);
+    # prefer own/neutral cards at equal Ops.
+    opponent_event_ops_penalty: float = 6.0
     action_round_ops_weight: float = 1.0
     # Turn-1 USSR headline bonus for the five canonical openings.
     t1_headline_bonus: float = 40.0
@@ -283,11 +286,31 @@ def _space_race_expected_vp(observation: Observation, side: Side) -> float:
     return probability * vp
 
 
+def _se_asia_scoring_net(board: Board) -> float:
+    """Southeast Asia scoring, net US-positive: +2 VP for control of Thailand,
+    +1 VP per other controlled SE Asia country (mirrors the engine's
+    `_score_southeast_asia`, which isn't reachable from a bare Board)."""
+    net = 0.0
+    for cid, info in board.countries.items():
+        if Subregion.SOUTHEAST_ASIA not in info.subregions:
+            continue
+        value = 2.0 if cid == "Thailand" else 1.0
+        ctrl = board.control(cid)
+        if ctrl is Side.US:
+            net += value
+        elif ctrl is Side.USSR:
+            net -= value
+    return net
+
+
 def _scoring_card_favorability(board: Board, side: Side, cid: str) -> float:
-    region = SCORING_CARD_REGION.get(cid)
-    if region is None:
-        return 0.0
-    net = board.score_region(region)  # positive favors US
+    if cid == "Southeast_Asia_Scoring":
+        net = _se_asia_scoring_net(board)
+    else:
+        region = SCORING_CARD_REGION.get(cid)
+        if region is None:
+            return 0.0
+        net = board.score_region(region)  # positive favors US
     return net if side is Side.US else -net
 
 
@@ -478,7 +501,10 @@ def _score_action_round_play(
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
     ops = _effective_ops_estimate(card, observation, side)
-    return weights.action_round_ops_weight * ops
+    score = weights.action_round_ops_weight * ops
+    if card.side.value == side.opponent.value:
+        score -= weights.opponent_event_ops_penalty  # its Event fires for them
+    return score
 
 
 def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
@@ -495,7 +521,13 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
             + weights.space_race_vp_weight * expected_vp
             - weights.space_race_ops_penalty * ops
         )
-    if mode in ("ops", "un_intervention"):
+    if mode == "ops":
+        score = weights.ops_mode_per_point * ops
+        if card.side.value == side.opponent.value:
+            score -= weights.opponent_event_ops_penalty  # fires their Event
+        return score
+    if mode == "un_intervention":
+        # UN Intervention cancels the opponent card's Event, so no penalty.
         return weights.ops_mode_per_point * ops
     # mode == "event": with the event layer off (or for a card with no
     # implemented event yet) this is a no-op discard -- always worse than
