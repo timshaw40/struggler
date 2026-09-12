@@ -51,6 +51,23 @@ def test_watch_mode_steps_one_move_per_poll() -> None:
         server.shutdown()
 
 
+def test_state_history_len_is_monotonic_while_history_is_capped() -> None:
+    # The client drains animations using `history_len` (a monotonic total);
+    # `history` is only a trailing window, so its length must stop growing at
+    # 60 while history_len keeps climbing. Otherwise all FX die at 60 events.
+    session = serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
+    for _ in range(90):
+        if session.engine.is_terminal:
+            break
+        session.step_once()
+    total = len(session.history.history)
+    payload = session.state()
+    assert payload["history_len"] == total
+    assert len(payload["history"]) == min(60, total)
+    if total > 60:
+        assert len(payload["history"]) == 60
+
+
 def test_advance_parks_on_human_decision() -> None:
     session = make_session()
     session.advance()

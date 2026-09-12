@@ -77,7 +77,29 @@ async function fetchJson(url) {
   return res.json();
 }
 
+/* Surface a failure to the player instead of only the console. Auto-hides;
+ * click to dismiss. */
+function showError(msg) {
+  const t = $("#toast");
+  if (!t) { console.error(msg); return; }
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(showError._t);
+  showError._t = setTimeout(() => { t.hidden = true; }, 8000);
+}
+
 async function boot() {
+  try {
+    await bootInner();
+  } catch (err) {
+    console.error(err);
+    showError("Failed to load the game: " + err.message);
+    busy = false;
+    render();
+  }
+}
+
+async function bootInner() {
   const [cards, manifest, countries] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
@@ -207,7 +229,12 @@ function enableDragPan() {
 let dragMoved = 0;
 
 async function refresh() {
-  state = await fetchJson("/state");
+  try {
+    state = await fetchJson("/state");
+  } catch (err) {
+    showError("Lost connection to the game server.");
+    throw err;
+  }
   render();
 }
 
@@ -217,7 +244,7 @@ async function refresh() {
 function tick() {
   if (inFlight) return;
   inFlight = true;
-  refresh().finally(() => {
+  refresh().catch(() => {}).finally(() => {
     inFlight = false;
     if (state && state.watch && playing && !state.is_terminal) setTimeout(tick, 400);
   });
@@ -236,6 +263,7 @@ async function act(index) {
     state = data.state || data;  // error replies carry the current state
   } catch (err) {
     console.error(err);
+    showError("That move could not be sent: " + err.message);
   } finally {
     busy = false;
     render();
@@ -310,7 +338,7 @@ const ROLL_KIND = {
   quagmire_roll: 1, realignment_actor_roll: 1, realignment_opponent_roll: 1,
 };
 const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
-let seenHistory = -1;
+let seenTotal = -1;
 let diceChain = Promise.resolve();
 let fxGate = Promise.resolve();  // opponent card reveals; pips and dice wait on it
 
@@ -408,9 +436,14 @@ function showCardPlay(cid, actor) {
 
 function drainRolls() {
   const hist = state.history || [];
-  if (seenHistory < 0) { seenHistory = hist.length; return; }
-  const fresh = hist.slice(seenHistory);
-  seenHistory = hist.length;
+  // `hist` is a truncated window of the server's history, so use the
+  // monotonic `history_len` as the cursor, not hist.length.
+  const total = state.history_len ?? hist.length;
+  if (seenTotal < 0) { seenTotal = total; return; }
+  const freshCount = Math.max(0, Math.min(total - seenTotal, hist.length));
+  seenTotal = total;
+  const fresh = hist.slice(hist.length - freshCount);
+  const start = hist.length - fresh.length;
   const headlines = fresh.filter((e) => e.kind === "headline_play" && e.payload.card);
   if (headlines.length >= 2) {
     const bySide = {};
@@ -430,17 +463,17 @@ function drainRolls() {
     const e = fresh[i];
     if (!ROLL_KIND[e.kind]) continue;
     if (e.kind === "realignment_actor_roll" && fresh[i + 1] && fresh[i + 1].kind === "realignment_opponent_roll") {
-      items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev: hist[seenHistory - fresh.length + i - 1] });
+      items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev: hist[start + i - 1] });
       i++;
     } else {
-      items.push({ kind: e.kind, e, prev: hist[seenHistory - fresh.length + i - 1] });
+      items.push({ kind: e.kind, e, prev: hist[start + i - 1] });
     }
   }
   for (const item of items) diceChain = diceChain.then(() => showDice(item));
   for (let i = 0; i < fresh.length; i++) {
     const e = fresh[i];
     if (e.payload.card && /_Scoring$/.test(e.payload.card)) {
-      const prev = hist[seenHistory - fresh.length + i - 1];
+      const prev = hist[start + i - 1];
       diceChain = diceChain.then(() => showScore(e, prev));
     }
   }
@@ -671,7 +704,7 @@ function renderBoard() {
     const ctrl = controlOf(cid, inf);
     el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
-    el.addEventListener("mouseleave", () => { countryTip.hidden = true; });
+    el.addEventListener("mouseleave", () => { if (countryTip) countryTip.hidden = true; });
     if (target !== null) {
       el.addEventListener("click", () => {
         if (dragMoved > 6) return;  // that was a map drag, not a click
@@ -1062,8 +1095,6 @@ function renderDecision() {
   }
 }
 
-let recordedEnd = false;
-
 function recordOf(side) {
   try {
     const r = JSON.parse(localStorage.getItem("struggler.record") || "{}");
@@ -1122,6 +1153,7 @@ function fillSettings() {
 }
 
 async function postGame(path) {
+  if (busy) return;  // a second click must not forfeit/restart twice
   busy = true;
   render();
   try {
@@ -1138,12 +1170,14 @@ async function postGame(path) {
     const data = await res.json();
     if (data.error && !data.influence) throw new Error(data.error);
     if (data.forfeit && state) bumpRecord(state.human_side, false);
-    seenHistory = -1;
+    seenTotal = -1;
     prevInf = null;
-    recordedEnd = false;
     state = data;
     $("#settings").hidden = true;
     await catchUp();
+  } catch (err) {
+    console.error(err);
+    showError("Could not start the game: " + err.message);
   } finally {
     busy = false;
     render();
@@ -1153,7 +1187,7 @@ async function postGame(path) {
 async function catchUp() {
   let prev = -1, stall = 0;
   while (state && !state.is_terminal && !state.decision) {
-    const n = (state.history || []).length;
+    const n = state.history_len ?? (state.history || []).length;
     if (n === prev) {
       if (++stall > 3) break;
     } else stall = 0;
@@ -1167,15 +1201,18 @@ function newGame() { return postGame("/new"); }
 function forfeitGame() { return postGame("/forfeit"); }
 
 async function goBack() {
+  if (busy) return;  // a second click must not fire a second /back (409)
   busy = true;
   render();
   try {
     const res = await fetch("/back", { method: "POST" });
     if (!res.ok) throw new Error("/back " + res.status);
     state = await res.json();
-    seenHistory = -1;
+    seenTotal = -1;
     prevInf = null;
-    recordedEnd = false;
+  } catch (err) {
+    console.error(err);
+    showError("Could not undo that move.");
   } finally {
     busy = false;
     render();
@@ -1185,13 +1222,17 @@ async function goBack() {
 function renderWinner() {
   const overlay = $("#winner");
   if (!state.is_terminal) {
-    recordedEnd = false;
     overlay.hidden = true;
     return;
   }
-  if (!recordedEnd && state.winner && !state.watch) {
-    bumpRecord(state.human_side, state.winner === state.human_side);
-    recordedEnd = true;
+  // Record once per game, keyed by the (monotonic) seed: a browser reload of
+  // the final screen must not pad the record with the same result again.
+  if (state.winner && !state.watch) {
+    const key = `struggler.recorded:${state.seed}`;
+    if (!localStorage.getItem(key)) {
+      bumpRecord(state.human_side, state.winner === state.human_side);
+      localStorage.setItem(key, "1");
+    }
   }
   overlay.hidden = false;
   const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";

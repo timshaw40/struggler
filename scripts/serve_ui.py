@@ -252,6 +252,11 @@ class Session:
             "is_terminal": engine.is_terminal,
             "winner": engine.winner.value if engine.winner is not None else None,
             "game_over_reason": engine._game_over_reason,
+            # `history` is truncated to a window, so its length is not a
+            # progress signal once the window fills. `history_len` is the
+            # monotonic total, which the client uses to know how many new
+            # events a poll carried (otherwise all animation stops at 60).
+            "history_len": len(self.history.history),
             "history": [self._event_view(e) for e in self.history.history[-60:]],
             # Only the human's own decisions reach the browser; bot/CHANCE
             # decisions are resolved server-side before state is sent. In

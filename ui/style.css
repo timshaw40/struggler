@@ -551,6 +551,27 @@ main {
 
 #winner:not([hidden]) { display: flex; }
 
+/* Transient error banner: connection/fetch failures must be visible, not
+ * just a console line. Click to dismiss; auto-hides. */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: 80vw;
+  padding: 10px 16px;
+  background: #7f1d1d;
+  color: #fff;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 40;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+#toast[hidden] { display: none; }
+
 /* Big read-a-card preview: floats above the hovered card (positioned by
  * JS from the card's rect) and is pointer-transparent, so sweeping the
  * hand keeps hit-testing the 92px thumbs — a CSS-scaled hover image would

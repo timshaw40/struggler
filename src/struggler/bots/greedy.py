@@ -204,6 +204,13 @@ def _coup_risks_defcon(observation: Observation, side: Side, info: CountryInfo) 
     return not (side is Side.US and bool(observation.turn_effects.get("nuclear_subs")))
 
 
+def _coup_is_suicide(observation: Observation, side: Side) -> bool:
+    """Cuban Missile Crisis: any Coup by the flagged side this turn loses the
+    game outright, so no target is ever safe (unlike the DEFCON risk above,
+    which only some targets carry)."""
+    return observation.turn_effects.get("cuban_missile_crisis") == side.value
+
+
 def _expected_coup_gain(
     weights: GreedyWeights,
     board: Board,
@@ -319,6 +326,8 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
     if bonus and _in_bonus_region(info, bonus):
         ops += 1
 
+    if _coup_is_suicide(observation, side):
+        return -weights.defcon_self_kill_penalty
     if observation.defcon <= 2 and _coup_risks_defcon(observation, side, info):
         return -weights.defcon_self_kill_penalty
 
@@ -383,6 +392,8 @@ def _best_coup_value(
     one of them would be a DEFCON self-kill. Region-lock effects beyond
     `RULES["coup_min_defcon"]` (NATO, The Reformer, ...) are not replicated
     here -- out of scope for v1 (core board decisions); see the module docstring."""
+    if _coup_is_suicide(observation, side):
+        return None  # every target loses the game under Cuban Missile Crisis
     opponent = side.opponent
     best = None
     for cid, info in board.countries.items():

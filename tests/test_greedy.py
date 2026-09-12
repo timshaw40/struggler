@@ -57,6 +57,23 @@ def test_greedy_avoids_coup_as_an_ops_type_at_defcon_2():
     assert action.payload["type"] != "coup"
 
 
+def test_greedy_avoids_coup_under_cuban_missile_crisis():
+    """Cuban Missile Crisis: any Coup by the flagged side this turn loses the
+    game outright, so Greedy must refuse "coup" at OPS_TYPE even with a good
+    target on offer (its DEFCON guard alone does not know about CMC)."""
+    engine = Engine(seed=1)
+    engine.board.influence["Mexico"]["USSR"] = 3  # a juicy, DEFCON-safe target
+    engine.turn_effects["cuban_missile_crisis"] = "US"
+
+    engine._push_ops_type(Side.US, ops=3)
+    observation = engine.observe(Side.US)
+    assert observation.pending_decision.kind is DecisionKind.OPS_TYPE
+    assert "coup" in {a.payload["type"] for a in observation.pending_decision.options}
+
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["type"] != "coup"
+
+
 def test_greedy_falls_back_to_first_option_for_unmapped_decision_kinds():
     engine = Engine.new_game(seed=1)
     observation = engine.observe(engine.pending_decision.actor)

@@ -257,13 +257,15 @@ class Board:
         def value_for(side: Side) -> int:
             tier = self.region_tier(side, region)
             if tier is ScoringTier.CONTROL:
-                if control_vp is None:
-                    raise RuntimeError(
-                        f"{region} reached CONTROL tier for {side}, but has no scoring "
-                        "value defined (Europe's full control is an immediate win, not "
-                        "a scoring-card outcome — see Board.controls_all_of_europe)."
-                    )
-                base = control_vp
+                # Europe has no printed Control value: controlling all of
+                # Europe is the immediate-win condition, checked separately by
+                # Engine._score_region_net. An intermediate CONTROL tier (all
+                # battlegrounds + more countries, but not every country) is
+                # still a real, reachable state, so approximate as Domination
+                # exactly as the engine's own net scorer does rather than
+                # raising (which crashed the LLM prompt and Greedy on a
+                # Europe Scoring card).
+                base = control_vp if control_vp is not None else domination_vp
             else:
                 base = tier_value[tier]
             return base + self.region_bonus_vp(side, region)
