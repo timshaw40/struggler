@@ -543,3 +543,39 @@ behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`
 over many seeds, both seat assignments) — a regression net for "the
 heuristics still actually help," not a claim of strategic strength.
 
+
+## Autonomous improvement tooling
+
+Three loops for improving a bot without a human in the driver's seat. All are
+pure-stdlib (no numpy/torch) and use `multiprocessing("spawn")`.
+
+- **`arena.py`** — the evaluation backbone. `PlayerSpec` names a
+  reconstructible bot (greedy with a weights dict, mcts, random, first);
+  `run_matchup`/`round_robin` play each seed twice with the seats swapped so
+  side asymmetry cancels; `head_to_head`, `score`, `matchup_table`, and a
+  simple `elo` read the results. `scripts/run_arena.py` is the CLI.
+  **Evaluate against a ladder, and gate on head-to-head, never on win rate
+  vs one fixed opponent** — that saturates and misleads once a bot passes it.
+- **`scripts/tune_greedy.py`** — CEM over `GreedyWeights`. Sampling is a
+  Gaussian in log-weight space (all tunable weights are positive); fitness is
+  the mean score across a fixed ladder (random, first, incumbent) on
+  side-swapped seeds. `defcon_self_kill_penalty` is a guardrail and is never
+  tuned. The best candidate is re-scored on a *held-out* seed bank against the
+  incumbent and only saved if it wins. This deliberately avoids the earlier
+  champion-vs-challenger self-play tuner's failure mode (a single opponent).
+- **`bots/value.py` + `scripts/train_value.py`** — a learned, antisymmetric
+  board value (`value(US) + value(USSR) = 1`) over ~19 public-state features,
+  fit by closed-form ridge regression on self-play outcomes. Pass it to
+  `MCTSPlayer(value=...)`; it replaces the greedy rollout's terminal estimate,
+  so `rollout_depth` can drop to 0 — measured ~70x faster per decision at the
+  same sim count in one position.
+
+Runtime knobs (env, read by `build_player`): `STRUGGLER_GREEDY_WEIGHTS` (a
+weights JSON) and `STRUGGLER_MCTS_VALUE` (a value JSON) let the live game use
+a tuned artifact without code changes. Artifacts live under `data/`
+(gitignored).
+
+The intended sequence: build the arena first, tune the linear greedy with CEM,
+learn the value and cheapen MCTS, then move to PPO self-play with league
+anchors and H2H Elo gates (tier 5). Behavior cloning from the small expert
+corpus is only an opening prior — it plateaus near the teacher.
