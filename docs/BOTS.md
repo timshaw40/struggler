@@ -614,19 +614,28 @@ The loop uses one **persistent actor pool** (`bots/rl/actors.py`) — created
 once, with a worker-side checkpoint cache — instead of re-spawning per
 iteration. Opponents during collection are a **league** of past promoted
 checkpoints (probability `--league-fraction`) plus the greedy anchor; the
-learner records only its own side. Promotion is a **head-to-head gate** against
-the incumbent best (paired seeds, side-swapped), logged alongside a small Elo
-round-robin versus greedy/random — never a single win rate.
+learner records only its own side. Promotion is a **significance gate**: a
+paired, side-swapped head-to-head against the incumbent best over
+`--gate-seeds`, promoting only when `wins - losses >= --gate-margin` — never a
+single win rate against one fixed opponent. The gate is logged next to a small
+anchored Elo round-robin versus greedy/random/first.
 
 Per-iteration metrics to watch: `pi` policy loss, `v` value loss, `H` entropy
 (should fall slowly; a collapse toward 0 is strategy collapse), `kl`/`clip`
 update stability, and `ev` explained variance (how well the value predicts
-returns; near 0 means the value is noise). In `logs`/`data`, `ppo_latest.pt`
-is the newest policy, `ppo_best.pt` the promoted one.
+returns; near 0 means the value is noise). A periodic **behavior probe**
+(`profile_game`, RL-vs-greedy) prints draw/`defcon1` counts, average end turn,
+coup count, and Southeast-Asia influence — the degenerate-play smells an Elo
+number hides. `--shaping` turns on potential-based reward shaping from
+`board_value` (policy-preserving; often speeds up the sparse ±1 signal).
+
+Everything is written to `data/metrics.jsonl` (one JSON object per iteration,
+including the eval/gate/behavior blocks), and `data/run.pt` is a resumable
+checkpoint (`--resume data/run.pt`, the shaping flag is restored from it).
+`ppo_latest.pt` is the newest policy, `ppo_best.pt` the promoted one.
 
 Remaining caveats: pure-Python self-play is the throughput ceiling (the fast
 `arena.py` numbers apply only to greedy rollouts, not the net), so a
 meaningful policy is an hours-to-days run, not minutes; the value is only as
-good as the terminal-reward signal until many games accumulate; and optional
-potential-based shaping from `board_value` plus a batched engine are the
-obvious next throughput/quality levers.
+good as the signal until many games accumulate; and a batched engine is the
+main remaining throughput lever.

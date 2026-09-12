@@ -8,14 +8,20 @@ interleaved when computing advantages.
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 
 import torch
 
-from struggler.bots.greedy import GreedyPlayer
+from struggler.bots.greedy import GreedyPlayer, GreedyWeights, board_value
 from struggler.bots.rl.encode import option_vector, state_vector
-from struggler.engine import Engine, Side
+from struggler.engine import DecisionKind, Engine, Side
+from struggler.engine.types import Subregion
+
+_VALUE_WEIGHTS = GreedyWeights()
+_VALUE_SCALE = 20.0
+_SE_ASIA = Subregion.SOUTHEAST_ASIA
 
 
 @dataclass
@@ -25,6 +31,9 @@ class Transition:
     action: int
     logprob: float
     value: float
+    # Heuristic potential of this state for the acting side, for optional
+    # potential-based reward shaping (see ppo.compute_gae).
+    phi: float = 0.0
     advantage: float = 0.0
     ret: float = 0.0
 
@@ -96,8 +105,9 @@ def collect_episode(
             dist = torch.distributions.Categorical(logits=logits)
             idx = int(dist.sample().item())
             logprob = float(dist.log_prob(torch.tensor(idx, device=device)).item())
+            phi = math.tanh(board_value(_VALUE_WEIGHTS, engine.board, decision.actor) / _VALUE_SCALE)
             recorded.setdefault(decision.actor.value, []).append(
-                Transition(state, opts, idx, logprob, value)
+                Transition(state, opts, idx, logprob, value, phi=phi)
             )
             action = options[idx]
         engine.step(action)
@@ -108,3 +118,41 @@ def collect_episode(
         reward = 0.0 if winner is None else (1.0 if side == winner else -1.0)
         episodes.append(Episode(side, transitions, reward))
     return episodes
+
+
+def profile_game(net, seed: int, *, events: bool = True, device: str = "cpu") -> dict:
+    """One RL-vs-greedy game (RL argmax) for behavioral monitoring: catches
+    degenerate play that a rising Elo can hide (DEFCON losses, over-couping,
+    a Southeast-Asia blind spot)."""
+    engine = Engine.new_game(seed=seed, events=events)
+    greedy = GreedyPlayer()
+    rl_side = Side.USSR if seed % 2 else Side.US
+    coups = 0
+    while not engine.is_terminal:
+        decision = engine.pending_decision
+        if decision is None:
+            break
+        if decision.actor is Side.CHANCE:
+            engine.step(decision.options[0])
+            continue
+        obs = engine.observe(decision.actor)
+        if decision.actor is rl_side and len(decision.options) > 1:
+            _, _, logits, _ = _forward(net, obs, decision.options, device)
+            action = decision.options[int(logits.argmax().item())]
+        else:
+            action = greedy.choose_action(obs, ())
+        if decision.kind is DecisionKind.COUP_TARGET:
+            coups += 1
+        engine.step(action)
+
+    se_asia = [c for c, info in engine.board.countries.items() if _SE_ASIA in info.subregions]
+    return {
+        "seed": seed,
+        "rl_side": rl_side.value,
+        "winner": engine.winner.value if engine.winner is not None else None,
+        "reason": engine._game_over_reason,
+        "turn": engine.turn,
+        "coups": coups,
+        "se_us": sum(engine.board.influence[c]["US"] for c in se_asia),
+        "se_ussr": sum(engine.board.influence[c]["USSR"] for c in se_asia),
+    }

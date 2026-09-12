@@ -8,7 +8,7 @@ from struggler.bots.rl.encode import OPTION_DIM, STATE_DIM, option_vector, state
 from struggler.bots.rl.net import ActorCritic, load_policy, save_policy
 from struggler.bots.rl.player import RLPlayer
 from struggler.bots.rl.ppo import compute_gae, ppo_update
-from struggler.bots.rl.selfplay import Episode, Transition, collect_episode
+from struggler.bots.rl.selfplay import Episode, Transition, collect_episode, profile_game
 from struggler.engine import Engine
 
 
@@ -87,6 +87,20 @@ def test_ppo_update_changes_parameters_and_reports_stats(tmp_path):
     stats = ppo_update(net, optimizer, [Episode("US", [t0, t1], 1.0)], device="cpu", epochs=2, minibatch=2)
     assert stats["transitions"] == 2.0
     assert any(not torch.equal(a, b) for a, b in zip(before, net.parameters()))
+
+
+def test_compute_gae_shaping_uses_the_potential():
+    t0 = Transition([0.0] * STATE_DIM, [[0.0] * OPTION_DIM], 0, 0.0, value=0.0, phi=0.5)
+    t1 = Transition([0.0] * STATE_DIM, [[0.0] * OPTION_DIM], 0, 0.0, value=0.0, phi=0.0)
+    flat = compute_gae([Episode("US", [t0, t1], reward=1.0)], shaping=True)
+    assert len(flat) == 2 and all(t.ret == t.advantage + t.value for t in flat)
+
+
+def test_profile_game_reports_behavior_keys():
+    net = ActorCritic(STATE_DIM, OPTION_DIM, hidden=8)
+    stats = profile_game(net, seed=1, device="cpu")
+    assert set(stats) >= {"winner", "reason", "turn", "coups", "se_us", "se_ussr", "rl_side"}
+    assert isinstance(stats["coups"], int)
 
 
 def test_rl_player_returns_a_legal_action(tmp_path):

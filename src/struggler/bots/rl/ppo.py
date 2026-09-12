@@ -16,14 +16,28 @@ from struggler.bots.rl.encode import OPTION_DIM
 from struggler.bots.rl.selfplay import Episode, Transition
 
 
-def compute_gae(episodes: Sequence[Episode], gamma: float = 1.0, lam: float = 0.95) -> list[Transition]:
+def compute_gae(
+    episodes: Sequence[Episode],
+    gamma: float = 1.0,
+    lam: float = 0.95,
+    shaping: bool = False,
+) -> list[Transition]:
+    """GAE over each side's episode. With `shaping=True`, adds potential-based
+    shaping F = gamma*phi(s') - phi(s) (phi is the stored heuristic potential),
+    the one form that provably leaves the optimal policy unchanged. The
+    terminal outcome (±1) is added on the last step."""
     flat: list[Transition] = []
     for ep in episodes:
         n = len(ep.transitions)
         if n == 0:
             continue
         rewards = [0.0] * n
-        rewards[-1] = ep.reward  # terminal-only reward
+        if shaping:
+            phis = [t.phi for t in ep.transitions]
+            for t in range(n):
+                next_phi = phis[t + 1] if t + 1 < n else 0.0
+                rewards[t] = gamma * next_phi - phis[t]
+        rewards[-1] += ep.reward
         values = [t.value for t in ep.transitions]
         adv = [0.0] * n
         running = 0.0
@@ -70,8 +84,9 @@ def ppo_update(
     vf_coef: float = 0.5,
     ent_coef: float = 0.01,
     seed: int = 0,
+    shaping: bool = False,
 ) -> dict[str, float]:
-    flat = compute_gae(episodes)
+    flat = compute_gae(episodes, shaping=shaping)
     if not flat:
         return {"transitions": 0.0, "policy": 0.0, "value": 0.0, "entropy": 0.0,
                 "kl": 0.0, "clip": 0.0, "explained_var": 0.0}
