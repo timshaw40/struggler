@@ -610,10 +610,23 @@ python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
 STRUGGLER_RL_POLICY=data/ppo_best.pt python src/main.py --us rl --ussr greedy
 ```
 
-First-cut caveats: pure-Python self-play is the throughput ceiling (the fast
-`arena.py` numbers apply only to greedy rollouts, not the net), the win rate
-vs greedy is noisy until many games, and promotion should gate on H2H Elo
-(see `arena.py`) rather than the single greedy matchup. Likely next steps:
-bigger batches with a persistent actor pool, potential-based shaping from
-`board_value`, a league of past checkpoints + greedy, and a tournament runner
-for H2H Elo.
+The loop uses one **persistent actor pool** (`bots/rl/actors.py`) — created
+once, with a worker-side checkpoint cache — instead of re-spawning per
+iteration. Opponents during collection are a **league** of past promoted
+checkpoints (probability `--league-fraction`) plus the greedy anchor; the
+learner records only its own side. Promotion is a **head-to-head gate** against
+the incumbent best (paired seeds, side-swapped), logged alongside a small Elo
+round-robin versus greedy/random — never a single win rate.
+
+Per-iteration metrics to watch: `pi` policy loss, `v` value loss, `H` entropy
+(should fall slowly; a collapse toward 0 is strategy collapse), `kl`/`clip`
+update stability, and `ev` explained variance (how well the value predicts
+returns; near 0 means the value is noise). In `logs`/`data`, `ppo_latest.pt`
+is the newest policy, `ppo_best.pt` the promoted one.
+
+Remaining caveats: pure-Python self-play is the throughput ceiling (the fast
+`arena.py` numbers apply only to greedy rollouts, not the net), so a
+meaningful policy is an hours-to-days run, not minutes; the value is only as
+good as the terminal-reward signal until many games accumulate; and optional
+potential-based shaping from `board_value` plus a batched engine are the
+obvious next throughput/quality levers.

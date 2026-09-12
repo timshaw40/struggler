@@ -89,7 +89,8 @@ def play_pair(seed: int, a: PlayerSpec, b: PlayerSpec, events: bool = True) -> l
     ]
 
 
-def _play_pair(args: tuple[int, PlayerSpec, PlayerSpec, bool]) -> list[GameResult]:
+def pair_job(args: tuple[int, PlayerSpec, PlayerSpec, bool]) -> list[GameResult]:
+    """Top-level tuple-taking wrapper so a `Pool.map` can call it."""
     seed, a, b, events = args
     return play_pair(seed, a, b, events)
 
@@ -101,15 +102,19 @@ def run_matchup(
     *,
     workers: int = 1,
     events: bool = True,
+    pool=None,
 ) -> list[GameResult]:
-    """Each seed played twice with sides swapped."""
+    """Each seed played twice with sides swapped. Pass `pool` to reuse a
+    persistent worker pool instead of spawning a fresh one."""
     jobs = [(int(s), a, b, events) for s in seeds]
-    if workers <= 1:
-        results = [_play_pair(j) for j in jobs]
+    if pool is not None:
+        results = pool.map(pair_job, jobs)
+    elif workers <= 1:
+        results = [pair_job(j) for j in jobs]
     else:
         ctx = multiprocessing.get_context("spawn")
-        with ctx.Pool(workers) as pool:
-            results = pool.map(_play_pair, jobs)
+        with ctx.Pool(workers) as owned:
+            results = owned.map(pair_job, jobs)
     return [r for pair in results for r in pair]
 
 
@@ -190,9 +195,12 @@ def round_robin(
     *,
     workers: int = 1,
     events: bool = True,
+    pool=None,
 ) -> list[GameResult]:
     results: list[GameResult] = []
     for i, a in enumerate(specs):
         for b in specs[i + 1 :]:
-            results.extend(run_matchup(a, b, seeds, workers=workers, events=events))
+            results.extend(
+                run_matchup(a, b, seeds, workers=workers, events=events, pool=pool)
+            )
     return results

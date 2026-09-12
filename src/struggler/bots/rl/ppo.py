@@ -73,14 +73,21 @@ def ppo_update(
 ) -> dict[str, float]:
     flat = compute_gae(episodes)
     if not flat:
-        return {"transition": 0.0, "policy": 0.0, "value": 0.0, "entropy": 0.0}
+        return {"transitions": 0.0, "policy": 0.0, "value": 0.0, "entropy": 0.0,
+                "kl": 0.0, "clip": 0.0, "explained_var": 0.0}
     advs = torch.tensor([t.advantage for t in flat], dtype=torch.float32)
     adv_norm = (advs - advs.mean()) / (advs.std() + 1e-8)
     for t, a in zip(flat, adv_norm.tolist()):
         t.advantage = a
 
+    # How much of the return variance the value head explains (pre-update).
+    # Near 0 means the value is noise; near 1 means it predicts outcomes.
+    rets_all = np.array([t.ret for t in flat])
+    vals_all = np.array([t.value for t in flat])
+    explained = 1.0 - np.var(rets_all - vals_all) / (np.var(rets_all) + 1e-8)
+
     rng = random.Random(seed)
-    stats = {"policy": 0.0, "value": 0.0, "entropy": 0.0, "n": 0}
+    stats = {"policy": 0.0, "value": 0.0, "entropy": 0.0, "kl": 0.0, "clip": 0.0, "n": 0}
     for _ in range(epochs):
         order = list(range(len(flat)))
         rng.shuffle(order)
@@ -104,6 +111,9 @@ def ppo_update(
             nn.utils.clip_grad_norm_(net.parameters(), 0.5)
             optimizer.step()
 
+            with torch.no_grad():
+                stats["kl"] += float((old_lp - new_lp).mean().item())
+                stats["clip"] += float(((ratio - 1).abs() > clip).float().mean().item())
             stats["policy"] += float(policy_loss.item())
             stats["value"] += float(value_loss.item())
             stats["entropy"] += float(entropy.item())
@@ -111,4 +121,5 @@ def ppo_update(
     n = max(1, stats.pop("n"))
     stats = {k: v / n for k, v in stats.items()}
     stats["transitions"] = float(len(flat))
+    stats["explained_var"] = float(explained)
     return stats

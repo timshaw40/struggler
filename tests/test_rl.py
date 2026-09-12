@@ -53,6 +53,22 @@ def test_collect_episode_returns_per_side_terminal_reward():
             assert all(len(o) == OPTION_DIM for o in t.options)
 
 
+def test_collect_episode_vs_a_league_opponent_records_only_the_learner():
+    net = ActorCritic(STATE_DIM, OPTION_DIM, hidden=8)
+    episodes = collect_episode(
+        net, seed=3, anchor_fraction=0.0, opponent_net=net, opponent_prob=1.0, device="cpu"
+    )
+    assert len(episodes) == 1  # only the learner side is recorded, not the opponent
+    assert episodes[0].side in ("US", "USSR") and episodes[0].transitions
+
+
+def test_actor_net_cache_returns_the_same_object(tmp_path):
+    from struggler.bots.rl.actors import get_net
+    path = tmp_path / "n.pt"
+    save_policy(path, ActorCritic(STATE_DIM, OPTION_DIM, hidden=8))
+    assert get_net(str(path)) is get_net(str(path))
+
+
 def test_compute_gae_puts_terminal_reward_on_the_last_step():
     t0 = Transition(state=[0.0] * STATE_DIM, options=[[0.0] * OPTION_DIM], action=0, logprob=0.0, value=0.0)
     t1 = Transition(state=[0.0] * STATE_DIM, options=[[0.0] * OPTION_DIM], action=0, logprob=0.0, value=0.0)

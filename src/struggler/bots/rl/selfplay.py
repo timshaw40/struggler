@@ -15,7 +15,6 @@ import torch
 
 from struggler.bots.greedy import GreedyPlayer
 from struggler.bots.rl.encode import option_vector, state_vector
-from struggler.bots.rl.net import load_policy
 from struggler.engine import Engine, Side
 
 
@@ -37,24 +36,40 @@ class Episode:
     reward: float
 
 
+def _forward(net, obs, options, device):
+    state = state_vector(obs)
+    opts = [option_vector(a) for a in options]
+    with torch.no_grad():
+        logits, value = net(
+            torch.tensor([state], dtype=torch.float32, device=device),
+            torch.tensor([opts], dtype=torch.float32, device=device),
+        )
+    return state, opts, logits[0], float(value.item())
+
+
 def collect_episode(
     net,
     seed: int,
     *,
     events: bool = True,
     anchor_fraction: float = 0.0,
+    opponent_net=None,
+    opponent_prob: float = 0.0,
     rng: random.Random | None = None,
     device: str = "cpu",
 ) -> list[Episode]:
+    """One game. The current `net` is the learner; the other seat is, per game,
+    a past-checkpoint `opponent_net` (league), the greedy anchor, or the same
+    net (pure self-play). Only the learner's transitions are recorded."""
     rng = rng or random.Random(seed)
     engine = Engine.new_game(seed=seed, events=events)
     anchor = GreedyPlayer()
-    # Occasionally a seat is played by the heuristic anchor instead of the
-    # policy, which keeps the opponent pool non-stationary and prevents the
-    # policy from collapsing onto its own quirks. Never anchor both seats.
     use_anchor = {Side.US: rng.random() < anchor_fraction, Side.USSR: rng.random() < anchor_fraction}
     if use_anchor[Side.US] and use_anchor[Side.USSR]:
         use_anchor[rng.choice([Side.US, Side.USSR])] = False
+    opp_side: Side | None = None
+    if opponent_net is not None and not any(use_anchor.values()) and rng.random() < opponent_prob:
+        opp_side = rng.choice([Side.US, Side.USSR])
 
     recorded: dict[str, list[Transition]] = {}
     while not engine.is_terminal:
@@ -68,21 +83,21 @@ def collect_episode(
         options = decision.options
         if use_anchor[decision.actor]:
             action = anchor.choose_action(obs, ())
+        elif decision.actor is opp_side:
+            if len(options) == 1:
+                action = options[0]
+            else:
+                _, _, logits, _ = _forward(opponent_net, obs, options, device)
+                action = options[int(logits.argmax().item())]
         elif len(options) == 1:
             action = options[0]
         else:
-            state = state_vector(obs)
-            opts = [option_vector(a) for a in options]
-            with torch.no_grad():
-                logits, value = net(
-                    torch.tensor([state], dtype=torch.float32, device=device),
-                    torch.tensor([opts], dtype=torch.float32, device=device),
-                )
-            dist = torch.distributions.Categorical(logits=logits[0])
+            state, opts, logits, value = _forward(net, obs, options, device)
+            dist = torch.distributions.Categorical(logits=logits)
             idx = int(dist.sample().item())
             logprob = float(dist.log_prob(torch.tensor(idx, device=device)).item())
             recorded.setdefault(decision.actor.value, []).append(
-                Transition(state, opts, idx, logprob, float(value.item()))
+                Transition(state, opts, idx, logprob, value)
             )
             action = options[idx]
         engine.step(action)
@@ -93,13 +108,3 @@ def collect_episode(
         reward = 0.0 if winner is None else (1.0 if side == winner else -1.0)
         episodes.append(Episode(side, transitions, reward))
     return episodes
-
-
-def _collect_job(args: tuple) -> list[Episode]:
-    net_path, seed, anchor_fraction, events = args
-    torch.set_num_threads(1)  # avoid oversubscription across worker processes
-    net = load_policy(net_path, device="cpu")
-    return collect_episode(
-        net, seed, events=events, anchor_fraction=anchor_fraction,
-        rng=random.Random(seed), device="cpu",
-    )
