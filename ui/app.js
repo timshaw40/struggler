@@ -946,6 +946,8 @@ function renderBoard() {
     el.setAttribute("aria-label", `${pretty(cid)} — US ${inf.US} / USSR ${inf.USSR}`);
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
     el.addEventListener("mouseleave", () => { if (countryTip) countryTip.hidden = true; });
+    el.addEventListener("focus", () => showCountryTip(el, cid, inf));  // keyboard users too
+    el.addEventListener("blur", () => { if (countryTip) countryTip.hidden = true; });
     if (target !== null) {
       el.classList.add("actionable");
       el.tabIndex = 0;
@@ -1565,6 +1567,10 @@ function renderWinner() {
     overlay.innerHTML = `<div class="cardbig">${esc(name)} wins<br><small>${esc(state.game_over_reason || "")}
       <br><a href="#" id="again">new game</a></small></div>`;
     $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
+    // One control in the dialog: keep Tab from escaping into the page behind it.
+    overlay.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") { e.preventDefault(); $("#again").focus(); }
+    });
   }
   if (!winnerFocused) {  // move focus into the dialog once, not every render
     winnerFocused = true;
