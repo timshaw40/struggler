@@ -375,8 +375,8 @@ function flyDiff() {
   for (const [cid, v] of Object.entries(inf))
     prevInf[cid] = { US: v.US, USSR: v.USSR };
   if (!jobs.length) return;
-  // Placements animate after any queued card reveal finishes.
-  fxGate.then(() => {
+  // Placements animate after the batch's reveals/rolls (queued behind them).
+  enqueueFx(() => {
     jobs.forEach(([cid, side], i) => setTimeout(() => flyPip(cid, side), i * 120));
   });
 }
@@ -407,15 +407,20 @@ const ROLL_KIND = {
 const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 let seenTotal = -1;
 let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
-let diceChain = Promise.resolve();
-let fxGate = Promise.resolve();  // opponent card reveals; pips and dice wait on it
-let fxBacklog = 0;               // roll/score popups still queued
+/* One ordered FX queue: card reveals, dice and scoring popups all run in the
+ * order their events happened. (Previously reveals and dice were separate
+ * chains, and dice waited on *all* reveals — so a card played later could jump
+ * ahead of an earlier roll.) `fxBacklog` lets a deep opponent batch drop its
+ * own rolls rather than bury the player's. */
+let fxChain = Promise.resolve();
+let fxBacklog = 0;
 
-/* Queue one roll/score popup, tracking depth so a big opponent batch can't
- * bury the player's own rolls behind a long animation backlog. */
-function queueDice(fn) {
+function enqueueFx(fn) {
   fxBacklog += 1;
-  diceChain = diceChain.then(fn).finally(() => { fxBacklog -= 1; });
+  fxChain = fxChain
+    .then(fn)
+    .catch((err) => console.error("FX error", err))  // one bad FX can't wedge the queue
+    .finally(() => { fxBacklog -= 1; });
 }
 
 function clearDiceBox() {
@@ -526,64 +531,58 @@ function drainRolls() {
   seenTotal = total;
   const fresh = hist.slice(hist.length - freshCount);
   const start = hist.length - fresh.length;
+
   const headlines = fresh.filter((e) => e.kind === "headline_play" && e.payload.card);
   if (headlines.length >= 2) {
     const bySide = {};
     for (const e of headlines) bySide[e.actor] = e.payload.card;
-    if (bySide.US && bySide.USSR)
-      fxGate = fxGate.then(() => showHeadlines(bySide.US, bySide.USSR));
+    if (bySide.US && bySide.USSR) enqueueFx(() => showHeadlines(bySide.US, bySide.USSR));
   }
-  for (const e of fresh) {
-    if (e.kind === "action_round_play"
-        && e.payload.card && e.actor !== state.human_side) {
-      fxGate = fxGate.then(() => showCardPlay(e.payload.card, e.actor));
-    }
-  }
-  diceChain = Promise.all([diceChain, fxGate]);
-  const items = [];
+
+  // One pass, in event order, queueing each event's FX onto the shared chain.
+  const enqueueDiceItem = (item) => {
+    // Always show the player's own rolls; drop opponent rolls once the queue is
+    // deep, so the player's action can't sit behind a wall of bot animation.
+    const who = item.kind === "score" ? null : actorOf(item.e || item.actor || item.opp);
+    if (who !== null && who !== state.human_side && fxBacklog >= 3) return;
+    enqueueFx(() => (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item)));
+  };
+
   for (let i = 0; i < fresh.length; i++) {
     const e = fresh[i];
     const prev = hist[start + i - 1];
+
+    if (e.kind === "action_round_play" && e.payload.card && e.actor !== state.human_side) {
+      enqueueFx(() => showCardPlay(e.payload.card, e.actor));
+    }
+
     if (e.kind === "realignment_actor_roll") {
       if (pendingRealignActor) {  // a prior actor roll never got its opponent roll
-        items.push({ kind: "realignment_actor_roll", e: pendingRealignActor.actor, prev: pendingRealignActor.prev });
+        enqueueDiceItem({ kind: "realignment_actor_roll", e: pendingRealignActor.actor, prev: pendingRealignActor.prev });
         pendingRealignActor = null;
       }
       if (fresh[i + 1] && fresh[i + 1].kind === "realignment_opponent_roll") {
-        items.push({ kind: "realignment", actor: e, opp: fresh[i + 1], prev });
+        enqueueDiceItem({ kind: "realignment", actor: e, opp: fresh[i + 1], prev });
         i++;
       } else {
         // Watch mode resolves one step per poll, so the two rolls arrive in
         // separate batches: hold the actor roll for its opponent roll.
         pendingRealignActor = { kind: "realignment", actor: e, prev };
       }
-      continue;
-    }
-    if (e.kind === "realignment_opponent_roll" && pendingRealignActor) {
+    } else if (e.kind === "realignment_opponent_roll" && pendingRealignActor) {
       pendingRealignActor.opp = e;
-      items.push(pendingRealignActor);
+      enqueueDiceItem(pendingRealignActor);
       pendingRealignActor = null;
-      continue;
+    } else if (ROLL_KIND[e.kind]) {
+      enqueueDiceItem({ kind: e.kind, e, prev });
     }
-    if (ROLL_KIND[e.kind]) items.push({ kind: e.kind, e, prev });
-  }
-  for (const item of items) {
-    // Always show the player's own rolls; drop opponent rolls once the queue is
-    // deep, so the player's action can't sit behind a wall of bot animation.
-    const owned = actorOf(item.e || item.actor || item.opp) === state.human_side;
-    if (!owned && fxBacklog >= 3) continue;
-    queueDice(() => showDice(item));
-  }
-  for (let i = 0; i < fresh.length; i++) {
-    const e = fresh[i];
+
     if (e.payload.card && /_Scoring$/.test(e.payload.card)) {
-      const prev = hist[start + i - 1];
-      queueDice(() => showScore(e, prev));
+      enqueueDiceItem({ kind: "score", e, prev });
     }
   }
+
   // Center-of-map caption: one update per fresh event, in cursor order.
-  // Driven by `fresh` (not `items`, which re-emits a buffered realignment
-  // actor roll) so it never double-shows.
   for (let i = 0; i < fresh.length; i++) {
     showAction(fresh[i], hist[start + i - 1]);
   }
