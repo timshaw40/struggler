@@ -44,6 +44,8 @@ let actionBar = null;
 let playing = true;   // watch mode playback
 let winnerFocused = false;
 let inFlight = false; // one poll chain at a time
+let lastRenderSig = null;          // skip redundant full re-renders
+const expandedRows = new Set();    // history rows the user opened, by absolute index
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -68,6 +70,7 @@ const MODE_LABELS = {
   ops: "for operations",
   event: "for the event",
   space_race: "for the space race",
+  un_intervention: "with UN Intervention",
 };
 
 const pretty = (s) => String(s).replace(/_/g, " ");
@@ -100,7 +103,8 @@ function installKeyboard() {
   document.addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    // Let a focused button/control handle its own Enter/Space/arrows.
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
 
     if (e.key === "Escape") {
       const s = $("#settings");
@@ -144,7 +148,12 @@ async function bootInner() {
   const boardImg = $("#board");
   const hideBoardLoad = () => { const l = $("#boardload"); if (l) l.hidden = true; };
   if (boardImg && boardImg.complete) hideBoardLoad();
-  else if (boardImg) boardImg.addEventListener("load", hideBoardLoad);
+  else if (boardImg) {
+    boardImg.addEventListener("load", hideBoardLoad);
+    boardImg.addEventListener("error", hideBoardLoad);  // don't cover the fallback
+  }
+  const toast = $("#toast");
+  if (toast) toast.addEventListener("click", () => { toast.hidden = true; });
   installKeyboard();
 
   const [cards, manifest, countries] = await Promise.all([
@@ -170,10 +179,10 @@ async function bootInner() {
   setView(view);
   busy = true;
   await refresh();
-  await catchUp();
+  if (state.watch) setTimeout(tick, 400);  // paced playback; catchUp is for bot replies
+  else await catchUp();
   busy = false;
   render();
-  if (state.watch) setTimeout(tick, 400);
 }
 
 /* The map renders the current view's slice across the available width. The
@@ -694,7 +703,13 @@ function optionLabel(o) {
   if (p.country) return pretty(p.country);
   if (p.card) return p.card === "none" ? "Pass" : cardName(p.card);
   if (p.mode) return MODE_LABELS[p.mode] || pretty(p.mode);
-  for (const key of ["type", "order", "choice"]) {
+  if ("choice" in p) {
+    // Same friendly mapping the banner/feed use, so buttons and log agree.
+    if (p.choice in CHOICE_WORDS) return CHOICE_WORDS[p.choice];
+    if (META[p.choice]) return cardName(p.choice);
+    return pretty(p.choice);
+  }
+  for (const key of ["type", "order"]) {
     if (key in p) return pretty(p[key]);
   }
   if (o.kind === "event_resume") return "Continue";
@@ -860,18 +875,34 @@ function showAction(e, prev) {
   const text = actionText(e, prev);
   if (!text) return;  // internal step: leave the current caption up
   actionBar.textContent = text;
+  actionBar.title = text;  // full text on hover (the pill may ellipsize)
   actionBar.hidden = false;
   actionBar.classList.remove("bump");
   void actionBar.offsetWidth;  // restart the pop
   actionBar.classList.add("bump");
+  const live = $("#live");
+  if (live) live.textContent = text;  // announced to screen readers
 }
 
 function clearAction() {
-  if (actionBar) { actionBar.hidden = true; actionBar.textContent = ""; }
+  if (actionBar) { actionBar.hidden = true; actionBar.textContent = ""; actionBar.title = ""; }
+  const live = $("#live");
+  if (live) live.textContent = "";
 }
 
 function render() {
   if (!state) return;
+  // Skip redundant full re-renders: a change to any of these implies the DOM
+  // needs rebuilding. This is what keeps the 60-row feed, hand, and markers
+  // from being torn down every poll (and lets expanded rows survive).
+  const d = state.decision;
+  const sig = [
+    state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
+    d ? `${d.kind}:${d.options.length}` : "-",
+  ].join("|");
+  if (sig === lastRenderSig) return;
+  lastRenderSig = sig;
+
   drainRolls();  // first: queue card reveals so pips and dice wait on them
   flyDiff();
   renderBoard();
@@ -991,7 +1022,26 @@ function kv(label, value) {
   return row;
 }
 
+function renderGameStatus() {
+  const el = $("#gamestatus");
+  if (!el || !state) return;
+  const phase = state.phase === "action_rounds" ? `Round ${state.action_round}`
+    : state.phase === "headline" ? "Headline"
+    : state.phase === "setup" ? "Setup"
+    : pretty(state.phase);
+  const vp = state.vp;
+  const vpText = vp === 0 ? "VP even" : vp > 0 ? `VP US +${vp}` : `VP USSR +${-vp}`;
+  const vpCls = vp > 0 ? "us" : vp < 0 ? "ussr" : "";
+  el.innerHTML =
+    esc(`Turn ${state.turn} · ${phase} · `)
+    + `<span class="defcon${state.defcon <= 2 ? " danger" : ""}">DEFCON ${state.defcon}</span>`
+    + esc(" · ")
+    + `<span class="${vpCls}">${esc(vpText)}</span>`;
+}
+
 function renderPanel() {
+  renderGameStatus();
+
   const status = $("#status");
   status.textContent = "";
   status.append(
@@ -1014,11 +1064,16 @@ function renderPanel() {
   const pileRow = (label, cards) => {
     if (!cards.length) return;
     const row = document.createElement("div");
-    row.className = "kv";
+    row.className = "kv pile";
     const names = cards.slice(-4).map(cardName).join(", ");
-    row.title = cards.map(cardName).join(", ");  // hover for the whole pile
+    row.title = "Show the whole pile";
     row.innerHTML = `<span>${esc(label)} (${cards.length})</span><b>${esc(names)}</b>`;
-    piles.append(row);
+    const list = document.createElement("div");
+    list.className = "pilelist";
+    list.hidden = true;
+    list.textContent = cards.map(cardName).join(", ");
+    row.addEventListener("click", () => { list.hidden = !list.hidden; });
+    piles.append(row, list);
   };
   pileRow("Discard", state.discard_pile);
   pileRow("Removed", state.removed_cards || []);
@@ -1027,44 +1082,51 @@ function renderPanel() {
   feed.textContent = "";
   const title = document.createElement("h2");
   title.textContent = "History";
-  title.style.fontSize = "13px";
   feed.append(title);
-  if (busy) {
+  const waiting = busy || (state.watch && playing && !state.is_terminal);
+  if (waiting) {
     const wait = document.createElement("div");
     wait.className = "feedrow wait";
-    wait.textContent = "Thinking…";
+    wait.textContent = state.watch ? "Playing…" : "Thinking…";
     feed.append(wait);
   }
-  const rows = state.history.slice().reverse().slice(0, 60);  // server sends 60
-  rows.forEach((e, i) => {
-    const older = rows[i + 1];  // reversed: next item is earlier in time
+  const hist = state.history || [];
+  const total = state.history_len ?? hist.length;
+  const rows = hist.slice().reverse().slice(0, 60);  // server sends 60
+  rows.forEach((e, j) => {
+    const older = rows[j + 1];  // reversed: next item is earlier in time
+    const who = actorOf(e);
+    const abs = total - 1 - j;  // monotonic id, stable across polls
     const row = document.createElement("div");
     row.className = "feedrow";
-    const side = e.actor === "USSR" ? "ussr" : "us";
     const main = document.createElement("div");
     main.className = "feedmain";
     const label = document.createElement("span");
-    label.textContent = feedSummary(e, older);
+    let text = actionText(e, older) || pretty(e.kind);
+    if (text.startsWith(who + " ")) text = text.slice(who.length + 1);  // actor is badged
+    label.textContent = `${text} · T${e.turn} R${e.action_round}`;
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "feedtoggle";
-    toggle.textContent = "+";
     const actor = document.createElement("b");
-    actor.className = side;
-    actor.textContent = e.actor;
+    actor.className = who === "USSR" ? "ussr" : "us";
+    actor.textContent = who;
     main.append(label, toggle, actor);
     const detail = document.createElement("div");
     detail.className = "feeddetail";
-    detail.hidden = true;
-    detail.textContent = "";
+    const open = expandedRows.has(abs);
+    detail.hidden = !open;
+    toggle.textContent = open ? "−" : "+";
     for (const line of eventDetail(e, older)) {
       const p = document.createElement("div");
       p.textContent = line;
       detail.append(p);
     }
     toggle.addEventListener("click", () => {
-      detail.hidden = !detail.hidden;
-      toggle.textContent = detail.hidden ? "+" : "−";
+      const nowOpen = detail.hidden;
+      detail.hidden = !nowOpen;
+      toggle.textContent = nowOpen ? "−" : "+";
+      if (nowOpen) expandedRows.add(abs); else expandedRows.delete(abs);
     });
     row.append(main, detail);
     feed.append(row);
@@ -1366,7 +1428,8 @@ function fillSettings() {
     `<input type="range" id="set-extra" min="0" max="6" value="${extra}"></label>` +
     `<div>` +
     (state && !state.watch ? `<button type="button" id="set-forfeit">Forfeit</button>` : "") +
-    `<button type="button" id="set-new">New game</button></div>`;
+    `<button type="button" id="set-new">New game</button>` +
+    `<button type="button" id="set-reset" title="Clear the local win/loss record">Reset record</button></div>`;
   $("#set-sound").addEventListener("change", (e) => {
     localStorage.setItem("struggler.sound", e.target.checked ? "1" : "0");
   });
@@ -1383,6 +1446,10 @@ function fillSettings() {
   const f = $("#set-forfeit");
   if (f) f.addEventListener("click", forfeitGame);
   $("#set-new").addEventListener("click", newGame);
+  $("#set-reset").addEventListener("click", () => {
+    localStorage.removeItem("struggler.record");
+    fillSettings();
+  });
 }
 
 async function postGame(path) {
@@ -1406,10 +1473,15 @@ async function postGame(path) {
     seenTotal = -1;
     pendingRealignActor = null;
     prevInf = null;
+    expandedRows.clear();
     clearAction();
     state = data;
     $("#settings").hidden = true;
-    await catchUp();
+    if (state.watch) {
+      if (playing) setTimeout(tick, 400);  // resume paced watch playback
+    } else {
+      await catchUp();
+    }
   } catch (err) {
     console.error(err);
     showError("Could not start the game: " + err.message);
@@ -1454,6 +1526,7 @@ async function goBack() {
     seenTotal = -1;
     pendingRealignActor = null;
     prevInf = null;
+    expandedRows.clear();
     clearAction();
   } catch (err) {
     console.error(err);
@@ -1468,6 +1541,7 @@ function renderWinner() {
   const overlay = $("#winner");
   if (!state.is_terminal) {
     overlay.hidden = true;
+    overlay.dataset.forSeed = "";
     winnerFocused = false;
     return;
   }
@@ -1482,10 +1556,16 @@ function renderWinner() {
     }
   }
   overlay.hidden = false;
-  const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
-  overlay.innerHTML = `<div class="cardbig">${esc(name)} wins<br><small>${esc(state.game_over_reason || "")}
-    <br><a href="#" id="again">new game</a></small></div>`;
-  $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
+  // Build the dialog once per game; rebuilding every render would destroy the
+  // focused "new game" link and drop keyboard focus.
+  if (overlay.dataset.forSeed !== String(state.seed)) {
+    overlay.dataset.forSeed = String(state.seed);
+    winnerFocused = false;
+    const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
+    overlay.innerHTML = `<div class="cardbig">${esc(name)} wins<br><small>${esc(state.game_over_reason || "")}
+      <br><a href="#" id="again">new game</a></small></div>`;
+    $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
+  }
   if (!winnerFocused) {  // move focus into the dialog once, not every render
     winnerFocused = true;
     $("#again").focus();

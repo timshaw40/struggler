@@ -301,7 +301,19 @@ main {
 }
 
 #feed { margin-bottom: 12px; }
+#feed h2 { font-size: 13px; margin: 0 0 6px; }
 #status { margin-top: 8px; }
+
+/* Click a pile row to reveal the whole list. */
+.kv.pile { cursor: pointer; }
+.kv.pile:hover { color: var(--text); }
+.pilelist {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0 6px;
+  border-bottom: 1px solid #2a303c;
+}
+.pilelist[hidden] { display: none; }
 
 .feedrow {
   padding: 3px 0;
@@ -348,9 +360,10 @@ main {
 .feeddetail[hidden] { display: none; }
 
 .feedrow.wait {
+  display: flex;
+  justify-content: flex-start;
   color: var(--gold);
   font-style: italic;
-  justify-content: flex-start;
   animation: pulse 1s ease-in-out infinite;
 }
 
@@ -418,7 +431,7 @@ main {
 #decision::-webkit-scrollbar { width: 10px; }
 #decision::-webkit-scrollbar-track { background: transparent; }
 #decision::-webkit-scrollbar-thumb { background: #9aa0ad; border-radius: 5px; }
-#decision .card { width: 90px; }
+#decision .card { width: 90px; margin: 0 auto 6px; }
 #decision .dcols { display: flex; gap: 10px; }
 #decision .dcol-main { flex: 1; min-width: 0; }
 #decision .dcol-card { flex: none; width: 100px; }
@@ -448,7 +461,6 @@ main {
   color: var(--muted);
   margin: 6px 0 4px;
 }
-#decision .card { margin: 0 auto 6px; }
 
 #decision .hint { display: block; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
 
@@ -506,6 +518,8 @@ main {
   transform: translate(-50%, -50%);
   min-width: 280px;
   max-width: 420px;
+  max-height: 92%;   /* keep tall reveals inside the map area */
+  overflow-y: auto;
   padding: 20px 28px;
   text-align: center;
   background: var(--panel);
@@ -530,7 +544,7 @@ main {
 }
 #dicebox .hcards { display: flex; gap: 18px; justify-content: center; }
 #dicebox .hcards > div { width: 180px; flex: none; }
-#dicebox .htag { white-space: nowrap; }
+#dicebox .htag { font-size: 13px; color: var(--muted); margin-bottom: 6px; white-space: nowrap; }
 #dicebox .hcards img {
   width: 170px;
   max-height: 40vh;
@@ -538,7 +552,6 @@ main {
   border-radius: 8px;
   background: #fff;
 }
-#dicebox .htag { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
 #dicebox .doutcome {
   margin: 0;
   min-height: 1.4em;
@@ -552,7 +565,7 @@ main {
   background: rgba(0, 0, 0, 0.7);
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 50;  /* above dice/preview/tooltip/flypip; #toast stays on top */
 }
 
 #winner:not([hidden]) { display: flex; }
@@ -571,12 +584,35 @@ main {
   border: 1px solid #ef4444;
   border-radius: 8px;
   font-size: 14px;
-  z-index: 40;
+  z-index: 60;  /* errors always on top */
   cursor: pointer;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
 }
 
 #toast[hidden] { display: none; }
+
+/* Action banner mirrored for screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Turn/round/DEFCON/VP header under the title. */
+#gamestatus {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: -4px 0 8px;
+}
+#gamestatus .us { color: #3b9eff; font-weight: 600; }
+#gamestatus .ussr { color: #ff2d2d; font-weight: 600; }
+#gamestatus .danger { color: #ff6b6b; font-weight: 700; }
 
 /* Big read-a-card preview: floats above the hovered card (positioned by
  * JS from the card's rect) and is pointer-transparent, so sweeping the
@@ -683,4 +719,14 @@ main {
 @keyframes actionbump {
   from { transform: translateX(-50%) scale(0.96); opacity: 0.55; }
   to   { transform: translateX(-50%) scale(1);    opacity: 1; }
+}
+
+/* Narrow windows: give the map back some room. */
+@media (max-width: 1180px) {
+  :root { --sidebar-w: 290px; }
+}
+@media (max-width: 900px) {
+  :root { --sidebar-w: 240px; }
+  #hand .card { width: 120px; }
+  #viewbar { max-width: 80%; }
 }

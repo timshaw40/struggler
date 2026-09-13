@@ -28,6 +28,7 @@
   </div>
   <aside id="panel">
     <h1>Struggler<button id="cog" type="button" title="Settings" aria-label="Settings" onclick="toggleSettings()">⚙</button></h1>
+    <div id="gamestatus"></div>
     <div id="settings" hidden></div>
     <div id="panelscroll">
       <div id="feed"></div>
@@ -39,7 +40,8 @@
   </aside>
 </main>
 <div id="winner" hidden role="dialog" aria-modal="true" aria-label="Game over"></div>
-<div id="toast" hidden onclick="this.hidden = true"></div>
+<div id="toast" hidden></div>
+<div id="live" class="sr-only" aria-live="polite"></div>
 <script src="/app.js"></script>
 </body>
 </html>
