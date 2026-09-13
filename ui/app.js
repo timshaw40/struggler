@@ -860,7 +860,7 @@ function actionText(e, prev) {
       : `${who} discards held card ${cardName(p.card)}`;
   } else if (kind === "place_influence") {
     line = c.setup
-      ? `${who} sets up ${pretty(p.country)}`
+      ? `${who} adds ops to ${pretty(p.country)}`
       : `${who} adds influence to ${pretty(p.country)}`;
   } else {
     line = feedSummary(e, prev);  // safe fallback for anything unforeseen
