@@ -768,3 +768,29 @@ main {
   #hand .card { width: 120px; }
   #viewbar { max-width: 80%; }
 }
+
+/* Placement aids: remaining Ops in the decision box, and a doubled-cost badge
+ * on opponent-controlled targets (placing there costs 2 Ops). */
+#decision .opsleft {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 4px 0 2px;
+}
+.marker .cost2 {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #c2410c;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 3;
+}

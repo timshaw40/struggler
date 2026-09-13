@@ -1072,6 +1072,14 @@ function renderBoard() {
     }
     const ctrl = controlOf(cid, inf);
     el.innerHTML = pip("us", inf.US, ctrl === "US") + pip("ussr", inf.USSR, ctrl === "USSR");
+    if (target !== null && d && d.kind === "place_influence" && !d.context.setup
+        && placementCost(cid, state.influence) === 2) {
+      const badge = document.createElement("span");
+      badge.className = "cost2";
+      badge.textContent = "2";
+      badge.title = "Opponent-controlled: placing here costs 2 Ops";
+      el.append(badge);
+    }
     el.setAttribute("aria-label", `${pretty(cid)} — US ${inf.US} / USSR ${inf.USSR}`);
     el.addEventListener("mouseenter", () => showCountryTip(el, cid, inf));
     el.addEventListener("mouseleave", () => { if (countryTip) countryTip.hidden = true; });
@@ -1128,6 +1136,27 @@ function renderTracks(host) {
  * the engine's own rule (board.control), mirrored here so each pip shows
  * the right face. Schematic fallback countries carry no stability: no
  * faces there. */
+/* Ops cost to place one Influence in `cid` for the human side: 2 when the
+ * opponent controls it (the doubling rule), else 1. Setup is flat 1. */
+function placementCost(cid, inf) {
+  const s = POS[cid] && POS[cid].s;
+  const row = inf[cid];
+  if (!s || !row) return 1;
+  const human = state.human_side, opp = human === "US" ? "USSR" : "US";
+  return row[opp] - row[human] >= s ? 2 : 1;
+}
+
+/* Ops still available in the current placement spend (normal or region-bonus). */
+function placementOpsLeft(d) {
+  const c = d.context || {};
+  if (c.setup) return null;
+  if (c.ops_remaining != null) return c.ops_remaining;
+  if (c.base != null && c.spent != null) {
+    return (c.non_bonus === 0 ? c.base + 1 : c.base) - c.spent;
+  }
+  return null;
+}
+
 function controlOf(cid, inf) {
   const s = POS[cid] && POS[cid].s;
   if (!s) return null;
@@ -1406,7 +1435,9 @@ function ctxLine(d) {
     if (typeof v === "object") return null;  // placed objects, etc.
     return pretty(v);
   };
-  for (const k of ["card", "event", "ops", "ops_remaining", "remaining", "mode", "type", "order", "choice", "subregion", "bonus", "country"]) {
+  // "ops_remaining" is omitted here: the placement box shows it prominently
+  // (see renderDecision) rather than as a small context line.
+  for (const k of ["card", "event", "ops", "remaining", "mode", "type", "order", "choice", "subregion", "bonus", "country"]) {
     if (c[k] === undefined || c[k] === null) continue;
     if ((k === "card" || k === "event") && (c[k] === "none" || c[k] === "HIDDEN_CARD")) continue;
     const v = val(k, c[k]);
@@ -1496,9 +1527,23 @@ function renderDecision() {
   // (every one of this decision's options names a country). The view never
   // moves on its own — it stays where the player put it.
   if (d.options.length && d.options.every((o) => o.payload && o.payload.country)) {
+    if (d.kind === "place_influence" && !d.context.setup) {
+      const left = placementOpsLeft(d);
+      if (left != null) {
+        const opsLine = document.createElement("div");
+        opsLine.className = "opsleft";
+        opsLine.textContent = left > 0
+          ? `${left} Op${left === 1 ? "" : "s"} left to place`
+          : "Last Op — choose a country";
+        main.append(opsLine);
+      }
+    }
+    const anyDouble = d.kind === "place_influence" && !d.context.setup
+      && d.options.some((o) => placementCost(o.payload.country, state.influence) === 2);
     const hint = document.createElement("em");
     hint.className = "hint";
-    hint.textContent = "Click a glowing country on the map.";
+    hint.textContent = "Click a glowing country on the map."
+      + (anyDouble ? " An orange 2 badge is opponent-controlled and costs 2 Ops." : "");
     main.append(hint);
     return;
   }
