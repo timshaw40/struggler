@@ -359,26 +359,40 @@ let prevInf = null;
 /* Any influence increase (human or bot) flies a chit. First snapshot is
  * silent so the opening board doesn't rain counters. Stagger a batch so
  * a bot dump of 6 doesn't stack on one frame. */
+/* Board-write diff since the last render, split by side so the player's own
+ * placements can animate before the opponent's turn. */
 function flyDiff() {
   const inf = state.influence || {};
-  const jobs = [];
+  const human = [], opp = [];
   if (prevInf) {
     for (const [cid, now] of Object.entries(inf)) {
       const was = prevInf[cid] || { US: 0, USSR: 0 };
       for (const side of ["US", "USSR"]) {
         const n = (now[side] || 0) - (was[side] || 0);
-        for (let i = 0; i < n; i++) jobs.push([cid, side]);
+        for (let i = 0; i < n; i++) (side === state.human_side ? human : opp).push([cid, side]);
       }
     }
   }
   prevInf = {};
   for (const [cid, v] of Object.entries(inf))
     prevInf[cid] = { US: v.US, USSR: v.USSR };
+  return { human, opp };
+}
+
+/* Queue a set of chip fly-ins and WAIT for them to land, so the next FX (the
+ * opponent's move) doesn't start on top of them. */
+function enqueuePlacements(jobs) {
   if (!jobs.length) return;
-  // Placements animate after the batch's reveals/rolls (queued behind them).
-  enqueueFx(() => {
+  enqueueFx(() => new Promise((resolve) => {
     jobs.forEach(([cid, side], i) => setTimeout(() => flyPip(cid, side), i * 120));
-  });
+    setTimeout(resolve, (jobs.length - 1) * 120 + 500);
+  }));
+}
+
+/* A short beat between the player's move and the opponent's, so the two turns
+ * don't read as one blur. */
+function enqueueBeat(ms = 400) {
+  enqueueFx(() => new Promise((resolve) => setTimeout(resolve, ms)));
 }
 
 function flyPip(cid, side) {
@@ -420,7 +434,12 @@ function enqueueFx(fn) {
   fxChain = fxChain
     .then(fn)
     .catch((err) => console.error("FX error", err))  // one bad FX can't wedge the queue
-    .finally(() => { fxBacklog -= 1; });
+    .finally(() => {
+      fxBacklog -= 1;
+      // When the queue drains, refresh the decision box (it was showing
+      // "Resolving…" and can now show the next decision / "Opponent thinking…").
+      if (fxBacklog === 0 && state) queueMicrotask(() => { if (state) renderDecision(); });
+    });
 }
 
 function clearDiceBox() {
@@ -1035,8 +1054,13 @@ function render() {
   if (sig === lastRenderSig) return;
   lastRenderSig = sig;
 
-  drainRolls();  // first: queue card reveals so pips and dice wait on them
-  flyDiff();
+  // Order the FX so one side's turn reads as one beat: the player's placements
+  // land first, then a short pause, then the opponent's reveals/rolls/placements.
+  const fly = flyDiff();
+  enqueuePlacements(fly.human);
+  enqueueBeat();
+  drainRolls();
+  enqueuePlacements(fly.opp);
   renderBoard();
   renderPanel();
   renderEffectsHud();
@@ -1478,7 +1502,8 @@ function renderDecision() {
   box.hidden = false;
   if (!d) {
     const note = document.createElement("em");
-    note.textContent = busy ? "Opponent thinking…" : "Resolving…";
+    // Don't claim the opponent is "thinking" while our own FX are still playing.
+    note.textContent = (busy || fxBacklog > 0) ? "Resolving…" : "Opponent thinking…";
     box.append(note);
     return;
   }
