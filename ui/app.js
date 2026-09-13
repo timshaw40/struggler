@@ -409,6 +409,14 @@ let seenTotal = -1;
 let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
 let diceChain = Promise.resolve();
 let fxGate = Promise.resolve();  // opponent card reveals; pips and dice wait on it
+let fxBacklog = 0;               // roll/score popups still queued
+
+/* Queue one roll/score popup, tracking depth so a big opponent batch can't
+ * bury the player's own rolls behind a long animation backlog. */
+function queueDice(fn) {
+  fxBacklog += 1;
+  diceChain = diceChain.then(fn).finally(() => { fxBacklog -= 1; });
+}
 
 function clearDiceBox() {
   const box = $("#dicebox");
@@ -559,12 +567,18 @@ function drainRolls() {
     }
     if (ROLL_KIND[e.kind]) items.push({ kind: e.kind, e, prev });
   }
-  for (const item of items) diceChain = diceChain.then(() => showDice(item));
+  for (const item of items) {
+    // Always show the player's own rolls; drop opponent rolls once the queue is
+    // deep, so the player's action can't sit behind a wall of bot animation.
+    const owned = actorOf(item.e || item.actor || item.opp) === state.human_side;
+    if (!owned && fxBacklog >= 3) continue;
+    queueDice(() => showDice(item));
+  }
   for (let i = 0; i < fresh.length; i++) {
     const e = fresh[i];
     if (e.payload.card && /_Scoring$/.test(e.payload.card)) {
       const prev = hist[start + i - 1];
-      diceChain = diceChain.then(() => showScore(e, prev));
+      queueDice(() => showScore(e, prev));
     }
   }
   // Center-of-map caption: one update per fresh event, in cursor order.
@@ -1028,6 +1042,9 @@ function render() {
 function renderBoard() {
   if (!state) return;
   $("#board").onerror = () => $("#boardwrap").classList.add("noboard");
+  // A hovered marker is destroyed on rebuild, so its mouseleave may never fire;
+  // hide the tip explicitly or it can linger over the map (and the dice popup).
+  if (countryTip) countryTip.hidden = true;
   const host = $("#markers");
   host.textContent = "";
   host.classList.toggle("busy", busy);  // no map picks while submitting
