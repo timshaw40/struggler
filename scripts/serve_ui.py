@@ -22,8 +22,10 @@ game. The server mirrors `runner.play_game`'s loop, interactively:
   the public `Event` list, so secrecy holds exactly as it does for bots
   (opponent hand = a count; headline picks hidden until both are in).
 
-Board/card images under ui/assets/ are user-supplied art produced by
-`render_assets.py`; the folder is gitignored and never committed.
+Board/card images under ui/assets/ are optional art, installed from
+`third_party/gmt-vassal/` by `install_vassal_ui_assets.py` (or produced from
+your own PDFs by `render_assets.py`); the folder is gitignored and never
+committed. Without art the UI falls back to plain text cards and no board.
 """
 
 from __future__ import annotations
@@ -64,7 +66,8 @@ CONTENT_TYPES = {
 class Session:
     """One interactive game: the engine, the bot seats, the advance loop."""
 
-    def __init__(self, seed: int, us: str, ussr: str, events: bool) -> None:
+    def __init__(self, seed: int, us: str, ussr: str, events: bool,
+                 include_ccw: bool = True) -> None:
         humans = (us == "human") + (ussr == "human")
         if humans > 1:
             raise SystemExit("at most one human seat (no per-client identity)")
@@ -72,18 +75,67 @@ class Session:
         # Play mode: the human's seat. Watch mode: the camera side — the
         # opponent hand stays hidden exactly as it would be for a bot.
         self.human_side = Side.US if (us == "human" or self.watch) else Side.USSR
-        self.engine = Engine.new_game(seed=seed, events=events)
+        self.seed = seed
+        self.us, self.ussr, self.events = us, ussr, events
+        self.bot_kind = ussr if us == "human" else us
+        self.include_ccw = include_ccw
+        self.setup_us_extra = 0
+        self.lock = threading.Lock()
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self.engine = Engine.new_game(
+            seed=self.seed, events=self.events, include_ccw=self.include_ccw,
+            setup_us_extra=self.setup_us_extra,
+        )
         self.players: dict[Side, Any] = {}
-        for side, kind in ((Side.US, us), (Side.USSR, ussr)):
+        for side, kind in ((Side.US, self.us), (Side.USSR, self.ussr)):
             if kind != "human":
-                # Same per-seat seed offset convention as main.py.
-                self.players[side] = build_player(kind, seed=seed + (1 if side is Side.US else 2))
+                self.players[side] = build_player(kind, seed=self.seed + (1 if side is Side.US else 2))
+        self._rebind()
+        self.history = HistoryBuilder()
+        self._undo = None
+
+    def restart(self, include_ccw: bool | None = None, side: str | None = None,
+                setup_us_extra: int | None = None) -> None:
+        if include_ccw is not None:
+            self.include_ccw = include_ccw
+        if setup_us_extra is not None:
+            self.setup_us_extra = max(0, min(6, int(setup_us_extra)))
+        if side in ("US", "USSR") and not self.watch:
+            self.human_side = Side(side)
+            if self.human_side is Side.US:
+                self.us, self.ussr = "human", self.bot_kind
+            else:
+                self.us, self.ussr = self.bot_kind, "human"
+        self.seed += 1
+        self._rebuild()
+
+    def _rebind(self) -> None:
         for player in self.players.values():
             bind = getattr(player, "bind_engine", None)
             if callable(bind):
                 bind(self.engine)
-        self.history = HistoryBuilder()
-        self.lock = threading.Lock()
+
+    def undo(self) -> None:
+        """Take back the human's last action (plus any bot/CHANCE replies
+        after it). Single level: one undo per action."""
+        if self._undo is None:
+            raise RuntimeError("nothing to undo")
+        snap = self._undo
+        self._undo = None
+        self.engine = Engine.deserialize(snap["engine"])
+        del self.history.history[snap["hist_len"]:]
+        del self.history._pending_headline[snap["pending_hl_len"]:]
+        self._rebind()
+
+    def forfeit(self, **restart_kw: Any) -> str:
+        """Opponent wins, then a new game starts. Returns the winner's side."""
+        winner = self.human_side.opponent
+        self.engine._win(winner, "forfeit")
+        side = winner.value
+        self.restart(**restart_kw)
+        return side
 
     def _step(self, action: Action) -> Event:
         decision = self.engine.pending_decision
@@ -126,6 +178,12 @@ class Session:
             raise RuntimeError("no pending decision")
         if not 0 <= index < len(decision.options):
             raise ValueError(f"option index {index} out of range")
+        if decision.actor is self.human_side:
+            self._undo = {
+                "engine": self.engine.serialize(),
+                "hist_len": len(self.history.history),
+                "pending_hl_len": len(self.history._pending_headline),
+            }
         self._step(decision.options[index])
         self.advance()
 
@@ -147,11 +205,15 @@ class Session:
             "actor": event.actor.value,
             "kind": event.decision.kind.value,
             "payload": Session._json(event.action.payload),
+            "context": Session._json(event.decision.context),
             "defcon": event.defcon,
             "vp": event.vp,
             "turn": event.turn,
             "action_round": event.action_round,
             "country": event.country,
+            "country_influence": Session._json(event.country_influence),
+            "country_control": event.country_control,
+            "space_race": Session._json(event.space_race),
         }
 
     def state(self) -> dict:
@@ -160,8 +222,11 @@ class Session:
         decision = obs.pending_decision
         data: dict[str, Any] = {
             "human_side": self.human_side.value,
+            "seed": self.seed,
+            "include_ccw": "Chinese_Civil_War" in engine.board.countries,
             "watch": self.watch,
             "phase": obs.phase,
+            "phasing": None if decision is None else decision.actor.value,
             "defcon": obs.defcon,
             "vp": obs.vp,
             "turn": obs.turn,
@@ -177,11 +242,21 @@ class Session:
             "space_race": obs.space_race,
             "space_race_attempts": obs.space_race_attempts,
             "military_ops": obs.military_ops,
+            "score_preview": {
+                cid: engine.preview_scoring(cid) for cid in obs.hand
+                if engine.cards[cid].scoring
+            },
             "turn_effects": self._json(obs.turn_effects),
             "game_effects": self._json(obs.game_effects),
+            "can_undo": self._undo is not None and not self.watch,
             "is_terminal": engine.is_terminal,
             "winner": engine.winner.value if engine.winner is not None else None,
             "game_over_reason": engine._game_over_reason,
+            # `history` is truncated to a window, so its length is not a
+            # progress signal once the window fills. `history_len` is the
+            # monotonic total, which the client uses to know how many new
+            # events a poll carried (otherwise all animation stops at 60).
+            "history_len": len(self.history.history),
             "history": [self._event_view(e) for e in self.history.history[-60:]],
             # Only the human's own decisions reach the browser; bot/CHANCE
             # decisions are resolved server-side before state is sent. In
@@ -201,6 +276,21 @@ class Session:
         return data
 
 
+def _restart_opts(body: dict) -> dict[str, Any]:
+    opts: dict[str, Any] = {}
+    if "include_ccw" in body:
+        opts["include_ccw"] = bool(body["include_ccw"])
+    if body.get("side") in ("US", "USSR"):
+        opts["side"] = body["side"]
+    raw_extra = body.get("setup_us_extra")
+    if raw_extra is not None:
+        try:
+            opts["setup_us_extra"] = max(0, min(6, int(raw_extra)))
+        except (TypeError, ValueError):
+            pass  # a tampered/legacy null must not 500 the restart
+    return opts
+
+
 def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args: Any) -> None:  # console already shows steps
@@ -210,6 +300,9 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
+            # Dev server with no validators: Safari's heuristic cache kept
+            # serving stale app.js/style.css across pushes. Never store.
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
@@ -221,15 +314,31 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             if not path.is_file() or UI_DIR not in path.parents:
                 self._send_json(404, {"error": "not found"})
                 return
-            self._send(200, path.read_bytes(), CONTENT_TYPES[path.suffix])
+            self._send(
+                200, path.read_bytes(),
+                CONTENT_TYPES.get(path.suffix, "application/octet-stream"),
+            )
 
         def do_GET(self) -> None:
             route = self.path.split("?")[0]
             if route == "/state":
-                with session.lock:
-                    if session.watch:
-                        session.step_once()
-                    self._send_json(200, session.state())
+                # Compute under the lock, then write the socket *outside* it:
+                # a slow client (or a slow LLM step) must not block every other
+                # request behind the response write.
+                try:
+                    with session.lock:
+                        if session.watch:
+                            session.step_once()
+                        else:
+                            d = session.engine.pending_decision
+                            if d is not None and d.actor is not session.human_side:
+                                session.step_once()
+                        payload = session.state()
+                except Exception as exc:  # a bot/provider failure must not drop the socket
+                    print(f"/state error: {exc!r}")
+                    self._send_json(500, {"error": str(exc)})
+                    return
+                self._send_json(200, payload)
             elif route == "/cards":
                 self._send_json(200, cards_meta)
             elif route in ("/", "/index.html"):
@@ -242,21 +351,40 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 self._send_json(404, {"error": "not found"})
 
         def do_POST(self) -> None:
-            if self.path != "/action":
-                self._send_json(404, {"error": "not found"})
-                return
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length) or b"{}")
-                index = int(body.get("index", -1))
-                with session.lock:
-                    session.act(index)
-                    self._send_json(200, session.state())
-            except (ValueError, RuntimeError) as exc:
-                # Illegal index or stepping a finished game: tell the client
-                # and hand back the current state so the UI resyncs.
-                with session.lock:
-                    self._send_json(409, {"error": str(exc), "state": session.state()})
+            except (ValueError, TypeError, json.JSONDecodeError):
+                self._send_json(400, {"error": "bad json"})
+                return
+            # Resolve the whole request under ONE lock acquisition and write the
+            # socket afterwards: the previous code re-locked on the error path
+            # (a mutation window) and wrote the response while holding the lock.
+            with session.lock:
+                try:
+                    if self.path == "/action":
+                        session.act(int(body.get("index", -1)))
+                        code, payload = 200, session.state()
+                    elif self.path == "/new":
+                        session.restart(**_restart_opts(body))
+                        code, payload = 200, session.state()
+                    elif self.path == "/forfeit":
+                        if session.watch:
+                            code, payload = 409, {"error": "watch mode"}
+                        else:
+                            winner = session.forfeit(**_restart_opts(body))
+                            payload = session.state()
+                            payload["forfeit"] = True
+                            payload["winner"] = winner  # state()'s winner is the fresh game's
+                            code = 200
+                    elif self.path == "/back":
+                        session.undo()
+                        code, payload = 200, session.state()
+                    else:
+                        code, payload = 404, {"error": "not found"}
+                except (ValueError, TypeError, RuntimeError) as exc:
+                    code, payload = 409, {"error": str(exc), "state": session.state()}
+            self._send_json(code, payload)
 
     return Handler
 
@@ -288,9 +416,6 @@ def main() -> None:
         }
         for cid, card in session.engine.cards.items()
     }
-    if not session.watch:
-        session.advance()  # setup + bot headline pick, up to the human's first decision
-
     handler = make_handler(session, cards_meta)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://localhost:{args.port}"

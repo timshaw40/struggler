@@ -141,7 +141,11 @@ def build_event(decision: Decision, action: Action, engine: Engine) -> Event:
     `action` was applied to `decision`, matching `Event`'s "totals right
     after the decision resolved" contract.
     """
-    country = action.payload.get("country")
+    country = (
+        action.payload.get("country")
+        or decision.context.get("country")
+        or decision.context.get("target")
+    )
     country_influence: Any = {}
     country_control: str | None = None
     if country is not None and country in engine.board.influence:

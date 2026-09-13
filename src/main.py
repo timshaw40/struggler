@@ -29,8 +29,18 @@ from struggler.runner import play_game
 
 
 DEFAULT_LLM_PROVIDER = "openai"
-DEFAULT_LLM_MODELS = {"anthropic": "claude-opus-5", "openai": "gpt-5.6-luna"}
-DEFAULT_LLM_PLAN_MODELS = {"anthropic": "claude-opus-5", "openai": "gpt-5.6-sol"}
+DEFAULT_LLM_MODELS = {
+    "anthropic": "claude-opus-5",
+    "openai": "gpt-5.6-luna",
+    "openai_compatible": "qwen3.6-35b-a3b-uncensored-genesis-hermes-v7",
+}
+DEFAULT_LLM_PLAN_MODELS = {
+    "anthropic": "claude-opus-5",
+    "openai": "gpt-5.6-sol",
+    "openai_compatible": "qwen3.6-35b-a3b-uncensored-genesis-hermes-v7",
+}
+# Default base URL for local OpenAI-compatible servers (LM Studio, Ollama).
+DEFAULT_LOCAL_BASE_URL = "http://localhost:11434/v1"
 
 
 def build_llm_client(provider: str | None = None, model: str | None = None):
@@ -43,15 +53,29 @@ def build_llm_client(provider: str | None = None, model: str | None = None):
     provider = provider or os.environ.get("STRUGGLER_LLM_PROVIDER", DEFAULT_LLM_PROVIDER)
     if provider not in DEFAULT_LLM_MODELS:
         raise ValueError(
-            f"unknown STRUGGLER_LLM_PROVIDER: {provider!r} (expected 'anthropic' or 'openai')"
+            "unknown STRUGGLER_LLM_PROVIDER: "
+            f"{provider!r} (expected one of {sorted(DEFAULT_LLM_MODELS)})"
         )
     model = model or os.environ.get("STRUGGLER_LLM_MODEL") or DEFAULT_LLM_MODELS[provider]
     if provider == "anthropic":
         from struggler.bots.llm.anthropic_client import AnthropicClient
         client: LLMClient = AnthropicClient(model=model)
+    elif provider == "openai_compatible":
+        # Local servers (LM Studio, Ollama) speak the OpenAI chat API.
+        # The key is required by the SDK but ignored by the server.
+        from struggler.bots.llm.openai_client import OpenAIClient
+        client = OpenAIClient(
+            model=model,
+            api_key=os.environ.get("STRUGGLER_LLM_API_KEY", "local"),
+            base_url=os.environ.get("STRUGGLER_LLM_BASE_URL", DEFAULT_LOCAL_BASE_URL),
+        )
     else:
         from struggler.bots.llm.openai_client import OpenAIClient
-        client = OpenAIClient(model=model)
+        # Honor STRUGGLER_LLM_API_KEY here too; when unset, the SDK falls back
+        # to OPENAI_API_KEY as before.
+        client = OpenAIClient(
+            model=model, api_key=os.environ.get("STRUGGLER_LLM_API_KEY")
+        )
     return client
 
 
@@ -71,13 +95,32 @@ def build_player(
     if kind == "random":
         return RandomPlayer(seed=seed)
     if kind == "greedy":
-        return GreedyPlayer()
+        from struggler.bots.checkpoint import load_weights
+
+        path = os.environ.get("STRUGGLER_GREEDY_WEIGHTS")
+        return GreedyPlayer(weights=load_weights(path) if path else None)
     if kind == "mcts":
+        value = None
+        value_path = os.environ.get("STRUGGLER_MCTS_VALUE")
+        if value_path:
+            from struggler.bots.value import LinearValue
+
+            value = LinearValue.load(value_path)
         return MCTSPlayer(
             seed=seed,
             sims=int(os.environ.get("STRUGGLER_MCTS_SIMS", "16")),
             rollout_depth=int(os.environ.get("STRUGGLER_MCTS_ROLLOUT_DEPTH", "16")),
             uct_c=float(os.environ.get("STRUGGLER_MCTS_UCT_C", "1.4")),
+            value=value,
+        )
+    if kind == "rl":
+        from struggler.bots.rl.player import RLPlayer
+
+        path = os.environ.get("STRUGGLER_RL_POLICY")
+        if not path:
+            raise ValueError("kind 'rl' requires STRUGGLER_RL_POLICY=<policy .pt>")
+        return RLPlayer.from_path(
+            path, device=os.environ.get("STRUGGLER_RL_DEVICE", "cpu"), seed=seed
         )
     if kind == "llm":
         client = build_llm_client()
@@ -101,7 +144,9 @@ def build_player(
             log_path=log_path,
             resume=resume,
         )
-    raise ValueError(f"unknown player kind: {kind!r} (expected human/first/random/greedy/mcts/llm)")
+    raise ValueError(
+        f"unknown player kind: {kind!r} (expected human/first/random/greedy/mcts/rl/llm)"
+    )
 
 
 def main() -> None:
@@ -127,7 +172,7 @@ def main() -> None:
         help=(
             "Resume an LLM player from its existing log file instead of "
             "starting with fresh memory. Requires --us-log-path and/or "
-            "--ussr-log-path (log filenames are timestamped at creation"
+            "--ussr-log-path (log filenames are timestamped at creation)."
         ),
     )
     parser.add_argument(

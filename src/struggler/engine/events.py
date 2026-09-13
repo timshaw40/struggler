@@ -392,8 +392,11 @@ def _evil_empire(engine: "Engine", side: Side) -> None:
 
 @event("U2_Incident")
 def _u2_incident(engine: "Engine", side: Side) -> None:
-    # (The extra VP if UN Intervention is later played this turn is not modeled.)
     engine._award_vp(Side.USSR, 1)
+    if not engine.is_terminal:
+        # "If the #32 UN Intervention Event is played later this turn ... the
+        # USSR receives an additional 1 VP." Turn-scoped; consumed on the play.
+        engine.turn_effects["u2_incident"] = True
 
 
 @event("Cultural_Revolution")
@@ -521,7 +524,12 @@ def _socialist_governments(engine: "Engine", side: Side) -> None:
     )
 
 
-@event("Muslim_Revolution")
+@event(
+    "Muslim_Revolution",
+    # AWACS Sale to Saudis: "prevents the Muslim Revolution card from being
+    # played as an Event."
+    eligible=lambda engine, side: not engine.game_effects.get("awacs"),
+)
 def _muslim_revolution(engine: "Engine", side: Side) -> None:
     countries = ["Sudan", "Iran", "Iraq", "Egypt", "Libya", "Saudi_Arabia",
                  "Syria", "Jordan"]
@@ -692,7 +700,7 @@ def _independent_reds_choice(engine: "Engine", side: Side, choice: str, context:
 
 @event("Five_Year_Plan")
 def _five_year_plan(engine: "Engine", side: Side) -> None:
-    # The USSR randomly discards a card; if it is a USSR event, that event fires.
+    # The USSR randomly discards a card; if it is a US event, that event fires.
     engine.push_random_discard(Side.USSR, "five_year_plan")
 
 
@@ -764,8 +772,9 @@ def _flower_power(engine: "Engine", side: Side) -> None:
 
 @event("Yuri_and_Samantha")
 def _yuri_and_samantha(engine: "Engine", side: Side) -> None:
-    # The USSR scores 1 VP for every US coup attempt for the rest of the game.
-    engine.game_effects["yuri_samantha"] = True
+    # The USSR scores 1 VP for every US coup attempt "during the remainder of
+    # the Turn" -- turn-scoped, so it lives in turn_effects and expires.
+    engine.turn_effects["yuri_samantha"] = True
 
 
 # -- set-DEFCON branch -------------------------------------------------------
@@ -782,7 +791,7 @@ def _how_i_learned(engine: "Engine", side: Side) -> None:
 def _how_i_learned_choice(engine: "Engine", side: Side, choice: str, context: dict) -> None:
     engine.set_defcon(int(choice), caused_by=side)
     if not engine.is_terminal:
-        engine.military_ops[side.value] += 5
+        engine._add_military_ops(side, 5)
 
 
 # -- influence then an optional free operation (Junta) ----------------------
@@ -913,7 +922,7 @@ CONTEST_RESOLVERS: dict[str, Callable[["Engine", Side, Side], None]] = {
 def _aldrich_ames(engine: "Engine", side: Side) -> None:
     # The USSR sees the US hand and chooses one card the US must discard. (The
     # remix's ongoing "sees the hand for the turn" reveal is not modeled.)
-    if engine.physical_mode and engine.physical_side is Side.US:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is Side.US):
         # The card's printed effect is "reveal the hand, then choose": the
         # USSR bot can't inspect a hidden US hand directly, so first have the
         # operator declare every still-hidden slot's real identity (one at a
@@ -996,10 +1005,13 @@ def _push_ask_not(engine: "Engine", side: Side, discarded: int) -> None:
         return
     source = (
         engine._physical_hand_candidates(side)
-        if engine.physical_mode and side is engine.physical_side
+        if engine._declares(side)
         else engine.hands[side.value]
     )
-    choices = tuple(cid for cid in source if not engine.cards[cid].scoring) + ("stop",)
+    # Card text explicitly allows discarding scoring cards too, so every card
+    # in hand is offered (the physical side's source is placeholders, which is
+    # fine -- we never index cards[] here).
+    choices = tuple(source) + ("stop",)
     if len(choices) == 1:  # nothing left to discard -> draw and finish
         engine.draw_cards_to_hand(side, discarded)
         return
@@ -1035,7 +1047,7 @@ def _scoring_card_countries(engine: "Engine", scoring_id: str) -> list[str]:
 def _cambridge_five(engine: "Engine", side: Side) -> None:
     # The US reveals its scoring cards; the USSR adds 1 Influence to a country
     # in one of those regions.
-    if engine.physical_mode and engine.physical_side is Side.US:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is Side.US):
         # The USSR bot can't inspect a hidden US hand to see which scoring
         # cards it holds. Unlike a single-card choice (Aldrich Ames), this
         # needs to know *which regions* apply, not one specific card -- ask
@@ -1119,7 +1131,7 @@ def _missile_envy(engine: "Engine", side: Side) -> None:
     # _handle_action_round_play). The taker then uses the *taken* card for
     # Ops, or its Event when allowed.
     opp = side.opponent
-    if engine.physical_mode and engine.physical_side is opp:
+    if engine.physical_mode and (engine.replay_mode or engine.physical_side is opp):
         # A physical giver's hand can't be inspected for the highest-Ops
         # card -- the operator names the one being handed over directly,
         # folding the max-Ops-then-tie-break computation into their answer
@@ -1360,7 +1372,7 @@ def _payable_cards(engine: "Engine", side: Side) -> list[str]:
     matches the real physical card."""
     source = (
         engine._physical_hand_candidates(side)
-        if engine.physical_mode and side is engine.physical_side
+        if engine._declares(side)
         else engine.hands[side.value]
     )
     return [
@@ -1575,20 +1587,20 @@ def _nixon_plays_the_china_card(engine: "Engine", side: Side) -> None:
         engine.china_card_available = False  # face down: not usable this turn
 
 
-@event("Nixon_Plays_The_China_Card")
-def _nixon_plays_the_china_card(engine: "Engine", side: Side) -> None:
-    # Physical card text, confirmed: "If USA has The China Card: +2 VP for
-    # USA. If CCCP has The China Card: USA gets the card, face down and
-    # unavailable for immediate play." Two exhaustive, unconditional
-    # branches -- no discard-to-keep option exists on the card.
-    if engine.china_card_owner == "US":
-        engine._award_vp(Side.US, 2)
-    else:
-        engine.china_card_owner = "US"
-        engine.china_card_available = False  # face down: not usable this turn
+def _us_controls_a_middle_east_country(engine: "Engine") -> bool:
+    return any(
+        engine.board.control(cid) is Side.US
+        for cid, info in engine.board.countries.items()
+        if info.region is Region.MIDDLE_EAST
+    )
 
 
-@event("Our_Man_In_Tehran")
+@event(
+    "Our_Man_In_Tehran",
+    # "If the US controls at least one Middle East country, the US player
+    # uses this Event..." (otherwise it is unplayable as an Event, rule 7.5).
+    eligible=lambda engine, side: _us_controls_a_middle_east_country(engine),
+)
 def _our_man_in_tehran(engine: "Engine", side: Side) -> None:
     # The US (regardless of who phases this) looks at the top 5 cards of the
     # draw pile one at a time, removing or keeping each; kept cards return to
@@ -1625,7 +1637,9 @@ def _our_man_in_tehran_choice(engine: "Engine", side: Side, choice: str, context
     if choice == "keep":
         engine._our_man_kept.append(card)
     else:
-        engine.removed_cards.append(card)
+        # "Discard", not remove-from-the-game: the card goes to the discard
+        # pile and will be reshuffled as normal (the card is not asterisked).
+        engine.discard_pile.append(card)
     _push_our_man_step(engine)
 
 

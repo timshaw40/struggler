@@ -23,20 +23,24 @@ pip install -e ".[llm]"  # optional if you plan to use the llm
 
 ### Configure an LLM bot
 
-To use the llm bot, you need to set up your api keys. This implementation supports anthropic and openai.
+To use the llm bot, you need to set up your api keys. This implementation supports anthropic, openai, and local OpenAI-compatible servers (LM Studio, Ollama — no key needed).
 
 ```sh
 export ANTHROPIC_API_KEY=...   # for provider=anthropic
 export OPENAI_API_KEY=...      # for provider=openai (the default)
+# for provider=openai_compatible (e.g. LM Studio):
+export STRUGGLER_LLM_BASE_URL=http://192.168.10.91:1234/v1
 ```
 
 Provider and model are picked via environment variables, each overridable per run:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic` or `openai` — used for both the per-decision client and the once-per-turn planning client |
+| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic`, `openai`, or `openai_compatible` — used for both the per-decision client and the once-per-turn planning client |
 | `STRUGGLER_LLM_MODEL` | provider's built-in default | model for in-decision calls |
 | `STRUGGLER_LLM_PLAN_MODEL` | provider's built-in default | model for the turn-planning call (same provider as above) |
+| `STRUGGLER_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint for `openai_compatible` |
+| `STRUGGLER_LLM_API_KEY` | `local` | key sent to the local server (required by the SDK, ignored by the server) |
 
 ## Play a game
 
@@ -93,8 +97,8 @@ A local web UI: the map on screen, you click countries and cards, a bot
 thinks and answers.
 
 ```sh
-pip install -e ".[ui]"    # PyMuPDF, used only for the asset step below
-python scripts/render_assets.py --map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"
+pip install -e ".[ui]"    # Pillow, used only for the board conversion
+python scripts/install_vassal_ui_assets.py --fetch-board
 python scripts/serve_ui.py --us human --ussr mcts --seed 1
 ```
 
@@ -115,12 +119,20 @@ game plays out in the browser at the bots' own pace (MCTS think time
 dominates). A Pause/Resume control sits where the decision panel would
 be. Use `--no-open` if you'd rather open the URL yourself.
 
-The board and card faces are **your own** images: `render_assets.py` reads
-your print-and-play PDFs and writes `ui/assets/board.png` plus one image
-per card under `ui/assets/cards/`. That folder is gitignored — user-supplied
-art is never committed — so a fresh clone falls back to plain text cards and
-no board. `scripts/calibrate_countries.py` derives the marker positions
-committed in `ui/countries.json` from the PDF's own label positions.
+The board and card faces come from the official VASSAL Deluxe 3.2 art in
+`third_party/gmt-vassal/`: `install_vassal_ui_assets.py` maps the 110 card
+numbers to engine card ids and writes `ui/assets/board.png`,
+`ui/assets/cards/{id}.svg`, plus marker positions calibrated to that board
+(`ui/assets/countries.json`, preferred by the UI when present).
+`--fetch-board` downloads the board JPG from the official VASSAL module
+when it is missing from the repo. That folder is gitignored — art is never
+committed — so a fresh clone without it falls back to plain text cards and
+no board.
+
+Prefer your own print-and-play PDFs instead? `scripts/render_assets.py
+--map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"` renders the
+same `ui/assets/` layout from them, and `scripts/calibrate_countries.py`
+derives matching marker positions.
 
 ## Add a new bot
 
@@ -157,7 +169,8 @@ See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approxima
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Code is released under the [MIT License](LICENSE). GMT VASSAL art under
+`third_party/gmt-vassal/` is separately licensed — see that folder's LICENSE.
 
 ## Disclaimer
 
@@ -165,15 +178,21 @@ This is an unofficial, fan-made project. It is **not affiliated with,
 endorsed by, or sponsored by GMT Games** or the designers of *Twilight
 Struggle*. *Twilight Struggle* is a trademark of GMT Games, LLC.
 
-No copyrighted material from the published game is redistributed here. The
-data files under `src/struggler/data/` record only factual attributes of the
-physical game — card names and numbers, Operations values, allegiance, deck,
-country adjacency and Battleground status — which this project re-entered
-independently from the published game components. The one free-text field,
-`event_summary`, is a short hand-written description of what this engine's
-own code does for that card, not a reproduction of the printed card. No card
-event text, artwork, rulebook prose, or other copyrightable expression is
-included anywhere in this repository.
+**Dual license.** Engine and project code remain under the [MIT License](LICENSE).
+Optional UI art under `third_party/gmt-vassal/` is **GMT Games copyrighted
+material** redistributed only under that folder's own
+[`LICENSE`](third_party/gmt-vassal/LICENSE) (personal, non-commercial use;
+you must own a copy of the physical game). See also
+[`SOURCE.md`](third_party/gmt-vassal/SOURCE.md) and
+[`README.md`](third_party/gmt-vassal/README.md). Install into the gitignored
+web UI with `scripts/install_vassal_ui_assets.py` (supports `--fetch-board`
+from the official VASSAL module when the board JPG is absent).
+
+The data files under `src/struggler/data/` still record only factual attributes
+of the physical game — card names and numbers, Operations values, allegiance,
+deck, country adjacency and Battleground status — re-entered independently.
+The free-text `event_summary` fields describe this engine's own code, not
+printed card text. No VASSAL Java/`.class` code is committed here.
 
 Playing this engine is not a substitute for owning the game. If you enjoy
 *Twilight Struggle*, buy a copy from [GMT Games](https://www.gmtgames.com/).

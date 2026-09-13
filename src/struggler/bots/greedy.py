@@ -35,8 +35,9 @@ branch order:
      other weight).
   2. A safe Coup with a good expected margin outscores placing Influence
      (`coup_base` plus the expected board-value swing).
-  3. Among Influence targets, Battlegrounds and control flips dominate
-     (`battleground_control` in `board_value`).
+    3. Among Influence targets, Battlegrounds and progress toward control
+       dominate (`battleground_control` in `board_value`, including partial
+       stacks — 1/3 in Poland beats 1/4 in Austria).
   4. A card not worth spending on Ops gets sent to the Space Race instead
      (low `ops_mode_per_point` score vs `space_race_base`).
 """
@@ -48,6 +49,7 @@ from typing import Callable, Sequence
 
 from struggler.engine import (
     Action,
+    CardSide,
     Decision,
     DecisionKind,
     Observation,
@@ -107,7 +109,29 @@ class GreedyWeights:
     event_mode_penalty: float = 30.0  # events off / unimplemented event: playing "event" is a no-op discard
     scoring_card_weight: float = 2.0  # per net VP the region would score, signed favorably/unfavorably
     hold_high_ops_weight: float = 0.5  # prefer headlining a low-Ops card, keeping high-Ops ones for Operations
+    opponent_headline_penalty: float = 50.0  # never headline an opponent-side event
+    # Playing an opponent-side card for Ops hands the opponent its Event (5.2);
+    # prefer own/neutral cards at equal Ops.
+    opponent_event_ops_penalty: float = 6.0
     action_round_ops_weight: float = 1.0
+    # Turn-1 USSR headline bonus for the five canonical openings.
+    t1_headline_bonus: float = 40.0
+    t1_iran_coup_bonus: float = 20.0
+
+
+# Standard openings (Twilight Strategy). Targets are influence AFTER setup,
+# including printed at-start (E. Germany already has 3).
+_SETUP_TARGET = {
+    Side.USSR: {"East_Germany": 4, "Poland": 4, "Yugoslavia": 1},
+    Side.US: {"West_Germany": 4, "Italy": 3},
+}
+_USSR_T1_HEADLINES = frozenset({
+    "Red_Scare_Purge",
+    "Suez_Crisis",
+    "Arab_Israeli_War",
+    "Socialist_Governments",
+    "Vietnam_Revolts",
+})
 
 
 # -- board evaluation ---------------------------------------------------------
@@ -115,19 +139,25 @@ class GreedyWeights:
 
 def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
     """A static heuristic value of the current board for `side` (higher is
-    better): regional Presence/Domination/Control tiers plus a flat bonus
-    per country Controlled, weighted extra for Battlegrounds."""
+    better): regional Presence/Domination/Control tiers plus progress
+    toward control in every country (full credit at control, partial
+    before — so 1/3 in Poland outranks 1/4 in Austria). Battlegrounds
+    use `battleground_control`, others `country_control`."""
     opponent = side.opponent
     value = 0.0
     for region in Region:
         value += _TIER_VALUE[board.region_tier(side, region)] * weights.region_tier
         value -= _TIER_VALUE[board.region_tier(opponent, region)] * weights.region_tier
     for cid, info in board.countries.items():
-        controller = board.control(cid)
-        if controller is None:
-            continue
-        per_country = weights.battleground_control if info.battleground else weights.country_control
-        value += per_country if controller is side else -per_country
+        own = board.influence[cid][side.value]
+        opp = board.influence[cid][opponent.value]
+        per = weights.battleground_control if info.battleground else weights.country_control
+        need = opp + info.stability
+        opp_need = own + info.stability
+        if need:
+            value += per * min(1.0, own / need)
+        if opp_need:
+            value -= per * min(1.0, opp / opp_need)
     return value
 
 
@@ -175,6 +205,13 @@ def _coup_risks_defcon(observation: Observation, side: Side, info: CountryInfo) 
     if not info.battleground:
         return False
     return not (side is Side.US and bool(observation.turn_effects.get("nuclear_subs")))
+
+
+def _coup_is_suicide(observation: Observation, side: Side) -> bool:
+    """Cuban Missile Crisis: any Coup by the flagged side this turn loses the
+    game outright, so no target is ever safe (unlike the DEFCON risk above,
+    which only some targets carry)."""
+    return observation.turn_effects.get("cuban_missile_crisis") == side.value
 
 
 def _expected_coup_gain(
@@ -249,20 +286,54 @@ def _space_race_expected_vp(observation: Observation, side: Side) -> float:
     return probability * vp
 
 
+def _se_asia_scoring_net(board: Board) -> float:
+    """Southeast Asia scoring, net US-positive: +2 VP for control of Thailand,
+    +1 VP per other controlled SE Asia country (mirrors the engine's
+    `_score_southeast_asia`, which isn't reachable from a bare Board)."""
+    net = 0.0
+    for cid, info in board.countries.items():
+        if Subregion.SOUTHEAST_ASIA not in info.subregions:
+            continue
+        value = 2.0 if cid == "Thailand" else 1.0
+        ctrl = board.control(cid)
+        if ctrl is Side.US:
+            net += value
+        elif ctrl is Side.USSR:
+            net -= value
+    return net
+
+
 def _scoring_card_favorability(board: Board, side: Side, cid: str) -> float:
-    region = SCORING_CARD_REGION.get(cid)
-    if region is None:
-        return 0.0
-    net = board.score_region(region)  # positive favors US
+    if cid == "Southeast_Asia_Scoring":
+        net = _se_asia_scoring_net(board)
+    else:
+        region = SCORING_CARD_REGION.get(cid)
+        if region is None:
+            return 0.0
+        net = board.score_region(region)  # positive favors US
     return net if side is Side.US else -net
 
 
 # -- per-decision-kind scorers -------------------------------------------------
 
 
+def _score_setup_place(board: Board, side: Side, country: str) -> float:
+    """Fill the standard opening stacks before anywhere else."""
+    want = _SETUP_TARGET[side].get(country)
+    if want is None:
+        return -10.0
+    have = board.influence[country][side.value]
+    if have >= want:
+        return -1.0
+    bg = 100.0 if board.countries[country].battleground else 10.0
+    return bg + (want - have)
+
+
 def _score_place_influence(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     country = action.payload["country"]
+    if observation.pending_decision.context.get("setup"):
+        return _score_setup_place(board, side, country)
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
     return weights.influence_base + gain - (cost - 1) * weights.doubled_cost_penalty
@@ -278,12 +349,22 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
     if bonus and _in_bonus_region(info, bonus):
         ops += 1
 
+    if _coup_is_suicide(observation, side):
+        return -weights.defcon_self_kill_penalty
     if observation.defcon <= 2 and _coup_risks_defcon(observation, side, info):
         return -weights.defcon_self_kill_penalty
 
     gain = _expected_coup_gain(weights, board, observation, side, country, info, ops)
     caution = weights.defcon_caution * (5 - observation.defcon)
-    return weights.coup_base + gain - caution
+    score = weights.coup_base + gain - caution
+    if (
+        observation.turn == 1
+        and side is Side.USSR
+        and country == "Iran"
+        and observation.defcon >= 4
+    ):
+        score += weights.t1_iran_coup_bonus
+    return score
 
 
 def _score_realignment_target(
@@ -334,6 +415,8 @@ def _best_coup_value(
     one of them would be a DEFCON self-kill. Region-lock effects beyond
     `RULES["coup_min_defcon"]` (NATO, The Reformer, ...) are not replicated
     here -- out of scope for v1 (core board decisions); see the module docstring."""
+    if _coup_is_suicide(observation, side):
+        return None  # every target loses the game under Cuban Missile Crisis
     opponent = side.opponent
     best = None
     for cid, info in board.countries.items():
@@ -393,10 +476,20 @@ def _score_headline(weights: GreedyWeights, board: Board, observation: Observati
     card = _CARDS[cid]
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
-    # Non-scoring: headlining is a no-op discard while its event is unfired
-    # (events off, or an unimplemented event) -- spend a low-Ops card here and
-    # keep higher-Ops ones for Operations.
-    return -weights.hold_high_ops_weight * card.ops
+    # Headlining an opponent-side event fires it *for them*. Never do that.
+    if (card.side is CardSide.US and side is Side.USSR) or (
+        card.side is CardSide.USSR and side is Side.US
+    ):
+        return -weights.opponent_headline_penalty
+    # Own/neutral: spend a low-Ops card here and keep higher-Ops ones for Ops.
+    score = -weights.hold_high_ops_weight * card.ops
+    if (
+        observation.turn == 1
+        and side is Side.USSR
+        and cid in _USSR_T1_HEADLINES
+    ):
+        score += weights.t1_headline_bonus
+    return score
 
 
 def _score_action_round_play(
@@ -408,7 +501,10 @@ def _score_action_round_play(
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
     ops = _effective_ops_estimate(card, observation, side)
-    return weights.action_round_ops_weight * ops
+    score = weights.action_round_ops_weight * ops
+    if card.side.value == side.opponent.value:
+        score -= weights.opponent_event_ops_penalty  # its Event fires for them
+    return score
 
 
 def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
@@ -425,7 +521,13 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
             + weights.space_race_vp_weight * expected_vp
             - weights.space_race_ops_penalty * ops
         )
-    if mode in ("ops", "un_intervention"):
+    if mode == "ops":
+        score = weights.ops_mode_per_point * ops
+        if card.side.value == side.opponent.value:
+            score -= weights.opponent_event_ops_penalty  # fires their Event
+        return score
+    if mode == "un_intervention":
+        # UN Intervention cancels the opponent card's Event, so no penalty.
         return weights.ops_mode_per_point * ops
     # mode == "event": with the event layer off (or for a card with no
     # implemented event yet) this is a no-op discard -- always worse than
@@ -473,6 +575,12 @@ class GreedyPlayer:
 
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
         decision: Decision = observation.pending_decision
+        if not decision.options:
+            # An engine-stuck state: fail loudly with the kind, rather than a
+            # bare IndexError/ValueError from options[0]/max().
+            raise RuntimeError(
+                f"no legal options for {decision.kind.value} (engine stuck state)"
+            )
         scorer = _SCORERS.get(decision.kind)
         if scorer is None:
             return decision.options[0]

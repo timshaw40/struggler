@@ -129,12 +129,15 @@ def test_score_region_rulebook_worked_example_10_1_2():
     assert board.score_region(Region.CENTRAL_AMERICA) == 1 - 5
 
 
-def test_score_region_europe_control_raises_instead_of_guessing():
-    import pytest
-
+def test_score_region_europe_control_approximates_domination():
+    # Europe has no printed Control value (controlling all of Europe is the
+    # immediate win, handled by Engine._score_region_net). An intermediate
+    # CONTROL tier is still reachable, and must score as Domination rather
+    # than raising -- which crashed the LLM prompt build and Greedy whenever
+    # Europe Scoring was on offer in that state.
     board = Board()
     europe = board.countries_in(Region.EUROPE)
     for cid in europe:
         board.influence[cid]["US"] = board.countries[cid].stability
-    with pytest.raises(RuntimeError):
-        board.score_region(Region.EUROPE)
+    assert board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
+    assert board.score_region(Region.EUROPE) > 0  # US domination + bonuses

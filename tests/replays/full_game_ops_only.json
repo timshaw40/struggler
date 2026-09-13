@@ -4758,6 +4758,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "CIA_Created",
           "Decolonization",
@@ -5905,6 +5906,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Indo_Pakistani_War",
           "Central_America_Scoring",
@@ -7049,6 +7051,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Iranian_Hostage_Crisis",
           "Glasnost",
@@ -8184,6 +8187,7 @@
         "game_over_reason": "final_vp",
         "phase": "complete",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Soviets_Shoot_Down_KAL_007",
           "Africa_Scoring",

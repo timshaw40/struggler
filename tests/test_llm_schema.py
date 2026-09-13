@@ -85,6 +85,16 @@ def test_a_genuinely_clean_payload_is_unaffected():
     assert dict(plan.steps[0].payload) == {"country": "Angola"}
 
 
+def test_rejects_a_step_missing_its_payload_key():
+    # A strict schema can emit an all-null payload; accepting it would let
+    # _find_matching_option treat an empty dict as "first option" and play an
+    # arbitrary move instead of retrying.
+    for empty in ({}, {"country": None}, {"country": "  "}):
+        raw = {"justification": "ok", "steps": [{"kind": "place_influence", "payload": empty}]}
+        with pytest.raises(PlanParseError):
+            parse_plan_response(raw)
+
+
 # -- turn plan -----------------------------------------------------------------
 
 

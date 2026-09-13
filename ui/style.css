@@ -7,6 +7,8 @@
   --us: #2f6fed;
   --ussr: #d43a3a;
   --gold: #ffd54a;
+  /* The log and the decision box share this exact width (the right column). */
+  --sidebar-w: 320px;
 }
 
 * { box-sizing: border-box; }
@@ -27,100 +29,257 @@ main {
   min-height: 0;
 }
 
+/* Left column: the map grows to fill, and the hand is a fixed-height bar
+ * flush underneath it (no reserved gap from a bottom decision bar). */
+#leftcol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 #boardarea {
   flex: 1;
   display: flex;
   min-width: 0;
+  min-height: 0;
   position: relative;
 }
 
 #boardwrap {
   flex: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
   overflow: auto;
   position: relative;
 }
 
-#zoomer {
+#boardbox {
+  position: relative;
+  margin: 0;
+  width: var(--boardw, 1600px);  /* set by layoutBoard() — the only zoom knob */
+}
+
+#viewbar {
   position: absolute;
   top: 10px;
   right: 12px;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
+  max-width: 60%;
   z-index: 5;
 }
 
-#zoomer button {
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid #3a4252;
-  border-radius: 8px;
-  padding: 4px 12px;
+#viewbar button {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: #cfd3dc;
+  background: #141a22;
+  border: 1px solid #3a4350;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
-  opacity: 0.9;
 }
 
-#zoomer button:hover { border-color: var(--gold); }
+#viewbar button:hover { border-color: #5a6572; }
 
-#boardwrap.noboard ~ #zoomer { display: none; }
+#viewbar button.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
 
-#boardbox {
-  position: relative;
-  margin: 0 auto;
+#boardwrap.noboard ~ #viewbar,
+#boardwrap.noboard ~ #zoom { display: none; }
+
+#zoom {
+  position: absolute;
+  right: 6px;
+  top: 48px;
+  width: 18px;
+  height: 25%;  /* 1/4 of the old full-height track */
+  margin: 0;
+  z-index: 5;
+  writing-mode: vertical-lr;
+  direction: rtl;  /* up = zoom in */
+  appearance: slider-vertical;
+  -webkit-appearance: slider-vertical;
 }
 
 #board {
+  width: 100%;
   display: block;
+  -webkit-user-drag: none;
 }
 
 #markers {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* Chips scale with the map: a pair runs ~0.9 of a country box tall in
+   * every region view. World keeps the readable floor (fit-width map, so
+   * the proportional term would shrink chips to dots — hover for detail). */
+  font-size: max(11.5px, calc(var(--boardw, 1600px) / 160));
 }
 
 .marker {
   position: absolute;
-  transform: translate(-50%, -50%);
-  display: flex;
-  gap: 2px;
   pointer-events: auto;
   z-index: 2;
 }
 
-.marker span {
-  min-width: 22px;
-  padding: 1px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
-  border-radius: 6px;
-  color: #fff;
+.marker:not(.boxed) {
+  transform: translate(-50%, -50%);
+  display: grid;
+  grid-template-columns: 1.9em 1.9em;
+  gap: 0.174em;
+  min-height: 1.9em;
 }
 
-.marker .us { background: var(--us); }
-.marker .ussr { background: var(--ussr); }
+.marker .pip {
+  position: relative;
+  width: 1.9em;
+  height: 1.9em;
+}
+
+.marker .pip.us { grid-column: 1; }
+.marker .pip.ussr { grid-column: 2; }
+
+.marker.boxed .pip {
+  position: absolute;
+  container-type: size;
+  top: calc(var(--strip) + 4%);
+  height: calc(100% - var(--strip) - 6%);
+  width: 44%;
+  grid-column: auto;
+}
+.marker.boxed .pip.us { left: 4%; }
+.marker.boxed .pip.ussr { right: 4%; left: auto; }
+
+.marker .pip img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.marker .pip b {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(1em + 2px);
+  font-weight: 700;
+  line-height: 1;
+  color: #1c2330;
+  -webkit-text-stroke: 2.5px #fff;
+  paint-order: stroke fill;
+  text-shadow: none;
+}
+
+.marker.boxed .pip b { font-size: calc(58cqmin + 2px); }
+
+.marker .pip.controlled b { color: #fff; }
+
+.marker .pip.us b { color: #1c2330; }
+
+.marker .pip.ussr.controlled b { -webkit-text-stroke-color: #000; }
 
 .marker.legal {
   cursor: pointer;
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--gold), 0 0 8px 1px rgba(255, 213, 74, 0.45);
 }
 
-.marker.legal:hover { transform: translate(-50%, -50%) scale(1.25); }
+.marker.legal:hover { filter: brightness(1.08); }
+.marker:not(.boxed).legal:hover { transform: translate(-50%, -50%) scale(1.25); }
 
+.tracktok {
+  position: absolute;
+  width: calc(var(--boardw) * 90 / 5100);
+  height: auto;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.flypip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 48px;
+  z-index: 40;
+  pointer-events: none;
+  transition: transform 0.4s ease-out;
+}
+
+/* Grab the map anywhere and drag to pan. */
+#boardwrap { cursor: grab; user-select: none; }
+#boardwrap.dragging { cursor: grabbing; }
+#boardwrap.dragging .marker { pointer-events: none; }
+
+/* The panel scrolls inside #panelscroll so #decision can pin to the panel's
+ * bottom edge — a popup floating over the History section. */
 #panel {
-  width: 320px;
+  flex: none;
+  width: var(--sidebar-w);
   background: var(--panel);
   padding: 12px 14px;
-  overflow-y: auto;
   border-left: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
 }
 
-#panel h1 { font-size: 18px; margin: 0 0 10px; }
+/* The log fills what the decision box doesn't need; it shrinks as the
+ * decision grows, so the two always share this one column's width. */
+#panelscroll {
+  flex: 1;
+  min-height: 90px;
+  overflow-y: auto;
+}
+
+#panel h1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+#cog {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  z-index: 6;
+  position: relative;
+}
+#cog:hover { color: var(--text); }
+#settings {
+  display: block;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: -4px 0 10px;
+  font-size: 13px;
+  z-index: 6;
+}
+#settings[hidden] { display: none; }
+#settings p { margin: 0 0 8px; }
+#settings label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+#settings input[type="range"] { flex: 1; }
+#settings button {
+  margin: 8px 6px 0 0;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
 
 .kv {
   display: flex;
@@ -131,17 +290,68 @@ main {
 
 .kv b { font-weight: 600; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+/* Active-effects HUD: bottom-right of the map, opposite the centered action
+ * bar. The container ignores pointer events so it never blocks drag-pan;
+ * only the chips accept hover (for the effect tooltip + card preview). */
+#effectshud {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  max-width: 46%;
+  pointer-events: none;
+}
+#effectshud[hidden] { display: none; }
 
-.chip {
-  background: var(--panel2);
-  border: 1px solid #333b49;
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 12px;
+.effgroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
-#feed { margin-top: 12px; }
+.efflabel {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.effchip {
+  pointer-events: auto;
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(20, 22, 26, 0.9);
+  border: 1px solid #3a4252;
+  white-space: nowrap;
+  cursor: help;
+}
+.effchip.us { border-color: #3b9eff; color: #cfe1ff; }
+.effchip.ussr { border-color: #ff2d2d; color: #ffd0d0; }
+.effchip.neutral { border-color: var(--gold); color: #ffe9a8; }
+.effchip.urgent { border-color: #ff2d2d; animation: pulse 1.2s ease-in-out infinite; }
+
+#feed { margin-bottom: 12px; }
+#feed h2 { font-size: 13px; margin: 0 0 6px; }
+#status { margin-top: 8px; }
+
+/* Click a pile row to reveal the whole list. */
+.kv.pile { cursor: pointer; }
+.kv.pile:hover { color: var(--text); }
+.pilelist {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0 6px;
+  border-bottom: 1px solid #2a303c;
+}
+.pilelist[hidden] { display: none; }
 
 .feedrow {
   padding: 3px 0;
@@ -150,29 +360,81 @@ main {
   color: var(--muted);
 }
 
-.feedrow b { color: var(--text); font-weight: 600; }
+.feedmain {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
 
-#playbar {
+.feedmain span { flex: 1; min-width: 0; }
+
+.feedtoggle {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 1;
+  background: none;
+  border: 1px solid #3a4252;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.feedtoggle:hover { color: var(--text); border-color: #5a6572; }
+
+.feedmain b { font-weight: 700; }
+.feedmain b.us { color: #3b9eff; }
+.feedmain b.ussr { color: #ff2d2d; }
+
+.feeddetail {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid #3a4252;
+  font-size: 12px;
+  color: var(--text);
+}
+.feeddetail[hidden] { display: none; }
+
+.feedrow.wait {
+  display: flex;
+  justify-content: flex-start;
+  color: var(--gold);
+  font-style: italic;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.4; }
+}
+
+/* The hand is a fixed-height bar flush under the map. It is always a single
+ * row: cards scroll horizontally instead of wrapping, and the card width (and
+ * so the bar height) never changes as the decision box grows. */
+#hand {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
   background: var(--panel);
   border-top: 1px solid #000;
   padding: 10px 14px;
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  min-height: 168px;
 }
 
-#hand { display: flex; gap: 8px; flex-wrap: wrap; max-width: 55%; }
-
 .card {
-  width: 92px;
+  width: 150px;
   border-radius: 8px;
   overflow: hidden;
   background: var(--panel2);
   flex-shrink: 0;
 }
 
-.card img { width: 100%; display: block; }
+/* White backing behind every card face: the VASSAL SVGs have transparent
+ * backgrounds, so without this the system dark theme bleeds through. */
+.card img { width: 100%; display: block; background: #fff; }
 
 .card.playable {
   outline: 2px solid var(--gold);
@@ -190,25 +452,150 @@ main {
 .side-us .cardname { color: #7ea4f5; }
 .side-ussr .cardname { color: #e57373; }
 
-#decision { flex: 1; }
+/* Decision box: the bottom of the right column, directly under the log and
+ * sharing its width. It takes only the height it needs (up to a cap), so the
+ * log above shrinks to make room instead of the map changing size. */
+#decision {
+  flex: none;
+  max-height: 65%;
+  overflow-y: auto;
+  scrollbar-color: #9aa0ad transparent;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+#decision::-webkit-scrollbar { width: 10px; }
+#decision::-webkit-scrollbar-track { background: transparent; }
+#decision::-webkit-scrollbar-thumb { background: #9aa0ad; border-radius: 5px; }
+#decision .card { width: 90px; margin: 0 auto 6px; }
+#decision .dcols { display: flex; gap: 10px; }
+#decision .dcol-main { flex: 1; min-width: 0; }
+#decision .dcol-card { flex: none; width: 100px; }
+
+#decision[hidden] { display: none; }
 
 #decision strong { font-size: 15px; }
 
-#decision .ctx { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; }
+#decision .dside { font-size: 16px; font-weight: 800; margin-bottom: 2px; }
+#decision .dside.us { color: #3b9eff; }
+#decision .dside.ussr { color: #ff2d2d; }
+#decision .dhead { display: flex; justify-content: space-between; align-items: center; }
+#decision .backbtn {
+  width: auto;
+  margin-top: 0;
+  padding: 2px 8px;
+  font-size: 12px;
+}
 
-#decision .options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 110px; overflow-y: auto; }
+#decision .ctx { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; }
+#decision .ctx b { color: var(--text); }
+
+#decision .playedcap {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 6px 0 4px;
+}
+
+#decision .hint { display: block; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
 
 #decision button {
-  background: var(--panel2);
+  display: block;
+  width: 100%;
+  background: var(--panel);
   color: var(--text);
   border: 1px solid #3a4252;
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 7px 10px;
+  margin-top: 6px;
   cursor: pointer;
   font-size: 13px;
+  text-align: center;
 }
 
 #decision button:hover { border-color: var(--gold); }
+
+/* Country hover tip: the country's printed header strip (flag | name |
+ * stability badge — red badge means battleground) amplified from the board
+ * image, with live influence beneath. */
+#countrytip {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+#countrytip[hidden] { display: none; }
+
+#countrytip .chead {
+  display: block;
+  width: 289px;  /* 15% under the map-strip's natural 340px so fewer neighbors hide */
+  border-radius: 6px;
+}
+
+#countrytip .cname { font-size: 18px; font-weight: 700; padding: 4px 6px; }
+
+#countrytip .cstats { font-size: 17px; margin-top: 4px; padding: 0 2px; text-align: center; }
+
+#countrytip .us { color: #7ea4f5; font-weight: 600; }
+
+#countrytip .ussr { color: #e57373; font-weight: 600; }
+
+#dicebox {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 280px;
+  max-width: 420px;
+  max-height: 92%;   /* keep tall reveals inside the map area */
+  overflow-y: auto;
+  padding: 20px 28px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid #3a4252;
+  border-radius: 12px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
+}
+#dicebox[hidden] { display: none; }
+#dicebox .dtitle { margin: 0; font-size: 16px; font-weight: 600; }
+#dicebox .dice {
+  font-size: 72px;
+  letter-spacing: 10px;
+  line-height: 1.1;
+  margin: 14px 0 8px;
+}
+#dicebox .playcard {
+  width: 200px;
+  max-height: 44vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+#dicebox .hcards { display: flex; gap: 18px; justify-content: center; }
+#dicebox .hcards > div { width: 180px; flex: none; }
+#dicebox .htag { font-size: 13px; color: var(--muted); margin-bottom: 6px; white-space: nowrap; }
+#dicebox .hcards img {
+  width: 170px;
+  max-height: 40vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}
+#dicebox .doutcome {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 14px;
+  color: var(--muted);
+}
 
 #winner {
   position: fixed;
@@ -216,10 +603,54 @@ main {
   background: rgba(0, 0, 0, 0.7);
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 50;  /* above dice/preview/tooltip/flypip; #toast stays on top */
 }
 
 #winner:not([hidden]) { display: flex; }
+
+/* Transient error banner: connection/fetch failures must be visible, not
+ * just a console line. Click to dismiss; auto-hides. */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  max-width: 80vw;
+  padding: 10px 16px;
+  background: #7f1d1d;
+  color: #fff;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 60;  /* errors always on top */
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+#toast[hidden] { display: none; }
+
+/* Action banner mirrored for screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Turn/round/DEFCON/VP header under the title. */
+#gamestatus {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: -4px 0 8px;
+}
+#gamestatus .us { color: #3b9eff; font-weight: 600; }
+#gamestatus .ussr { color: #ff2d2d; font-weight: 600; }
+#gamestatus .danger { color: #ff6b6b; font-weight: 700; }
 
 /* Big read-a-card preview: floats above the hovered card (positioned by
  * JS from the card's rect) and is pointer-transparent, so sweeping the
@@ -241,12 +672,22 @@ main {
 #cardpreview img {
   width: 100%;
   display: block;
+  background: #fff;
   aspect-ratio: 824 / 1124;  /* all faces share it: height is known pre-load */
 }
 
 #cardpreview .cardname { font-size: 20px; padding: 10px 12px 2px; }
 
 #cardpreview .cardops { font-size: 15px; padding: 0 12px 12px; }
+
+#cardpreview .scorepreview {
+  font-size: 14px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid #3a4252;
+  color: var(--text);
+}
+#cardpreview .scorepreview b.us { color: #3b9eff; }
+#cardpreview .scorepreview b.ussr { color: #ff2d2d; }
 
 #winner .cardbig {
   background: var(--panel);
@@ -255,4 +696,101 @@ main {
   padding: 24px 36px;
   font-size: 20px;
   text-align: center;
+}
+
+/* Board loading placeholder (the board art is ~13 MB). */
+#boardload {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b94a3;
+  font-size: 15px;
+  background: #12161d;
+}
+#boardload[hidden] { display: none; }
+
+/* No map picks while an action is in flight. */
+#markers.busy .marker { pointer-events: none; cursor: default; }
+
+/* Visible keyboard focus on the interactive elements that are divs. */
+.marker.actionable:focus-visible,
+.card.playable:focus-visible,
+#viewbar button:focus-visible,
+#decision button:focus-visible,
+#cog:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+#decision button:disabled { opacity: 0.5; cursor: default; }
+
+/* Persistent "most recent action" caption, bottom-center of the map.
+ * Horizontally centered but clear of the centered #dicebox popups so the
+ * action stays readable while dice/card animations play. pointer-events:none
+ * so it never steals marker clicks or drag-pan. */
+#actionbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;  /* over the map (2/3) and viewbar (5); under #winner/#dicebox */
+  pointer-events: none;
+  max-width: min(92%, 760px);
+  padding: 8px 18px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(20, 22, 26, 0.9);
+  border: 1px solid #3a4252;
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#actionbar[hidden] { display: none; }
+
+#actionbar.bump { animation: actionbump 0.18s ease-out; }
+@keyframes actionbump {
+  from { transform: translateX(-50%) scale(0.96); opacity: 0.55; }
+  to   { transform: translateX(-50%) scale(1);    opacity: 1; }
+}
+
+/* Narrow windows: give the map back some room. */
+@media (max-width: 1180px) {
+  :root { --sidebar-w: 290px; }
+}
+@media (max-width: 900px) {
+  :root { --sidebar-w: 240px; }
+  #hand .card { width: 120px; }
+  #viewbar { max-width: 80%; }
+}
+
+/* Placement aids: remaining Ops in the decision box, and a doubled-cost badge
+ * on opponent-controlled targets (placing there costs 2 Ops). */
+#decision .opsleft {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin: 4px 0 2px;
+}
+.marker .cost2 {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #c2410c;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 3;
 }

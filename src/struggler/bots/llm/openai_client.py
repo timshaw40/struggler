@@ -13,9 +13,13 @@ from typing import Any, Mapping
 
 from struggler.bots.llm.client import (
     DEFAULT_MAX_TOKENS,
+    DEFAULT_TIMEOUT,
     LLMClientError,
     LLMRequest,
     LLMResponse,
+    LLMTruncatedError,
+    redact_secrets,
+    strip_json_fence,
 )
 
 
@@ -33,7 +37,8 @@ class OpenAIClient:
     """
 
     def __init__(
-        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS
+        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS,
+        base_url: str | None = None, timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
         try:
             import openai
@@ -42,7 +47,14 @@ class OpenAIClient:
                 "OpenAIClient requires the 'openai' package: "
                 "pip install 'struggler[llm-openai]'"
             ) from exc
-        self._client = openai.OpenAI(**({"api_key": api_key} if api_key else {}))
+        kwargs: dict[str, Any] = {"timeout": timeout}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            # Local OpenAI-compatible servers (LM Studio, Ollama): the key
+            # is required by the SDK but ignored by the server.
+            kwargs["base_url"] = base_url
+        self._client = openai.OpenAI(**kwargs)
         self._model = model
         self._max_tokens = max_tokens
         self.provider_name = "openai"
@@ -69,13 +81,25 @@ class OpenAIClient:
                 },
             )
         except Exception as exc:  # network/HTTP/SDK failure
-            raise LLMClientError(str(exc)) from exc
+            raise LLMClientError(redact_secrets(str(exc))) from exc
 
-        text = response.choices[0].message.content if response.choices else None
-        if text is None:
+        choice = response.choices[0] if response.choices else None
+        message = choice.message if choice is not None else None
+        # A response cut off at the token limit is not "unparseable": say so,
+        # so the retry/log can distinguish it from genuinely malformed JSON.
+        if choice is not None and getattr(choice, "finish_reason", None) == "length":
+            raise LLMTruncatedError(
+                "OpenAI response hit the output-token limit before finishing"
+            )
+        text = message.content if message is not None else None
+        if not text and message is not None:
+            # Reasoning models behind LM Studio emit the schema-constrained
+            # answer as `reasoning_content` with an empty `content`.
+            text = getattr(message, "reasoning_content", None)
+        if not text:
             raise LLMClientError("OpenAI response carried no message content")
         try:
-            structured = json.loads(text)
+            structured = json.loads(strip_json_fence(text))
         except json.JSONDecodeError as exc:
             raise LLMClientError(f"unparseable structured output: {exc}") from exc
 
@@ -128,4 +152,9 @@ def _make_nullable(subschema: Mapping[str, Any]) -> dict[str, Any]:
         subschema["type"] = [t, "null"]
     elif isinstance(t, list) and "null" not in t:
         subschema["type"] = [*t, "null"]
+    # A nullable enum must also list null among its values, or OpenAI strict
+    # mode rejects the whole schema (e.g. payload `mode`/`type`/`order`).
+    enum = subschema.get("enum")
+    if isinstance(enum, list) and None not in enum:
+        subschema["enum"] = [*enum, None]
     return subschema

@@ -71,7 +71,7 @@
       "remove_after_event": false,
       "optional": false,
       "in_deck": true,
-      "event_summary": "USSR randomly discards a card; if it's a USSR event, that event fires too."
+      "event_summary": "USSR randomly discards a card; if it's a US event, that event fires too."
     },
     "The_China_Card": {
       "number": 6,
@@ -815,7 +815,7 @@
       "remove_after_event": false,
       "optional": false,
       "in_deck": true,
-      "event_summary": "One USSR card is randomly revealed; US plays it in full (Event or Ops) or returns it (US conducts 2 Ops instead); if the USSR hand is empty, US just gets 2 Ops."
+      "event_summary": "One USSR card is randomly revealed; US plays it for its Ops (a USSR card never offers its Event) or returns it (US conducts 2 Ops instead); if the USSR hand is empty, US just gets 2 Ops."
     },
     "John_Paul_II_Elected_Pope": {
       "number": 68,

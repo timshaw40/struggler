@@ -57,6 +57,46 @@ def test_greedy_avoids_coup_as_an_ops_type_at_defcon_2():
     assert action.payload["type"] != "coup"
 
 
+def test_greedy_scores_southeast_asia_scoring():
+    from struggler.bots.greedy import _scoring_card_favorability
+
+    board = Board()
+    board.influence["Thailand"] = {"US": board.countries["Thailand"].stability, "USSR": 0}
+    board.influence["Vietnam"] = {"US": 0, "USSR": board.countries["Vietnam"].stability}
+
+    us = _scoring_card_favorability(board, Side.US, "Southeast_Asia_Scoring")
+    ussr = _scoring_card_favorability(board, Side.USSR, "Southeast_Asia_Scoring")
+    assert us > 0 and ussr < 0 and us == -ussr  # Thailand 2 - Vietnam 1 = +1 net US
+
+
+def test_greedy_avoids_playing_an_opponent_event_for_ops():
+    # Warsaw Pact Formed (USSR, 3 Ops) vs Duck and Cover (US, 3 Ops): equal
+    # Ops, but the USSR card would fire its Event for the opponent on an Ops
+    # play, so Greedy picks the US card.
+    engine = Engine(seed=1)
+    engine.hands["US"] = ["Warsaw_Pact_Formed", "Duck_and_Cover"]
+    engine._push_action_round_play(Side.US)
+    action = GreedyPlayer().choose_action(engine.observe(Side.US), [])
+    assert action.payload["card"] == "Duck_and_Cover"
+
+
+def test_greedy_avoids_coup_under_cuban_missile_crisis():
+    """Cuban Missile Crisis: any Coup by the flagged side this turn loses the
+    game outright, so Greedy must refuse "coup" at OPS_TYPE even with a good
+    target on offer (its DEFCON guard alone does not know about CMC)."""
+    engine = Engine(seed=1)
+    engine.board.influence["Mexico"]["USSR"] = 3  # a juicy, DEFCON-safe target
+    engine.turn_effects["cuban_missile_crisis"] = "US"
+
+    engine._push_ops_type(Side.US, ops=3)
+    observation = engine.observe(Side.US)
+    assert observation.pending_decision.kind is DecisionKind.OPS_TYPE
+    assert "coup" in {a.payload["type"] for a in observation.pending_decision.options}
+
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["type"] != "coup"
+
+
 def test_greedy_falls_back_to_first_option_for_unmapped_decision_kinds():
     engine = Engine.new_game(seed=1)
     observation = engine.observe(engine.pending_decision.actor)
@@ -89,3 +129,102 @@ def test_greedy_aldrich_ames_remix_discards_the_opponents_highest_ops_card():
     action = GreedyPlayer().choose_action(observation, [])
 
     assert action.payload["choice"] == "Duck_and_Cover"
+
+
+def test_ussr_standard_opening_is_four_poland_one_eg_one_yugo():
+    """Twilight Strategy standard USSR setup: 4 E.Ger, 4 Poland, 1 Yugoslavia."""
+    engine = Engine.new_game(seed=1)
+    greedy = GreedyPlayer()
+    placed: list[str] = []
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.USSR
+        and engine.pending_decision.context.get("setup")
+    ):
+        action = greedy.choose_action(engine.observe(Side.USSR), [])
+        placed.append(action.payload["country"])
+        engine.step(action)
+    assert placed.count("Poland") == 4
+    assert placed.count("East_Germany") == 1
+    assert placed.count("Yugoslavia") == 1
+    assert "Austria" not in placed
+
+
+def test_us_standard_opening_is_four_wg_three_italy():
+    engine = Engine.new_game(seed=1)
+    greedy = GreedyPlayer()
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.USSR
+        and engine.pending_decision.context.get("setup")
+    ):
+        engine.step(greedy.choose_action(engine.observe(Side.USSR), []))
+    placed: list[str] = []
+    while (
+        engine.pending_decision
+        and engine.pending_decision.actor is Side.US
+        and engine.pending_decision.context.get("setup")
+    ):
+        action = greedy.choose_action(engine.observe(Side.US), [])
+        placed.append(action.payload["country"])
+        engine.step(action)
+    assert placed.count("West_Germany") == 4
+    assert placed.count("Italy") == 3
+
+
+def test_ussr_does_not_headline_a_us_event():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    decision = Decision(
+        id=999,
+        actor=Side.USSR,
+        kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "CIA_Created"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Socialist_Governments"}),
+        ),
+    )
+    observation = dataclasses.replace(
+        observation, pending_decision=decision, side=Side.USSR,
+    )
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["card"] == "Socialist_Governments"
+
+
+def test_ussr_t1_headlines_red_scare_over_a_filler_ussr_event():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    observation = dataclasses.replace(observation, turn=1, side=Side.USSR)
+    decision = Decision(
+        id=998,
+        actor=Side.USSR,
+        kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Romanian_Abdication"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Red_Scare_Purge"}),
+        ),
+    )
+    observation = dataclasses.replace(observation, pending_decision=decision)
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["card"] == "Red_Scare_Purge"
+
+
+def test_ussr_t1_prefers_couping_iran_over_italy():
+    engine = Engine.new_game(seed=1)
+    observation = engine.observe(engine.pending_decision.actor)
+    observation = dataclasses.replace(
+        observation, turn=1, defcon=5, side=Side.USSR,
+    )
+    decision = Decision(
+        id=997,
+        actor=Side.USSR,
+        kind=DecisionKind.COUP_TARGET,
+        options=(
+            Action(DecisionKind.COUP_TARGET, {"country": "Italy"}),
+            Action(DecisionKind.COUP_TARGET, {"country": "Iran"}),
+        ),
+        context={"ops": 4, "bonus": None},
+    )
+    observation = dataclasses.replace(observation, pending_decision=decision)
+    action = GreedyPlayer().choose_action(observation, [])
+    assert action.payload["country"] == "Iran"

@@ -27,6 +27,8 @@ Thumbs.db
 
 # Outputs
 logs/
+data/
+*.pt
 
 # User-supplied art (scans/PDF-derived images). Never commit these.
 ui/assets/
