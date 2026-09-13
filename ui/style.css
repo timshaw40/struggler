@@ -290,15 +290,53 @@ main {
 
 .kv b { font-weight: 600; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-
-.chip {
-  background: var(--panel2);
-  border: 1px solid #333b49;
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 12px;
+/* Active-effects HUD: bottom-right of the map, opposite the centered action
+ * bar. The container ignores pointer events so it never blocks drag-pan;
+ * only the chips accept hover (for the effect tooltip + card preview). */
+#effectshud {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  max-width: 46%;
+  pointer-events: none;
 }
+#effectshud[hidden] { display: none; }
+
+.effgroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.efflabel {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.effchip {
+  pointer-events: auto;
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(20, 22, 26, 0.9);
+  border: 1px solid #3a4252;
+  white-space: nowrap;
+  cursor: help;
+}
+.effchip.us { border-color: #3b9eff; color: #cfe1ff; }
+.effchip.ussr { border-color: #ff2d2d; color: #ffd0d0; }
+.effchip.neutral { border-color: var(--gold); color: #ffe9a8; }
+.effchip.urgent { border-color: #ff2d2d; animation: pulse 1.2s ease-in-out infinite; }
 
 #feed { margin-bottom: 12px; }
 #feed h2 { font-size: 13px; margin: 0 0 6px; }

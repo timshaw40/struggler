@@ -781,6 +781,116 @@ const CHOICE_WORDS = {
 };
 const choiceWord = (c) => CHOICE_WORDS[c] || pretty(c);
 
+/* Maps every engine effect key (turn_effects / game_effects) to the card that
+ * set it, a compact label, and a one-line effect description. The four
+ * space_race_* keys are Space Race box abilities, not cards. `sideValue` means
+ * the stored value names the affected side; `valueIsRegion` means it names a
+ * region. Keep in sync with events.py / core.py (the HUD warns on any key
+ * missing here). */
+const EFFECT_META = {
+  // per-turn
+  containment: { card: "Containment", short: "Containment", scope: "turn", note: "US Operations +1 this turn (max 4)." },
+  brezhnev: { card: "Brezhnev_Doctrine", short: "Brezhnev", scope: "turn", note: "USSR Operations +1 this turn (max 4)." },
+  red_scare: { card: "Red_Scare_Purge", short: "Red Scare", scope: "turn", sideValue: true, note: "That side's Operations \u22121 this turn." },
+  u2_incident: { card: "U2_Incident", short: "U2 Incident", scope: "turn", note: "USSR +1 VP if UN Intervention is played this turn." },
+  nuclear_subs: { card: "Nuclear_Subs", short: "Nuclear Subs", scope: "turn", note: "US coups in battlegrounds don't lower DEFCON this turn." },
+  vietnam_revolts: { card: "Vietnam_Revolts", short: "Vietnam Revolts", scope: "turn", note: "USSR +1 Op when all Ops go to Southeast Asia this turn." },
+  la_death_squads: { card: "Latin_American_Death_Squads", short: "Death Squads", scope: "turn", sideValue: true, note: "That side's coups +1 / opponent's \u22121 in Central & South America this turn." },
+  iran_contra: { card: "Iran_Contra_Scandal", short: "Iran\u2013Contra", scope: "turn", note: "US realignment rolls \u22121 this turn." },
+  chernobyl: { card: "Chernobyl", short: "Chernobyl", scope: "turn", valueIsRegion: true, note: "USSR can't add Influence by Ops in the named region this turn." },
+  yuri_samantha: { card: "Yuri_and_Samantha", short: "Yuri & Samantha", scope: "turn", note: "USSR +1 VP per US coup this turn." },
+  salt: { card: "Salt_Negotiations", short: "SALT", scope: "turn", note: "All coup rolls \u22121 this turn." },
+  cuban_missile_crisis: { card: "Cuban_Missile_Crisis", short: "Cuban Missile Crisis", scope: "turn", sideValue: true, urgent: true, note: "Any coup by the flagged side loses the game." },
+  we_will_bury_you: { card: "We_Will_Bury_You", short: "We Will Bury You", scope: "turn", urgent: true, note: "USSR +3 VP unless the US plays UN Intervention this Action Round." },
+  north_sea_oil_extra: { card: "North_Sea_Oil", short: "North Sea Oil (extra AR)", scope: "turn", note: "US gets an extra Action Round this turn." },
+  // game-long
+  marshall_or_warsaw: { card: null, short: "Marshall Plan / Warsaw Pact", scope: "game", note: "Enables NATO." },
+  nato: { card: "NATO", short: "NATO", scope: "game", note: "USSR can't coup or realign US-controlled Europe; Brush War blocked." },
+  us_japan_pact: { card: "US_Japan_Mutual_Defense_Pact", short: "US/Japan Pact", scope: "game", note: "USSR can't coup or realign Japan." },
+  degaulle_france: { card: "De_Gaulle_Leads_France", short: "De Gaulle", scope: "game", note: "NATO doesn't protect France." },
+  willy_brandt: { card: "Willy_Brandt", short: "Willy Brandt", scope: "game", note: "NATO doesn't protect West Germany." },
+  john_paul: { card: "John_Paul_II_Elected_Pope", short: "John Paul II", scope: "game", note: "Solidarity may be played." },
+  camp_david: { card: "Camp_David_Accords", short: "Camp David", scope: "game", note: "Arab-Israeli War can't be played." },
+  iranian_hostage: { card: "Iranian_Hostage_Crisis", short: "Iran Hostage", scope: "game", note: "Terrorism makes the US discard 2." },
+  iron_lady: { card: "The_Iron_Lady", short: "Iron Lady", scope: "game", note: "Socialist Governments can't be played." },
+  awacs: { card: "AWACS_Sale_to_Saudis", short: "AWACS", scope: "game", note: "Muslim Revolution can't be played." },
+  reformer: { card: "The_Reformer", short: "Reformer", scope: "game", note: "USSR can't coup in Europe." },
+  flower_power: { card: "Flower_Power", short: "Flower Power", scope: "game", note: "USSR +2 VP per US war card." },
+  evil_empire: { card: "An_Evil_Empire", short: "Evil Empire", scope: "game", note: "Flower Power is cancelled." },
+  formosan_resolution: { card: "Formosan_Resolution", short: "Formosan", scope: "game", note: "Taiwan counts as a battleground until the US plays the China Card." },
+  shuttle_diplomacy: { card: "Shuttle_Diplomacy", short: "Shuttle Diplomacy", scope: "game", note: "\u22121 USSR battleground at the next Middle East/Asia scoring." },
+  north_sea_oil: { card: "North_Sea_Oil", short: "North Sea Oil", scope: "game", note: "OPEC can't be played." },
+  norad: { card: "NORAD", short: "NORAD", scope: "game", note: "US +1 Influence when DEFCON drops to 2 during an Action Round." },
+  bear_trap: { card: "Bear_Trap", short: "Bear Trap", scope: "game", note: "USSR is trapped: discard + roll each Action Round." },
+  quagmire: { card: "Quagmire", short: "Quagmire", scope: "game", note: "US is trapped: discard + roll each Action Round." },
+  missile_envy_forced: { card: "Missile_Envy", short: "Missile Envy", scope: "game", sideValue: true, note: "That side must spend Missile Envy on Operations next Action Round." },
+  // Space Race abilities
+  space_race_double_attempt_holder: { card: null, short: "2nd attempt", scope: "space", sideValue: true, note: "A second Space Race attempt each turn." },
+  space_race_headline_reveal_holder: { card: null, short: "headline peek", scope: "space", sideValue: true, note: "Picks its Headline second and sees the opponent's." },
+  space_race_discard_holder: { card: null, short: "discard Held Card", scope: "space", sideValue: true, note: "May discard the Held Card." },
+  space_race_extra_round_holder: { card: null, short: "extra Action Round", scope: "space", sideValue: true, note: "Gets an extra Action Round." },
+};
+const warnedEffectKeys = new Set();
+
+function effectEntry(key, value, defaultScope) {
+  let meta = EFFECT_META[key];
+  if (!meta) {
+    if (!warnedEffectKeys.has(key)) {
+      warnedEffectKeys.add(key);
+      console.warn("Unknown effect key — add it to EFFECT_META:", key);
+    }
+    meta = { card: null, short: pretty(key), scope: defaultScope, note: "" };
+  }
+  const scope = meta.scope || defaultScope;
+  let side = null;
+  if (meta.sideValue && (value === "US" || value === "USSR")) side = value;
+  if (!side && meta.card && META[meta.card]) {
+    const s = META[meta.card].side;
+    if (s === "US" || s === "USSR") side = s;
+  }
+  let note = meta.note || "";
+  if (meta.valueIsRegion && value) note += ` (${pretty(value)})`;
+  return { short: meta.short, note, side, scope, urgent: !!meta.urgent, card: meta.card };
+}
+
+/* Active-effects HUD: only effects currently in force (present in
+ * turn_effects / game_effects), grouped by duration. Hover a chip for the
+ * effect text and a card-face preview. */
+function renderEffectsHud() {
+  const host = $("#effectshud");
+  if (!host || !state) return;
+  host.textContent = "";
+  const entries = [];
+  for (const [k, v] of Object.entries(state.turn_effects || {})) entries.push(effectEntry(k, v, "turn"));
+  for (const [k, v] of Object.entries(state.game_effects || {})) entries.push(effectEntry(k, v, "game"));
+  let any = false;
+  for (const [scope, label] of [["turn", "This turn"], ["game", "Game"], ["space", "\u{1F680} Space Race"]]) {
+    const items = entries.filter((e) => e.scope === scope).sort((a, b) => a.short.localeCompare(b.short));
+    if (!items.length) continue;
+    any = true;
+    const group = document.createElement("div");
+    group.className = "effgroup";
+    const lab = document.createElement("span");
+    lab.className = "efflabel";
+    lab.textContent = label;
+    group.append(lab);
+    for (const e of items) {
+      const chip = document.createElement("span");
+      const cls = e.side === "US" ? "us" : e.side === "USSR" ? "ussr" : "neutral";
+      chip.className = `effchip ${cls}${e.urgent ? " urgent" : ""}`;
+      chip.textContent = e.short;
+      chip.title = e.note || e.short;
+      if (e.card) {
+        chip.addEventListener("mouseenter", () => showPreview(e.card, chip));
+        chip.addEventListener("mouseleave", () => { if (previewEl) previewEl.hidden = true; });
+      }
+      group.append(chip);
+    }
+    host.append(group);
+  }
+  host.hidden = !any;
+}
+
 /* The center-of-map caption for one resolved event. Returns "" for internal
  * steps (keep the previous caption up). Covers every DecisionKind; anything
  * unforeseen falls back to `feedSummary`. */
@@ -899,6 +1009,8 @@ function render() {
   const sig = [
     state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
     d ? `${d.kind}:${d.options.length}` : "-",
+    Object.keys(state.turn_effects || {}).length,
+    Object.keys(state.game_effects || {}).length,
   ].join("|");
   if (sig === lastRenderSig) return;
   lastRenderSig = sig;
@@ -907,6 +1019,7 @@ function render() {
   flyDiff();
   renderBoard();
   renderPanel();
+  renderEffectsHud();
   renderHand();
   renderDecision();
   renderWinner();
@@ -1050,16 +1163,6 @@ function renderPanel() {
     kv("China card", `${state.china_card_owner}${state.china_card_available ? "" : " (face-down)"}`),
     kv("Opponent", `hand ${state.opponent_hand_size} · draw ${state.draw_pile_size}`),
   );
-
-  const chips = $("#effects");
-  chips.textContent = "";
-  const effects = { ...state.turn_effects, ...state.game_effects };
-  for (const [k, v] of Object.entries(effects)) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = `${pretty(k)}: ${typeof v === "boolean" ? (v ? "on" : "off") : pretty(v)}`;
-    chips.append(chip);
-  }
 
   const piles = $("#piles");
   piles.textContent = "";
