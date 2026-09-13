@@ -492,7 +492,10 @@ function showCardPlay(cid, actor) {
     const box = $("#dicebox");
     const m = META[cid] || {};
     clearDiceBox();
-    box.querySelector(".dtitle").textContent = `${actor} plays ${m.name || pretty(cid)}`;
+    // The opponent playing YOUR card for Ops fires YOUR event (rule 5.2); say so.
+    const yourEvent = m.side && m.side === state.human_side;
+    box.querySelector(".dtitle").textContent =
+      `${actor} plays ${m.name || pretty(cid)}` + (yourEvent ? " — your event fires" : "");
     if (IMAGES[cid]) {
       const img = document.createElement("img");
       img.className = "playcard";
@@ -945,7 +948,11 @@ function actionText(e, prev) {
   } else if (kind === "space_race_roll") {
     line = `${who} attempts the space race — rolled ${p.value}`;
   } else if (kind === "event_ops_order") {
-    const order = p.order === "event_first" ? "their event first" : "ops first";
+    const owner = META[c.card] && META[c.card].side;
+    const owner_word = owner === "US" ? "US" : owner === "USSR" ? "USSR" : "the";
+    const order = p.order === "event_first"
+      ? `${owner_word} event resolves first`
+      : "ops resolve first";
     line = `${who} plays ${cardName(c.card)} for ops — ${order}`;
   } else if (kind === "war_target") {
     line = `${who} plays ${cardName(c.card)} — attacks ${pretty(p.country)}`;
