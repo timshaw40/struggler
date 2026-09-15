@@ -67,6 +67,7 @@ def _tensors(batch: Sequence[Transition], device):
         mask,
         torch.tensor([t.action for t in batch], dtype=torch.long, device=device),
         torch.tensor([t.logprob for t in batch], dtype=torch.float32, device=device),
+        torch.tensor([t.value for t in batch], dtype=torch.float32, device=device),
         torch.tensor([t.ret for t in batch], dtype=torch.float32, device=device),
         torch.tensor([t.advantage for t in batch], dtype=torch.float32, device=device),
     )
@@ -110,14 +111,17 @@ def ppo_update(
             batch = [flat[i] for i in order[start : start + minibatch]]
             if len(batch) < 2:
                 continue
-            states, opts, mask, actions, old_lp, rets, adv = _tensors(batch, device)
+            states, opts, mask, actions, old_lp, old_values, rets, adv = _tensors(batch, device)
             logits, values = net(states, opts, mask)
             dist = torch.distributions.Categorical(logits=logits)
             new_lp = dist.log_prob(actions)
             ratio = (new_lp - old_lp).exp()
             surr = torch.min(ratio * adv, ratio.clamp(1 - clip, 1 + clip) * adv)
             policy_loss = -surr.mean()
-            value_loss = (values - rets).pow(2).mean()
+            # Value clipping (as in the PPO paper): don't let a single batch
+            # move the value head too far, which stabilises the shared trunk.
+            clipped = old_values + (values - old_values).clamp(-clip, clip)
+            value_loss = torch.max((values - rets).pow(2), (clipped - rets).pow(2)).mean()
             entropy = dist.entropy().mean()
             loss = policy_loss + vf_coef * value_loss - ent_coef * entropy
 
