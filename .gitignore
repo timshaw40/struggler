@@ -30,3 +30,7 @@ logs/
 
 # User-supplied BGG sessions archive (like the PDFs: never committed)
 twilight_struggle_sessions.txt
+
+# Never commit source PDFs or rendered board/card art.
+*.pdf
+ui/assets/
