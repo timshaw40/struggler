@@ -573,6 +573,17 @@ class GreedyPlayer:
         self.weights = weights or GreedyWeights()
         self._board = Board()
 
+    def option_scores(self, observation: Observation) -> list[float]:
+        """The heuristic score of every legal option (aligned with
+        `pending_decision.options`). Used as a search prior; falls back to 0.0
+        for decision kinds this bot has no scorer for."""
+        decision: Decision = observation.pending_decision
+        scorer = _SCORERS.get(decision.kind)
+        if scorer is None:
+            return [0.0] * len(decision.options)
+        _sync_board(self._board, observation)
+        return [scorer(self.weights, self._board, observation, a) for a in decision.options]
+
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
         decision: Decision = observation.pending_decision
         if not decision.options:

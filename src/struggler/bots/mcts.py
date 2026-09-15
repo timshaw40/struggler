@@ -190,8 +190,14 @@ class MCTSPlayer:
 
         visits = [0] * len(options)
         totals = [0.0] * len(options)
-        untried = list(range(len(options)))
-        self._rng.shuffle(untried)
+        # Prior-guided coverage: examine the heuristic's most promising options
+        # first, so a small simulation budget still looks at the good ones; the
+        # full legal set is retained and each option is visited while budget
+        # allows.
+        prior = self._greedy.option_scores(observation)
+        if len(prior) != len(options):
+            prior = [0.0] * len(options)
+        untried = sorted(range(len(options)), key=lambda i: prior[i])  # worst..best
         snapshot = self._engine.serialize()
         self.stats = {
             "sims": 0, "scored": 0, "short_pool": 0, "action_miss": 0,
@@ -219,6 +225,7 @@ class MCTSPlayer:
 
         self.stats["root_options"] = len(options)
         self.stats["visited_options"] = sum(1 for v in visits if v > 0)
+        self.stats["unvisited_options"] = len(options) - self.stats["visited_options"]
         if not self.stats["visited_options"]:
             # Every simulation was invalid; don't invent a choice.
             return self._greedy.choose_action(observation, history)
@@ -241,15 +248,21 @@ class MCTSPlayer:
                 self.stats["action_miss"] += 1
                 return None
             clone.step(action)
-            steps = 0
-            while not clone.is_terminal and steps < self.rollout_depth:
+            # Depth is counted in DECISION POINTS, not atomic engine steps: dice
+            # rolls and other CHANCE nodes are not strategic moves, and letting
+            # them consume the horizon left the root card's consequences
+            # unexamined. A hard cap still guards pathological non-termination.
+            plies = 0
+            safety = self.rollout_depth * 8 + 16
+            while not clone.is_terminal and plies < self.rollout_depth and safety > 0:
                 pending = clone.pending_decision
                 if pending.actor is Side.CHANCE:
                     clone.step(pending.options[0])
                 else:
                     obs = clone.observe(pending.actor)
                     clone.step(self._greedy.choose_action(obs, ()))
-                steps += 1
+                    plies += 1
+                safety -= 1
             if clone.is_terminal:
                 self.stats["terminal"] += 1
             else:

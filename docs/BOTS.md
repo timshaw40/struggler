@@ -286,15 +286,25 @@ built:
 other bots. `runner.play_game` calls `bind_engine` once so search can
 `serialize()`/`deserialize()` clones; it never `step()`s the live engine.
 
-Each `choose_action` runs root UCT over `pending_decision.options`: untried
-actions first, then UCB1. Every simulation determinizes hidden cards, plays
-the chosen root action on a clone, then rolls out with `GreedyPlayer` for
-**both** seats (including the DEFCON self-kill penalty) until the game ends
-or `rollout_depth` steps. Terminal reward is 1 / 0.5 / 0 (win / draw /
-loss); a depth-cap uses `tanh(board_value / 20)` mapped to `[0, 1]`. Chance
-decisions use the clone's pre-drawn `options[0]`, same as `play_game`.
-The live engine's RNG is never touched; search uses `random.Random(seed)`
-and reseeds each clone from that.
+Each `choose_action` runs root UCT over `pending_decision.options`. Untried
+options are tried first, ordered by `GreedyPlayer.option_scores` (a prior, so
+a small budget looks at the promising options while still retaining the full
+legal set), then UCB1. Every simulation determinizes hidden cards, plays the
+chosen root action on a clone, then rolls out with `GreedyPlayer` for **both**
+seats (including the DEFCON self-kill penalty) until the game ends or
+`rollout_depth` **decision points** have been made — dice/CHANCE nodes no
+longer consume the horizon, so the root action's consequences get examined.
+Terminal reward is 1 / 0.5 / 0 (win / draw / loss); a depth-cap uses
+`tanh(board_value / 20)` mapped to `[0, 1]`. Chance decisions use the clone's
+pre-drawn `options[0]`, same as `play_game`. The live engine's RNG is never
+touched; search uses `random.Random(seed)` and reseeds each clone from that.
+
+Invalid simulations are **excluded, not scored**: with `strict=True` (the
+default) a determinized clone whose unknown pool is too short raises
+`ShortPoolError` and the simulation is dropped, tracked in
+`player.stats` (`sims` / `scored` / `short_pool` / `action_miss` /
+`exception` / `root_options` / `visited_options`). If every simulation was
+invalid the player falls back to the heuristic.
 
 ### Imperfect-information approximation
 
@@ -316,7 +326,8 @@ opponent instead.
 | Knob | Default | Constructor | Env (via `build_player`) |
 | --- | --- | --- | --- |
 | simulations per decision | 16 | `sims=` | `STRUGGLER_MCTS_SIMS` |
-| greedy rollout cap | 16 | `rollout_depth=` | `STRUGGLER_MCTS_ROLLOUT_DEPTH` |
+| rollout cap, in decision points | 16 | `rollout_depth=` | `STRUGGLER_MCTS_ROLLOUT_DEPTH` |
+| exclude invalid sims | True | `strict=` | — |
 | UCB1 exploration constant | 1.4 | `uct_c=` | `STRUGGLER_MCTS_UCT_C` |
 
 Raise `sims` for stronger (slower) play. Eval uses a lower default (`--sims 8`)
@@ -614,11 +625,14 @@ The loop uses one **persistent actor pool** (`bots/rl/actors.py`) — created
 once, with a worker-side checkpoint cache — instead of re-spawning per
 iteration. Opponents during collection are a **league** of past promoted
 checkpoints (probability `--league-fraction`) plus the greedy anchor; the
-learner records only its own side. Promotion is a **significance gate**: a
+learner records only its own side. Promotion is a **promotion margin**: a
 paired, side-swapped head-to-head against the incumbent best over
-`--gate-seeds`, promoting only when `wins - losses >= --gate-margin` — never a
-single win rate against one fixed opponent. The gate is logged next to a small
-anchored Elo round-robin versus greedy/random/first.
+`--gate-seeds` (a fresh seed bank per attempt, `--gate-base`), promoting only
+when `wins - losses >= --gate-margin`. It is a *margin*, not a significance
+test — the Wilson interval is logged alongside it (`gate_ci`). Seeds at or
+above `arena.FINAL_EVAL_SEED_BASE` are reserved for `scripts/final_eval.py`
+and must never feed training or the gate; `train_ppo.py` refuses to start if a
+bank overlaps them.
 
 Per-iteration metrics to watch: `pi` policy loss, `v` value loss, `H` entropy
 (should fall slowly; a collapse toward 0 is strategy collapse), `kl`/`clip`

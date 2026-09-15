@@ -45,3 +45,12 @@ def test_elo_returns_a_rating_for_every_name():
     ratings = elo(results, ["g", "f"])
     assert set(ratings) == {"g", "f"}
     assert all(isinstance(v, float) for v in ratings.values())
+
+
+def test_wilson_interval_and_reserved_final_bank():
+    from struggler.arena import FINAL_EVAL_SEED_BASE, wilson_interval
+
+    assert wilson_interval(0, 0) == (0.0, 1.0)
+    lo, hi = wilson_interval(13, 11)  # a "margin 2" result is not evidence
+    assert 0.0 <= lo < 13 / 24 < hi <= 1.0
+    assert FINAL_EVAL_SEED_BASE >= 900_000_000  # well clear of training banks

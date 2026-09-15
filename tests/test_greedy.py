@@ -228,3 +228,11 @@ def test_ussr_t1_prefers_couping_iran_over_italy():
     observation = dataclasses.replace(observation, pending_decision=decision)
     action = GreedyPlayer().choose_action(observation, [])
     assert action.payload["country"] == "Iran"
+
+
+def test_greedy_option_scores_align_with_the_legal_options():
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(engine.pending_decision.actor)
+    scores = GreedyPlayer().option_scores(obs)
+    assert len(scores) == len(obs.pending_decision.options)
+    assert all(isinstance(s, float) for s in scores)

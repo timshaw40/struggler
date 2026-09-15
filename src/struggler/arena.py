@@ -16,11 +16,17 @@ win rate against one fixed opponent (which saturates and misleads).
 
 from __future__ import annotations
 
+import math
 import multiprocessing
 import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
+
+# Seeds at or above this are RESERVED for final evaluation only. Training
+# collection, tuning, and promotion gates must stay below it, so the final
+# number is measured on games no candidate ever saw.
+FINAL_EVAL_SEED_BASE = 950_000_000
 
 from struggler.bots.greedy import GreedyPlayer, GreedyWeights
 from struggler.engine import Engine, Side
@@ -137,6 +143,19 @@ def head_to_head(results: Sequence[GameResult], a: str, b: str) -> tuple[int, in
         else:
             losses += 1
     return wins, losses, draws
+
+
+def wilson_interval(wins: int, losses: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score interval for the win rate (draws excluded). Report it
+    alongside every published rate — a 13-11 result is not evidence."""
+    n = wins + losses
+    if n == 0:
+        return (0.0, 1.0)
+    p = wins / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, centre - half), min(1.0, centre + half))
 
 
 def score(results: Sequence[GameResult], name: str) -> tuple[float, int]:

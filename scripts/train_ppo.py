@@ -9,8 +9,9 @@ updates on the training device. Periodically it:
 
   * rates the candidate on a small Elo round-robin vs the fixed bots (anchored,
     so readings are comparable across evals),
-  * runs a **significance gate** head-to-head against the incumbent best
-    (paired, side-swapped seeds; promote only on a wins-minus-losses margin),
+  * runs a **promotion margin** head-to-head against the incumbent best
+    (paired, side-swapped seeds, a fresh bank each attempt; promote only on a
+    wins-minus-losses margin — a margin, not a significance test),
   * profiles a few RL-vs-greedy games for degenerate behavior (DEFCON losses,
     over-couping, a Southeast-Asia blind spot).
 
@@ -39,7 +40,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import torch  # noqa: E402
 
-from struggler.arena import PlayerSpec, elo, head_to_head, round_robin, run_matchup  # noqa: E402
+from struggler.arena import (  # noqa: E402
+    FINAL_EVAL_SEED_BASE,
+    PlayerSpec,
+    elo,
+    head_to_head,
+    round_robin,
+    run_matchup,
+    wilson_interval,
+)
 from struggler.bots.rl.actors import collect_task, make_pool  # noqa: E402
 from struggler.bots.rl.encode import OPTION_DIM, STATE_DIM  # noqa: E402
 from struggler.bots.rl.net import ActorCritic, save_policy  # noqa: E402
@@ -76,31 +85,40 @@ def behavior_report(net, seeds, device, events) -> dict:
     }
 
 
-def evaluate(candidate: str, pool, args) -> dict:
+def evaluate(candidate: str, pool, args, it: int) -> dict:
     specs = [
         PlayerSpec("cand", "rl", net_path=candidate),
         PlayerSpec("greedy", "greedy"),
         PlayerSpec("random", "random", player_seed=1),
         PlayerSpec("first", "first"),
     ]
-    seeds = [args.eval_base + i for i in range(args.eval_seeds)]
+    # Fresh seed bank each eval, so a checkpoint can't be tuned to fixed seeds.
+    seeds = [args.eval_base + it * (args.eval_seeds + 3) + i for i in range(args.eval_seeds)]
     results = round_robin(specs, seeds, events=args.events, pool=pool)
     gw, gl, gd = head_to_head(results, "cand", "greedy")
+    lo, hi = wilson_interval(gw, gl)
     return {
         "elo": {k: round(v, 1) for k, v in elo(results, [s.name for s in specs]).items()},
         "vs_greedy": [gw, gl, gd],
+        "vs_greedy_ci": [round(lo, 3), round(hi, 3)],
     }
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--iterations", type=int, default=500)
+    ap.add_argument("--minutes", type=float, default=0.0,
+                    help="stop cleanly after this many minutes (0 = no limit); resume later")
     ap.add_argument("--games", type=int, default=64, help="self-play games per iteration")
     ap.add_argument("--workers", type=int, default=min(8, multiprocessing.cpu_count()))
     ap.add_argument("--hidden", type=int, default=256)
     ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--lr-decay", type=float, default=0.85, help="multiply LR by this after each eval")
+    ap.add_argument("--lr-floor", type=float, default=1e-5)
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--minibatch", type=int, default=64)
+    ap.add_argument("--vf-coef", type=float, default=0.5)
+    ap.add_argument("--ent-coef", type=float, default=0.01)
     ap.add_argument("--anchor", type=float, default=0.25, help="fraction of seats played by greedy")
     ap.add_argument("--league-fraction", type=float, default=0.3, help="games vs a past checkpoint")
     ap.add_argument("--league-size", type=int, default=4)
@@ -110,10 +128,16 @@ def main() -> None:
     ap.add_argument("--seed-base", type=int, default=0)
     ap.add_argument("--eval-every", type=int, default=25)
     ap.add_argument("--eval-seeds", type=int, default=8, help="seeds for the Elo round-robin")
-    ap.add_argument("--gate-seeds", type=int, default=12, help="paired seeds for the promotion gate")
-    ap.add_argument("--gate-margin", type=int, default=2, help="promote iff wins-losses >= margin")
-    ap.add_argument("--probe-games", type=int, default=4, help="RL-vs-greedy games for behavior")
+    ap.add_argument("--gate-seeds", type=int, default=12,
+                    help="paired seeds per promotion attempt")
+    ap.add_argument("--gate-margin", type=int, default=2,
+                    help="promote iff wins-losses >= this PROMOTION MARGIN (not a "
+                         "significance test until uncertainty is measured)")
     ap.add_argument("--eval-base", type=int, default=900_000)
+    ap.add_argument("--gate-base", type=int, default=10_000_000,
+                    help="first gate seed; a fresh bank is used per attempt. Must be "
+                         f"below the reserved final bank ({FINAL_EVAL_SEED_BASE}).")
+    ap.add_argument("--probe-games", type=int, default=4, help="RL-vs-greedy games for behavior")
     ap.add_argument("--resume", default=None, help="run.pt to continue")
     ap.add_argument("--out-dir", default="data")
     ap.add_argument("--metrics", default=None, help="defaults to <out-dir>/metrics.jsonl")
@@ -124,7 +148,14 @@ def main() -> None:
     args = ap.parse_args()
 
     device = ("mps" if torch.backends.mps.is_available() else "cpu") if args.device == "auto" else args.device
+    if max(args.seed_base, args.eval_base, args.gate_base) >= FINAL_EVAL_SEED_BASE:
+        raise SystemExit(
+            f"a seed bank starts at/after the reserved final bank "
+            f"({FINAL_EVAL_SEED_BASE}); move it below or evaluation is not honest"
+        )
     print(f"device={device}  state_dim={STATE_DIM}  option_dim={OPTION_DIM}  shaping={args.shaping}")
+    print(f"seed banks: train {args.seed_base}+  eval {args.eval_base}+  gate {args.gate_base}+  "
+          f"(final bank {FINAL_EVAL_SEED_BASE}+ is reserved for scripts/final_eval.py)")
 
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -138,6 +169,10 @@ def main() -> None:
         ckpt = torch.load(args.resume, map_location=device)
         net.load_state_dict(ckpt["state_dict"])
         optimizer.load_state_dict(ckpt["optimizer"])
+        # Let the CLI --lr win on resume, so each chunk can re-anneal instead of
+        # continuing from an LR that already decayed to the floor.
+        for group in optimizer.param_groups:
+            group["lr"] = args.lr
         start_it = int(ckpt.get("iteration", 0))
         best_path = ckpt.get("best_path")
         league = [p for p in ckpt.get("league", []) if os.path.exists(p)]
@@ -145,9 +180,13 @@ def main() -> None:
         print(f"resumed from {args.resume} at iteration {start_it} (shaping={args.shaping})")
 
     rng = random.Random(args.seed + start_it)
+    deadline = time.monotonic() + args.minutes * 60 if args.minutes else None
     pool = make_pool(args.workers)
     try:
         for it in range(start_it, args.iterations):
+            if deadline is not None and time.monotonic() > deadline:
+                print(f"time budget reached at iteration {it}")
+                break
             t0 = time.perf_counter()
             snap = str(out / f"snap_{it:05d}.pt")
             save_policy(snap, net)
@@ -160,6 +199,7 @@ def main() -> None:
             stats = ppo_update(
                 net, optimizer, episodes, device=device, epochs=args.epochs,
                 minibatch=args.minibatch, seed=args.seed + it, shaping=args.shaping,
+                vf_coef=args.vf_coef, ent_coef=args.ent_coef,
             )
             os.remove(snap)
             record = {"iteration": it, **stats}
@@ -173,12 +213,15 @@ def main() -> None:
             if (it + 1) % args.eval_every == 0 or it == args.iterations - 1:
                 cand = str(out / "ppo_latest.pt")
                 save_policy(cand, net)
-                ev = evaluate(cand, pool, args)
+                ev = evaluate(cand, pool, args, it)
                 report = {"eval": ev}
 
                 # Significance gate vs the incumbent best.
                 if best_path and os.path.exists(best_path):
-                    gate_seeds = [args.eval_base + 500_000 + i for i in range(args.gate_seeds)]
+                    # A fresh, non-reused gate bank per attempt; the reserved
+                    # final bank stays untouched.
+                    gate_seeds = [args.gate_base + it * (args.gate_seeds + 3) + i
+                                  for i in range(args.gate_seeds)]
                     results = run_matchup(
                         PlayerSpec("cand", "rl", net_path=cand),
                         PlayerSpec("best", "rl", net_path=best_path),
@@ -187,6 +230,7 @@ def main() -> None:
                     bw, bl, bd = head_to_head(results, "cand", "best")
                     promote = (bw - bl) >= args.gate_margin
                     report["gate"] = [bw, bl, bd]
+                    report["gate_ci"] = [round(x, 3) for x in wilson_interval(bw, bl)]
                 else:
                     bw = bl = bd = 0
                     promote = True
@@ -197,7 +241,7 @@ def main() -> None:
                 gw, gl, gd = ev["vs_greedy"]
                 print(
                     f"           eval  vs greedy {gw}-{gl}-{gd} ({gw / max(1, gw + gl):.0%})  "
-                    f"elo {ev['elo']}"
+                    f"lr {optimizer.param_groups[0]['lr']:.1e}  elo {ev['elo']}"
                     + (f"  gate vs best {bw}-{bl}-{bd}" if "gate" in report else "")
                 )
                 if report.get("behavior"):
@@ -216,11 +260,16 @@ def main() -> None:
                         league.pop(0)
                     print("           promoted -> best + league")
 
+                for group in optimizer.param_groups:  # decay to fine-tune out of a plateau
+                    group["lr"] = max(args.lr_floor, group["lr"] * args.lr_decay)
+
                 record.update(report)
-                save_run(str(out / "run.pt"), net, optimizer, it + 1, best_path, league, args.shaping)
 
             with metrics_path.open("a") as fh:
                 fh.write(json.dumps(record) + "\n")
+            # Checkpoint every iteration so an interrupt/time-budget stop never
+            # loses more than one iteration's progress.
+            save_run(str(out / "run.pt"), net, optimizer, it + 1, best_path, league, args.shaping)
     finally:
         pool.close()
         pool.join()

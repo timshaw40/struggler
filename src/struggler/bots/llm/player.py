@@ -77,6 +77,7 @@ the model's only source of card mechanics, and nothing checks it against
 
 from __future__ import annotations
 
+import os
 import random
 from collections import deque
 from dataclasses import dataclass
@@ -174,6 +175,7 @@ class LLMPlayer:
         plan_turns: bool = True,
         log_path: str | Path | None = None,
         resume: bool = False,
+        max_context_chars: int | None = None,
     ) -> None:
         self._client = client
         # The once-per-turn planning call's model; same as `client` unless
@@ -192,6 +194,12 @@ class LLMPlayer:
         self._seed = seed
         self._log_path = Path(log_path) if log_path is not None else None
         self._messages: list[LLMMessage] = []  # the one growing conversation = memory
+        # Character budget for that conversation; 0 disables compaction. Keeps a
+        # long unattended game's prompt from growing without bound.
+        self._max_context_chars = (
+            max_context_chars if max_context_chars is not None
+            else int(os.environ.get("STRUGGLER_LLM_CONTEXT_CHARS", "0") or 0)
+        )
         self._plan: deque[PlannedStep] = deque()
         # The once-per-game-turn intent (see schema.TURN_PLAN_SCHEMA), and the
         # turn it was written for. Every decision in that turn is prompted with
@@ -395,6 +403,30 @@ class LLMPlayer:
         self._persist_if_configured()
         return action
 
+    def _compact_context(self) -> None:
+        """Drop the oldest conversation turns once `_max_context_chars` is
+        exceeded, keeping the most recent ones and a marker that history was
+        compacted. A stale plan is not a concern here: every step is already
+        re-validated against the live decision's kind and options before it is
+        consumed (`_try_consume_plan`), so an interruption that invalidates a
+        step drops it mechanically."""
+        if self._max_context_chars <= 0:
+            return
+        total = sum(len(m.content) for m in self._messages)
+        if total <= self._max_context_chars:
+            return
+        dropped = False
+        while len(self._messages) > 2 and total > self._max_context_chars:
+            total -= len(self._messages.pop(0).content)
+            dropped = True
+        while self._messages and self._messages[0].role == "assistant":
+            total -= len(self._messages.pop(0).content)
+            dropped = True
+        if dropped:
+            self._messages.insert(
+                0, LLMMessage(role="user", content="[earlier conversation compacted]")
+            )
+
     def _attempt_with_retry(
         self,
         side: Side,
@@ -425,6 +457,7 @@ class LLMPlayer:
         received a response (an `LLMClientError` raised before any response
         arrives contributes nothing).
         """
+        self._compact_context()
         attempt_messages = list(self._messages) + [LLMMessage(role="user", content=user_text)]
         last_error: str | None = None
         total_usage: dict[str, int] = {"input_tokens": 0, "output_tokens": 0}

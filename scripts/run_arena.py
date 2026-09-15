@@ -20,10 +20,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from struggler.arena import (  # noqa: E402
+    FINAL_EVAL_SEED_BASE,
     PlayerSpec,
     elo,
+    head_to_head,
     matchup_table,
     round_robin,
+    wilson_interval,
 )
 from struggler.bots.checkpoint import load_weights, weights_to_dict  # noqa: E402
 
@@ -31,7 +34,9 @@ from struggler.bots.checkpoint import load_weights, weights_to_dict  # noqa: E40
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--seeds", type=int, default=6)
-    ap.add_argument("--seed-base", type=int, default=0)
+    ap.add_argument("--seed-base", type=int, default=FINAL_EVAL_SEED_BASE,
+                    help="first seed; defaults to the RESERVED final-eval bank, "
+                         "so an ad-hoc run here doesn't reuse training seeds")
     ap.add_argument("--workers", type=int, default=min(8, multiprocessing.cpu_count()))
     ap.add_argument("--weights", default=None, help="greedy weights JSON to add as 'tuned'")
     ap.add_argument("--include-mcts", action="store_true")
@@ -66,7 +71,9 @@ def main() -> None:
         for b in names:
             if a < b:
                 w, l, d = table[a][b]
-                print(f"  {a:8s} vs {b:8s}: {w}-{l}-{d}")
+                lo, hi = wilson_interval(w, l)
+                print(f"  {a:8s} vs {b:8s}: {w}-{l}-{d}  "
+                      f"win rate {w / max(1, w + l):.0%} [{lo:.0%}-{hi:.0%}]")
     print()
     for name, rating in sorted(elo(results, names).items(), key=lambda kv: -kv[1]):
         print(f"  {name:8s} elo {rating:7.1f}")
