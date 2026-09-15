@@ -794,3 +794,20 @@ main {
   pointer-events: none;
   z-index: 3;
 }
+
+/* Legal-country list beside the map shortcuts (keyboard / off-screen / no art). */
+#decision .countrybtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+#decision .countrybtns button {
+  width: auto;
+  margin-top: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+#decision .cost2txt { color: #f08a4b; font-weight: 700; }

@@ -169,6 +169,41 @@ def test_observe_hides_the_acting_sides_hand_options():
         assert opponent_view.options == ()  # opponent sees none of them
 
 
+def test_observe_redacts_a_private_event_choice_from_the_non_actor():
+    # Blockade asks the US to discard from their own hand: those options are a
+    # hidden hand, so the USSR's observation must not carry them.
+    from conftest import bare_engine as _bare
+
+    engine = _bare()
+    engine.hands["US"] = ["Duck_and_Cover"]
+    engine._fire_event(Side.USSR, "Blockade")
+    assert engine.pending_decision.kind is DecisionKind.EVENT_CHOICE
+    assert engine.pending_decision.actor is Side.US
+
+    assert engine.observe(Side.US).pending_decision.options  # actor keeps them
+    assert engine.observe(Side.USSR).pending_decision.options == ()  # opponent: none
+    # The engine-private marker is stripped from the player-facing context too.
+    assert "_private" not in engine.observe(Side.US).pending_decision.context
+
+
+def test_history_redacts_opponent_hidden_options_but_keeps_the_record():
+    from conftest import bare_engine as _bare
+    from struggler.engine.replay import HistoryBuilder
+
+    engine = _bare()
+    engine.hands["US"] = ["Duck_and_Cover"]
+    engine._fire_event(Side.USSR, "Blockade")
+    decision = engine.pending_decision
+    action = decision.options[0]
+    engine.step(action)
+    builder = HistoryBuilder()
+    builder.record(decision, action, engine)
+
+    assert builder.for_player(Side.USSR)[0].decision.options == ()  # redacted
+    assert builder.for_player(Side.US)[0].decision.options  # actor keeps it
+    assert builder.history[0].decision.options  # authoritative record intact
+
+
 @settings(max_examples=15, deadline=None)
 @given(seed=st.integers(min_value=0, max_value=MAX_INT32),
        driver_seed=st.integers(min_value=0, max_value=MAX_INT32))

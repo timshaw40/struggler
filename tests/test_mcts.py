@@ -89,6 +89,38 @@ def test_determinize_keeps_a_known_box4_opponent_headline():
     assert filled["headline"]["USSR"] == "Fidel"
 
 
+def test_determinize_strict_rejects_a_short_unseen_pool():
+    from struggler.bots.mcts import ShortPoolError
+
+    engine = Engine.new_game(seed=3)
+    data = engine.serialize()
+    # Inflate the hidden draw pile far past the unseen-card pool: an honest
+    # clone is impossible, so strict mode must refuse rather than recycle ids.
+    data["draw_pile"] = [f"X{i}" for i in range(400)]
+    with pytest.raises(ShortPoolError):
+        determinize(data, "US", random.Random(0), strict=True)
+
+    # Lenient mode still recycles (the pre-existing fallback).
+    out = determinize(data, "US", random.Random(0))
+    assert len(out["draw_pile"]) == 400
+
+
+def test_mcts_strict_search_excludes_invalid_simulations():
+    engine = Engine.new_game(seed=1)
+    first = FirstLegalPlayer()
+    # Setup delegates to greedy (no search), so advance past it first.
+    while engine.pending_decision.context.get("setup"):
+        engine.step(first.choose_action(engine.observe(engine.pending_decision.actor), ()))
+    player = MCTSPlayer(seed=1, sims=6, rollout_depth=0, strict=True)
+    player.bind_engine(engine)
+    obs = engine.observe(engine.pending_decision.actor)
+    action = player.choose_action(obs, [])
+    assert action in obs.pending_decision.options
+    s = player.stats
+    assert s["sims"] == 6 and s["scored"] <= s["sims"]
+    assert 1 <= s["visited_options"] <= s["root_options"]
+
+
 def test_same_seed_picks_the_same_action():
     engine = Engine.new_game(seed=4)
     observation = engine.observe(engine.pending_decision.actor)

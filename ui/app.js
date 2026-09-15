@@ -1574,9 +1574,26 @@ function renderDecision() {
       && d.options.some((o) => placementCost(o.payload.country, state.influence) === 2);
     const hint = document.createElement("em");
     hint.className = "hint";
-    hint.textContent = "Click a glowing country on the map."
+    hint.textContent = "Click a glowing country on the map, or pick one here."
       + (anyDouble ? " An orange 2 badge is opponent-controlled and costs 2 Ops." : "");
     main.append(hint);
+    // A persistent, keyboard-accessible list of the legal countries: map clicks
+    // remain the primary affordance, but off-screen countries, missing art, or
+    // keyboard use must not strand a legal choice.
+    const list = document.createElement("div");
+    list.className = "countrybtns";
+    for (const o of d.options) {
+      const doubles = d.kind === "place_influence" && !d.context.setup
+        && placementCost(o.payload.country, state.influence) === 2;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.innerHTML = `<b>${esc(pretty(o.payload.country))}</b>`
+        + (doubles ? ` <span class="cost2txt">2 Ops</span>` : "");
+      b.disabled = busy;
+      b.addEventListener("click", () => act(o.index));
+      list.append(b);
+    }
+    main.append(list);
     return;
   }
   for (const o of d.options) {

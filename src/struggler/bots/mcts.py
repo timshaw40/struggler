@@ -78,10 +78,18 @@ def _opponent_headline_is_known(data: dict, me: str) -> bool:
     )
 
 
-def determinize(data: dict, me: str, rng: random.Random) -> dict:
+class ShortPoolError(ValueError):
+    """The unseen-card pool could not fill the hidden slots: the clone would be
+    illegal. Strict search rejects this instead of recycling duplicate cards."""
+
+
+def determinize(data: dict, me: str, rng: random.Random, *, strict: bool = False) -> dict:
     """Overwrite hidden opponent-hand / draw-pile (and secret headline) slots.
 
     Reads only *lengths* of those hidden fields, never their card ids.
+    With `strict=True`, a pool too short to fill the slots raises
+    `ShortPoolError` instead of recycling duplicate ids (which fabricates an
+    illegal position whose rollout is meaningless).
     """
     opp = "USSR" if me == "US" else "US"
     n_hand = len(data["hands"][opp])
@@ -102,10 +110,12 @@ def determinize(data: dict, me: str, rng: random.Random) -> dict:
     rng.shuffle(pool)
 
     need = n_hand + n_draw + (1 if secret_hl else 0)
-    # ponytail: the pool can come up short on mid-resolution accounting drift;
-    # recycle rather than crash, illegal clones then score 0.5 in the rollout
-    # try/except.
     if len(pool) < need:
+        if strict:
+            raise ShortPoolError(f"pool {len(pool)} < needed {need}")
+        # Lenient fallback: recycle ids rather than crash. The clone is then
+        # illegal and its rollout is not real evidence — strict mode is what
+        # evaluation should use.
         pool = (pool * (need // max(len(pool), 1) + 1))[:need]
 
     data["hands"][opp] = pool[:n_hand]
@@ -142,6 +152,7 @@ class MCTSPlayer:
         rollout_depth: int = 16,
         uct_c: float = 1.4,
         value: Any = None,
+        strict: bool = True,
     ) -> None:
         self._rng = random.Random(seed)
         self.sims = sims
@@ -149,7 +160,11 @@ class MCTSPlayer:
         self.uct_c = uct_c
         self._greedy = GreedyPlayer()
         self._value = value
+        self.strict = strict
         self._engine: Engine | None = None
+        # Per-search diagnostics (reset each choose_action): how often a
+        # simulation was rejected rather than scored, and how coverage looked.
+        self.stats: dict[str, float] = {}
 
     def bind_engine(self, engine: Engine) -> None:
         if engine.physical_mode:
@@ -178,6 +193,10 @@ class MCTSPlayer:
         untried = list(range(len(options)))
         self._rng.shuffle(untried)
         snapshot = self._engine.serialize()
+        self.stats = {
+            "sims": 0, "scored": 0, "short_pool": 0, "action_miss": 0,
+            "exception": 0, "terminal": 0, "depth_capped": 0,
+        }
 
         for sim in range(max(1, self.sims)):
             if untried:
@@ -190,21 +209,37 @@ class MCTSPlayer:
                     key=lambda i: totals[i] / visits[i]
                     + self.uct_c * math.sqrt(math.log(sim) / visits[i]),
                 )
-            totals[idx] += self._rollout(snapshot, observation.side, options[idx])
+            self.stats["sims"] += 1
+            value = self._rollout(snapshot, observation.side, options[idx])
+            if value is None:
+                continue  # invalid simulation: excluded, NOT counted as a draw
+            totals[idx] += value
             visits[idx] += 1
+            self.stats["scored"] += 1
 
+        self.stats["root_options"] = len(options)
+        self.stats["visited_options"] = sum(1 for v in visits if v > 0)
+        if not self.stats["visited_options"]:
+            # Every simulation was invalid; don't invent a choice.
+            return self._greedy.choose_action(observation, history)
         best = max(
             (i for i in range(len(options)) if visits[i] > 0),
             key=lambda i: (visits[i], totals[i] / visits[i]),
         )
         return options[best]
 
-    def _rollout(self, snapshot: dict, side: Side, action: Action) -> float:
+    def _rollout(self, snapshot: dict, side: Side, action: Action) -> float | None:
+        """Return the rollout value in [0, 1], or None if the simulation is not
+        valid evidence (short unseen pool, illegal root action, or a clone
+        error) — the caller excludes it rather than scoring 0.5."""
         try:
-            clone = Engine.deserialize(determinize(snapshot, side.value, self._rng))
+            clone = Engine.deserialize(
+                determinize(snapshot, side.value, self._rng, strict=self.strict)
+            )
             clone._rng.seed(self._rng.getrandbits(64))
             if action not in clone.pending_decision.options:
-                return 0.5
+                self.stats["action_miss"] += 1
+                return None
             clone.step(action)
             steps = 0
             while not clone.is_terminal and steps < self.rollout_depth:
@@ -215,6 +250,14 @@ class MCTSPlayer:
                     obs = clone.observe(pending.actor)
                     clone.step(self._greedy.choose_action(obs, ()))
                 steps += 1
+            if clone.is_terminal:
+                self.stats["terminal"] += 1
+            else:
+                self.stats["depth_capped"] += 1
             return _position_value(clone, side, self._greedy, self._value)
+        except ShortPoolError:
+            self.stats["short_pool"] += 1
+            return None
         except (ValueError, RuntimeError, KeyError):
-            return 0.5
+            self.stats["exception"] += 1
+            return None

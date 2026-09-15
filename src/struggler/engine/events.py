@@ -936,7 +936,8 @@ def _aldrich_ames(engine: "Engine", side: Side) -> None:
     us_hand = engine.hands["US"]
     if not us_hand:
         return
-    engine.push_event_choice("Aldrich_Ames_Remix", Side.USSR, tuple(us_hand))
+    engine.push_event_choice("Aldrich_Ames_Remix", Side.USSR, tuple(us_hand),
+                             extra={"_private": True})
 
 
 def _push_aldrich_ames_reveal(engine: "Engine") -> None:
@@ -945,7 +946,8 @@ def _push_aldrich_ames_reveal(engine: "Engine") -> None:
     if HIDDEN_CARD not in engine.hands["US"]:
         us_hand = list(engine.hands["US"])
         if us_hand:
-            engine.push_event_choice("Aldrich_Ames_Remix", Side.USSR, tuple(us_hand))
+            engine.push_event_choice("Aldrich_Ames_Remix", Side.USSR, tuple(us_hand),
+                                     extra={"_private": True})
         return
     engine.push_event_choice(
         "Aldrich_Ames_Remix_reveal", Side.CHANCE, tuple(engine.hidden_pool)
@@ -1017,7 +1019,7 @@ def _push_ask_not(engine: "Engine", side: Side, discarded: int) -> None:
         return
     engine.push_event_choice(
         "Ask_Not_What_Your_Country_Can_Do_For_You", side, choices,
-        extra={"discarded": discarded},
+        extra={"discarded": discarded, "_private": True},
     )
 
 
@@ -1391,7 +1393,8 @@ def _blockade(engine: "Engine", side: Side) -> None:
     if not payable:
         engine.remove_all_influence("West_Germany", Side.US)
         return
-    engine.push_event_choice("Blockade", Side.US, tuple(payable) + ("refuse",))
+    engine.push_event_choice("Blockade", Side.US, tuple(payable) + ("refuse",),
+                             extra={"_private": True})
 
 
 def _blockade_choice(engine: "Engine", side: Side, choice: str, context: dict) -> None:

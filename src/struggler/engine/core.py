@@ -48,6 +48,31 @@ _SECRET_HAND_KINDS = frozenset({
     DecisionKind.DEAL_CARD,
 })
 
+
+def redact_decision_for(decision: Decision | None, viewer: Side) -> Decision | None:
+    """A `decision` safe to show `viewer`.
+
+    Drops the hidden-hand options from a decision the viewer is not the actor
+    of (same rule as `observe`), and strips engine-private context keys
+    (`_`-prefixed, e.g. the `_private` marker on a hand-derived EVENT_CHOICE).
+    Authoritative records (the game log, the engine's own stack) keep the
+    originals; only player-facing projections pass through here.
+    """
+    if decision is None:
+        return None
+    context = {
+        k: v for k, v in decision.context.items()
+        if not (isinstance(k, str) and k.startswith("_"))
+    }
+    hidden = decision.actor is not viewer and (
+        decision.kind in _SECRET_HAND_KINDS or bool(decision.context.get("_private"))
+    )
+    if hidden:
+        return Decision(decision.id, decision.actor, decision.kind, (), context)
+    if context != dict(decision.context):
+        return Decision(decision.id, decision.actor, decision.kind, decision.options, context)
+    return decision
+
 # Which region each scoring card scores, keyed by card id.
 SCORING_CARD_REGION: dict[str, Region] = {
     "Asia_Scoring": Region.ASIA,
@@ -168,12 +193,10 @@ class Engine:
         if player not in (Side.US, Side.USSR):
             raise ValueError("observe() is only valid for Side.US or Side.USSR")
         opponent = player.opponent
-        pending = self.pending_decision
-        if pending is not None and pending.actor is not player and pending.kind in _SECRET_HAND_KINDS:
-            # The actor's hand is the private part, not the fact that they are
-            # deciding: keep id/actor/kind/context (so `phasing` and "a choice
-            # is pending" stay correct) but drop the hand-derived options.
-            pending = Decision(pending.id, pending.actor, pending.kind, (), pending.context)
+        # The actor's hand is the private part, not the fact that they are
+        # deciding: keep id/actor/kind/context (so `phasing` and "a choice is
+        # pending" stay correct) but drop the hand-derived options.
+        pending = redact_decision_for(self.pending_decision, player)
         return Observation(
             side=player,
             phase=self.phase,

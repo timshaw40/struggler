@@ -58,10 +58,10 @@ def collect(games: int, seed_base: int, workers: int, events: bool, stride: int)
         return pool.map(_collect_job, jobs)
 
 
-def build_dataset(raw) -> tuple[list[list[float]], list[float]]:
+def build_dataset(games) -> tuple[list[list[float]], list[float]]:
     X: list[list[float]] = []
     Y: list[float] = []
-    for feats, actors, winner in raw:
+    for feats, actors, winner in games:
         for f, actor in zip(feats, actors):
             y = 0.0 if winner is None else (1.0 if actor == winner else -1.0)
             X.append(f)
@@ -69,6 +69,15 @@ def build_dataset(raw) -> tuple[list[list[float]], list[float]]:
             X.append([-v for v in f])  # mirrored sample enforces antisymmetry
             Y.append(-y)
     return X, Y
+
+
+def split_games(games: list, val_fraction: float, seed: int = 0) -> tuple[list, list]:
+    """Split whole games, so a val position and its train neighbours (and a
+    sample and its mirror) can never straddle the boundary."""
+    idx = list(range(len(games)))
+    random.Random(seed).shuffle(idx)
+    cut = int(len(idx) * (1 - val_fraction))
+    return [games[i] for i in idx[:cut]], [games[i] for i in idx[cut:]]
 
 
 def _mse(X, Y, w) -> float:
@@ -96,18 +105,15 @@ def main() -> None:
     args = ap.parse_args()
 
     raw = collect(args.games, args.seed_base, args.workers, args.events, args.stride)
-    X, Y = build_dataset(raw)
-    rng = random.Random(0)
-    order = list(range(len(X)))
-    rng.shuffle(order)
-    cut = int(len(order) * (1 - args.val_fraction))
-    train, val = order[:cut], order[cut:]
-    w = fit_ridge([X[i] for i in train], [Y[i] for i in train], l2=args.l2)
+    train_games, val_games = split_games(raw, args.val_fraction, seed=0)
+    Xt, Yt = build_dataset(train_games)
+    Xv, Yv = build_dataset(val_games)
+    w = fit_ridge(Xt, Yt, l2=args.l2)
 
-    print(f"{len(raw)} games, {len(X)} samples ({len(train)} train / {len(val)} val)")
-    print(f"train MSE {_mse([X[i] for i in train], [Y[i] for i in train], w):.3f}  "
-          f"val MSE {_mse([X[i] for i in val], [Y[i] for i in val], w):.3f}")
-    print(f"val sign accuracy {_sign_accuracy([X[i] for i in val], [Y[i] for i in val], w):.1%}")
+    print(f"{len(raw)} games ({len(train_games)} train / {len(val_games)} val), "
+          f"{len(Xt)} train / {len(Xv)} val samples")
+    print(f"train MSE {_mse(Xt, Yt, w):.3f}  val MSE {_mse(Xv, Yv, w):.3f}")
+    print(f"val sign accuracy {_sign_accuracy(Xv, Yv, w):.1%}")
 
     LinearValue(weights=w).save(args.out)
     print(f"saved {args.out}")
