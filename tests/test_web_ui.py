@@ -219,3 +219,71 @@ def test_http_forfeit_reports_the_winner_and_starts_fresh() -> None:
         assert reply["is_terminal"] is False  # forfeit also starts a new game
     finally:
         server.shutdown()
+
+
+def test_action_rejects_a_stale_decision_id() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    good = state["decision"]["id"]
+    with pytest.raises(RuntimeError, match="stale"):
+        session.act(0, game_id=state["game_id"], decision_id=good + 999)
+    # The right ids are accepted.
+    session.act(0, game_id=state["game_id"], decision_id=good)
+    assert session.engine.pending_decision is not None
+
+
+def test_action_rejects_a_stale_game_id() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    with pytest.raises(RuntimeError, match="stale game"):
+        session.act(0, game_id=state["game_id"] + 1, decision_id=state["decision"]["id"])
+
+
+def test_undo_restores_a_buffered_opponent_headline() -> None:
+    # USSR (bot) picks its headline first and is buffered; the human then
+    # headlines. Undo must put the buffer back, not just truncate lengths.
+    session = make_session()  # human = US
+    # Drive through setup to the human's headline decision.
+    for _ in range(50):
+        d = session.engine.pending_decision
+        if d is None or (d.kind.value == "headline_play" and d.actor is session.human_side):
+            break
+        if d.actor is session.human_side:
+            session.act(0)
+        else:
+            session.advance()
+    decision = session.engine.pending_decision
+    assert decision.kind.value == "headline_play" and decision.actor.value == "US"
+    assert len(session.history._pending_headline) == 1  # USSR pick buffered
+
+    session.act(0)  # US headlined; the buffer emptied
+    assert len(session.history._pending_headline) == 0
+
+    session.undo()
+    assert len(session.history._pending_headline) == 1  # restored
+    assert session.engine.pending_decision.actor.value == "US"
+
+
+def test_game_log_is_written_and_can_resume(tmp_path) -> None:
+    session = make_session()
+    session.log_dir = str(tmp_path)
+    session._open_log()
+    session.advance()
+    session.act(0)
+    session.advance()
+
+    log_path = tmp_path / f"game_{session.game_id}.json"
+    assert log_path.is_file()
+    log = json.loads(log_path.read_text())
+    assert log["actions"] and log["new_game"] is True
+
+    resumed = serve_ui.Session.resume(
+        str(log_path), us="human", ussr="greedy", log_dir=str(tmp_path)
+    )
+    assert resumed.engine.serialize() == session.engine.serialize()
+    assert len(resumed.history.history) == len(session.history.history)
+    # It can keep playing.
+    resumed.advance()
+    assert resumed.engine.pending_decision is not None

@@ -325,8 +325,19 @@ async function act(index) {
     const data = await fetch("/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ index }),
+      // game_id + decision_id let the server reject a stale/duplicate click
+      // instead of advancing whatever decision happens to be pending.
+      body: JSON.stringify({
+        index,
+        game_id: state.game_id,
+        decision_id: state.decision ? state.decision.id : null,
+      }),
     }).then((r) => r.json());
+    if (data.error && data.state) {
+      console.warn("/action rejected:", data.error);
+      state = data.state;  // resync to the server's real position
+      return;
+    }
     state = data.state || data;  // error replies carry the current state
   } catch (err) {
     console.error(err);

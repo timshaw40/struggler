@@ -64,4 +64,5 @@ def test_extract_training_runs_on_parsed_corpus() -> None:
     game = json.loads(parsed[0].read_text())
     rows, summary = mod.extract(game, GreedyPlayer())
     assert "greedy_agreement" in summary
-    assert summary["human_decisions"] == len(rows)
+    assert summary["decisions"] == len(rows)
+    assert summary["eligible_decisions"] <= summary["decisions"]

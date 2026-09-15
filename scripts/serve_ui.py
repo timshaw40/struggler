@@ -46,7 +46,12 @@ sys.path.insert(0, str(ROOT / "src"))
 from main import build_player  # noqa: E402  (repo CLI module, needs src/ on sys.path)
 from struggler.engine import Engine, Side  # noqa: E402
 from struggler.engine.player import Event  # noqa: E402
-from struggler.engine.replay import HistoryBuilder  # noqa: E402
+from struggler.engine.replay import (  # noqa: E402
+    GameLogWriter,
+    HistoryBuilder,
+    encode_action,
+    replay_history,
+)
 from struggler.engine.types import Action  # noqa: E402
 
 UI_DIR = ROOT / "ui"
@@ -67,7 +72,7 @@ class Session:
     """One interactive game: the engine, the bot seats, the advance loop."""
 
     def __init__(self, seed: int, us: str, ussr: str, events: bool,
-                 include_ccw: bool = True) -> None:
+                 include_ccw: bool = True, log_dir: str | None = None) -> None:
         humans = (us == "human") + (ussr == "human")
         if humans > 1:
             raise SystemExit("at most one human seat (no per-client identity)")
@@ -80,10 +85,59 @@ class Session:
         self.bot_kind = ussr if us == "human" else us
         self.include_ccw = include_ccw
         self.setup_us_extra = 0
+        self.log_dir = log_dir
+        self.game_id = 0
+        self._log_writer: GameLogWriter | None = None
         self.lock = threading.Lock()
         self._rebuild()
 
+    @classmethod
+    def resume(cls, log_path: str, us: str, ussr: str, log_dir: str | None = None) -> "Session":
+        """Rebuild a saved game from its log and continue it. The seat kinds
+        come from the caller (they aren't stored in the log)."""
+        log = json.loads(Path(log_path).read_text())
+        if log.get("winner") is not None:
+            raise SystemExit(f"{log_path} is a finished game; nothing to resume")
+        session = cls.__new__(cls)
+        session.watch = False
+        session.human_side = Side.US if us == "human" else Side.USSR
+        session.seed = int(log["seed"])
+        session.us, session.ussr = us, ussr
+        session.events = bool(log.get("events", True))
+        session.bot_kind = ussr if us == "human" else us
+        session.log_dir = log_dir
+        session.game_id = 0
+        session._log_writer = None
+        session.lock = threading.Lock()
+        engine, history = replay_history(log)
+        session.engine = engine
+        session.include_ccw = "Chinese_Civil_War" in engine.board.countries
+        session.setup_us_extra = engine.setup_us_extra
+        session.history = HistoryBuilder(history)
+        session._undo = None
+        session.players = {}
+        for side, kind in ((Side.US, us), (Side.USSR, ussr)):
+            if kind != "human":
+                session.players[side] = build_player(kind, seed=session.seed + (1 if side is Side.US else 2))
+        session._rebind()
+        session.game_id = 1
+        session._open_log(initial_actions=log.get("actions"))
+        return session
+
+    def _open_log(self, initial_actions: list[dict] | None = None) -> None:
+        if not self.log_dir:
+            return
+        path = Path(self.log_dir) / f"game_{self.game_id}.json"
+        self._log_writer = GameLogWriter(path, self.engine, initial_actions=initial_actions)
+
+    def _close_log(self) -> None:
+        if self._log_writer is not None:
+            self._log_writer.finalize(self.engine.winner)
+            self._log_writer = None
+
     def _rebuild(self) -> None:
+        self._close_log()  # finalize the outgoing game's log
+        self.game_id += 1
         self.engine = Engine.new_game(
             seed=self.seed, events=self.events, include_ccw=self.include_ccw,
             setup_us_extra=self.setup_us_extra,
@@ -95,6 +149,7 @@ class Session:
         self._rebind()
         self.history = HistoryBuilder()
         self._undo = None
+        self._open_log()
 
     def restart(self, include_ccw: bool | None = None, side: str | None = None,
                 setup_us_extra: int | None = None) -> None:
@@ -119,15 +174,20 @@ class Session:
 
     def undo(self) -> None:
         """Take back the human's last action (plus any bot/CHANCE replies
-        after it). Single level: one undo per action."""
+        after it). Single level: one undo per action. Restores the FULL
+        HistoryBuilder state, including an in-progress headline buffer that
+        length-truncation could not put back."""
         if self._undo is None:
             raise RuntimeError("nothing to undo")
         snap = self._undo
         self._undo = None
         self.engine = Engine.deserialize(snap["engine"])
-        del self.history.history[snap["hist_len"]:]
-        del self.history._pending_headline[snap["pending_hl_len"]:]
+        self.history.history = list(snap["history"])
+        self.history._pending_headline = list(snap["pending_headline"])
         self._rebind()
+        # Rewrite the on-disk log to match the rewound game.
+        self._close_log()
+        self._open_log(initial_actions=[encode_action(e.action) for e in self.history.history])
 
     def forfeit(self, **restart_kw: Any) -> str:
         """Opponent wins, then a new game starts. Returns the winner's side."""
@@ -141,6 +201,8 @@ class Session:
         decision = self.engine.pending_decision
         self.engine.step(action)
         event = self.history.record(decision, action, self.engine)
+        if self._log_writer is not None:
+            self._log_writer.record_step(event)
         detail = dict(action.payload)
         print(
             f"T{event.turn}/R{event.action_round} {event.actor.value:4s} "
@@ -172,18 +234,29 @@ class Session:
                 return
             self.step_once()
 
-    def act(self, index: int) -> None:
+    def act(self, index: int, game_id: int | None = None,
+            decision_id: int | None = None) -> None:
+        """Apply the human's choice. `game_id`/`decision_id`, when given (the
+        browser always sends them), reject a stale submission — a duplicated or
+        late request can never advance a decision it wasn't answering."""
         decision = self.engine.pending_decision
         if decision is None:
             raise RuntimeError("no pending decision")
+        if self.watch:
+            raise RuntimeError("watch mode: no human seat")
+        if game_id is not None and int(game_id) != self.game_id:
+            raise RuntimeError(f"stale game id {game_id} (server {self.game_id})")
+        if decision_id is not None and int(decision_id) != decision.id:
+            raise RuntimeError("stale decision id")
+        if decision.actor is not self.human_side:
+            raise RuntimeError("not the human's decision")
         if not 0 <= index < len(decision.options):
             raise ValueError(f"option index {index} out of range")
-        if decision.actor is self.human_side:
-            self._undo = {
-                "engine": self.engine.serialize(),
-                "hist_len": len(self.history.history),
-                "pending_hl_len": len(self.history._pending_headline),
-            }
+        self._undo = {
+            "engine": self.engine.serialize(),
+            "history": list(self.history.history),
+            "pending_headline": list(self.history._pending_headline),
+        }
         self._step(decision.options[index])
         self.advance()
 
@@ -221,6 +294,7 @@ class Session:
         obs = engine.observe(self.human_side)
         decision = obs.pending_decision
         data: dict[str, Any] = {
+            "game_id": self.game_id,
             "human_side": self.human_side.value,
             "seed": self.seed,
             "include_ccw": "Chinese_Civil_War" in engine.board.countries,
@@ -265,6 +339,7 @@ class Session:
             "decision": None
             if decision is None or self.watch or decision.actor is not self.human_side
             else {
+                "id": decision.id,
                 "kind": decision.kind.value,
                 "context": self._json(decision.context),
                 "options": [
@@ -363,7 +438,11 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
             with session.lock:
                 try:
                     if self.path == "/action":
-                        session.act(int(body.get("index", -1)))
+                        session.act(
+                            int(body.get("index", -1)),
+                            game_id=body.get("game_id"),
+                            decision_id=body.get("decision_id"),
+                        )
                         code, payload = 200, session.state()
                     elif self.path == "/new":
                         session.restart(**_restart_opts(body))
@@ -400,9 +479,19 @@ def main() -> None:
         help="Pass events= to Engine.new_game (default: on).",
     )
     parser.add_argument("--no-open", action="store_true", help="don't auto-open the browser")
+    parser.add_argument("--log-dir", default=None,
+                        help="write each game's replay log here (default: none)")
+    parser.add_argument("--resume-log", default=None,
+                        help="continue the game saved in this replay log instead of dealing fresh")
     args = parser.parse_args()
 
-    session = Session(seed=args.seed, us=args.us, ussr=args.ussr, events=args.events)
+    if args.resume_log:
+        session = Session.resume(
+            args.resume_log, us=args.us, ussr=args.ussr, log_dir=args.log_dir
+        )
+    else:
+        session = Session(seed=args.seed, us=args.us, ussr=args.ussr,
+                          events=args.events, log_dir=args.log_dir)
     cards_meta = {
         cid: {
             "number": card.number,
