@@ -290,7 +290,8 @@ of turn.
 ## Space Race boxes
 
 Box 2 (a second Space Race attempt per turn), box 4 (see below), box 6 (may
-discard the Held Card at end of turn), and box 8 (an extra Action Round) are
+discard the Held Card at end of turn), and box 8 (an absolute 8 Action Rounds
+per turn — not base + 1) are
 implemented. Each is granted only to the first side to reach the box and is
 cancelled outright — not transferred — the instant the second side also
 reaches it (rule 6.4.4), via `Engine._update_space_race_ability` and the
