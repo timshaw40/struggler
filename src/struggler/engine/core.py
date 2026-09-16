@@ -1369,6 +1369,21 @@ class Engine:
             return False
         return Side(card.side.value) is side.opponent
 
+    def _ops_modifier(self, side: Side) -> int:
+        """Per-turn additive Ops modifiers from persistent events
+        (Containment/Brezhnev +1 for their side, Red Scare/Purge -1 for the
+        side it targeted). 7.4.2: these apply "for all purposes" — card
+        plays, event-granted Operations, discard thresholds, and coup rolls
+        alike."""
+        mod = 0
+        if self.turn_effects.get("containment") and side is Side.US:
+            mod += 1
+        if self.turn_effects.get("brezhnev") and side is Side.USSR:
+            mod += 1
+        if self.turn_effects.get("red_scare") == side.value:
+            mod -= 1
+        return mod
+
     def _effective_ops(self, side: Side, card: Card) -> int:
         """The card's Ops value for `side` after persistent per-turn modifiers
         (Containment/Brezhnev +1 to a maximum of 4, Red Scare -1). Never
@@ -1647,9 +1662,10 @@ class Engine:
         """An event that has its beneficiary conduct `ops` Operations (CIA
         Created, Lone Gunman, ABM Treaty, ...). `allow_coup=False` restricts
         the spend to Influence/Realignment only (Glasnost, KAL-007's printed
-        text names only those two, never Coup)."""
-        if ops > 0:
-            self._push_ops_type(side, ops, allow_coup=allow_coup)
+        text names only those two, never Coup). Ops modifiers apply here too
+        (7.4.2 "for all purposes": Containment + CIA Created = 2 Ops)."""
+        ops = max(1, ops + self._ops_modifier(side))
+        self._push_ops_type(side, ops, allow_coup=allow_coup)
 
     def set_defcon(self, level: int, caused_by: Side) -> None:
         """Set DEFCON to `level` (How I Learned to Stop Worrying, ...). Routed
@@ -2624,7 +2640,10 @@ class Engine:
             self.discard_pile.append(cid)
             # The taken card is used for Operations, so the phasing side's
             # per-turn Ops modifiers (Containment/Brezhnev/Red Scare) apply.
-            self.push_event_operations(taker, self._effective_ops(taker, card))
+            # `_effective_ops` already folds them in (with the printed card's
+            # "maximum of 4 Operations" cap), so push directly rather than
+            # through push_event_operations, which would apply them twice.
+            self._push_ops_type(taker, self._effective_ops(taker, card))
 
     # -- Bear Trap / Quagmire — a persistent per-player operating lock ------
     #
@@ -2660,7 +2679,8 @@ class Engine:
         )
         payable = [
             cid for cid in source
-            if not self.cards[cid].scoring and self.cards[cid].ops >= 2
+            if not self.cards[cid].scoring
+            and self._effective_ops(side, self.cards[cid]) >= 2
         ]
         if payable:
             options = tuple(
