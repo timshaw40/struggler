@@ -2417,6 +2417,10 @@
           "USSR": 4
         },
         "ars_played": 3,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
         "phasing_side": "USSR",
         "headline": {
           "US": null,
@@ -3547,6 +3551,10 @@
           "USSR": 5
         },
         "ars_played": 6,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
         "phasing_side": "US",
         "headline": {
           "US": null,
@@ -4622,6 +4630,10 @@
           "USSR": 5
         },
         "ars_played": 11,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
         "phasing_side": "USSR",
         "headline": {
           "US": null,
