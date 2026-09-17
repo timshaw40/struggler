@@ -2384,6 +2384,7 @@
           "Nuclear_Test_Ban"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Five_Year_Plan",
@@ -3519,8 +3520,10 @@
           "Red_Scare_Purge"
         ],
         "removed_cards": [
-          "Marshall_Plan",
           "Suez_Crisis"
+        ],
+        "in_play_cards": [
+          "Marshall_Plan"
         ],
         "hands": {
           "US": [
@@ -4600,8 +4603,10 @@
           "Duck_and_Cover"
         ],
         "removed_cards": [
+          "Suez_Crisis"
+        ],
+        "in_play_cards": [
           "Marshall_Plan",
-          "Suez_Crisis",
           "De_Gaulle_Leads_France",
           "Warsaw_Pact_Formed"
         ],

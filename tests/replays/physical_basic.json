@@ -1288,6 +1288,7 @@
           "Romanian_Abdication"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Middle_East_Scoring",

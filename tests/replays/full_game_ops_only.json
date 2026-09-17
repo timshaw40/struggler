@@ -4785,6 +4785,7 @@
           "De_Stalinization"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Vietnam_Revolts",
@@ -5987,6 +5988,7 @@
           "Brush_War"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "De_Gaulle_Leads_France",
@@ -7165,6 +7167,7 @@
         "removed_cards": [
           "Southeast_Asia_Scoring"
         ],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "An_Evil_Empire",
@@ -8308,6 +8311,7 @@
         "removed_cards": [
           "Southeast_Asia_Scoring"
         ],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Cultural_Revolution"

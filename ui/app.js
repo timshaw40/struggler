@@ -1265,6 +1265,7 @@ function renderPanel() {
     row.addEventListener("click", () => { list.hidden = !list.hidden; });
     piles.append(row, list);
   };
+  pileRow("In play", state.in_play_cards || []);
   pileRow("Discard", state.discard_pile);
   pileRow("Removed", state.removed_cards || []);
 

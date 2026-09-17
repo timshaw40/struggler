@@ -311,6 +311,7 @@ class Session:
             "draw_pile_size": obs.draw_pile_size,
             "discard_pile": list(obs.discard_pile),
             "removed_cards": list(obs.removed_cards),
+            "in_play_cards": list(obs.in_play_cards),
             "china_card_owner": obs.china_card_owner.value,
             "china_card_available": obs.china_card_available,
             "space_race": obs.space_race,

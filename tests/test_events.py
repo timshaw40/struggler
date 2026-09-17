@@ -2228,14 +2228,16 @@ def test_ineligible_remove_after_event_is_not_offered_as_an_event():
     with pytest.raises(ValueError):
         engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
 
-    # Once eligible it is offered, fires, and *is* removed.
+    # Once eligible it is offered, fires, and — NATO's printed footer says
+    # "persists" — the card goes face-up beside the board.
     eligible = _bare()
     eligible.hands["US"] = ["NATO"]
     eligible.game_effects["marshall_or_warsaw"] = True
     eligible.push_full_card_play(Side.US, "NATO")
     assert "event" in {a.payload["mode"] for a in eligible.pending_decision.options}
     eligible.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
-    assert "NATO" in eligible.removed_cards
+    assert "NATO" in eligible.in_play_cards
+    assert "NATO" not in eligible.removed_cards
     assert eligible.game_effects.get("nato") is True
 
 
@@ -2590,3 +2592,58 @@ def test_cardless_side_sits_out_and_opponent_completes_the_turn():
     # reshuffled deal re-arms the USSR; that is not what this test pins.)
     assert len(plays) == 11
     assert all(a is Side.US for a in plays)
+
+
+def test_permanent_events_live_in_play_not_in_the_discard_pile():
+    # 2.2.5: an underlined event card is displayed face-up beside the board
+    # until cancelled -- it is not in any draw/discard pile, so it can never
+    # be reshuffled back into a hand, reclaimed by SALT Negotiations, or
+    # re-fired from the discard by Star Wars while its effect is live.
+    engine = _bare()
+    engine.hands = {"USSR": ["Flower_Power"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Flower_Power")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is True
+
+    # Cancellation (An Evil Empire): Flower Power's printed footer says
+    # "persists until nullified ... then cut from play" -- the card leaves the
+    # game, not the discard pile.
+    engine.hands = {"USSR": [], "US": ["An_Evil_Empire"]}
+    engine.push_full_card_play(Side.US, "An_Evil_Empire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.removed_cards
+    assert "Flower_Power" not in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is None
+    # ...and the cancelling card is itself on the table.
+    assert "An_Evil_Empire" in engine.in_play_cards
+
+
+def test_trap_card_leaves_play_when_freed_by_the_roll():
+    engine = _bare()
+    engine.hands = {"USSR": ["Quagmire"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Quagmire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Quagmire" in engine.in_play_cards
+    # The freeing roll (1-4) cancels the trap: the card goes to the discard.
+    from struggler.engine.types import DecisionKind as DK
+    engine._push(Side.CHANCE, DK.QUAGMIRE_ROLL,
+                 (Action(DK.QUAGMIRE_ROLL, {"value": 3}),), {"key": "quagmire"})
+    engine.step(engine.legal_actions()[0])
+    assert "Quagmire" in engine.discard_pile
+    assert engine.game_effects.get("quagmire") is None
+
+
+def test_shuttle_diplomacy_leaves_play_when_consumed_at_scoring():
+    engine = _bare()
+    engine.board.influence["Egypt"]["USSR"] = 3
+    engine.board.influence["Israel"]["US"] = 3
+    engine.hands = {"USSR": [], "US": ["Shuttle_Diplomacy"]}
+    engine.push_full_card_play(Side.US, "Shuttle_Diplomacy")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Shuttle_Diplomacy" in engine.in_play_cards
+    engine._score_region_net(Region.MIDDLE_EAST)
+    assert "Shuttle_Diplomacy" in engine.discard_pile
+    assert "Shuttle_Diplomacy" not in engine.in_play_cards

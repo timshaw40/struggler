@@ -200,7 +200,7 @@
       "side": "USSR",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Branch: remove all US Influence from 4 Eastern Europe countries, OR USSR +5 Influence there (max 2/country); enables NATO."
@@ -212,7 +212,7 @@
       "side": "USSR",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Remove 2 US / +1 USSR Influence in France; NATO no longer protects France."
@@ -260,7 +260,7 @@
       "side": "US",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "USSR may no longer Coup, Realign, or play Brush War against US-controlled Europe (requires Marshall Plan or Warsaw Pact Formed)."
@@ -284,7 +284,7 @@
       "side": "US",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "US +1 Influence each to 7 non-USSR-controlled Western Europe countries; enables NATO."
@@ -332,7 +332,7 @@
       "side": "US",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "US gains Control of Japan; USSR may never Coup/Realign against Japan again."
@@ -428,7 +428,7 @@
       "side": "US",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "While the US controls Taiwan, it scores as an Asian Battleground; nullified once the US plays the China Card (not when the USSR does)."
@@ -512,7 +512,7 @@
       "side": "USSR",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Traps the US: each action round it must discard a 2+-Ops card and roll a die (1-4 frees it, 5-6 stays trapped); with no such card, the round is wasted with no roll (any scoring card in hand is still forced into play)."
@@ -536,7 +536,7 @@
       "side": "US",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Traps the USSR: each action round it must discard a 2+-Ops card and roll a die (1-4 frees it, 5-6 stays trapped); with no such card, the round is wasted with no roll (any scoring card in hand is still forced into play)."
@@ -668,7 +668,7 @@
       "side": "USSR",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "USSR +1 VP, +1 Influence in West Germany; NATO no longer protects West Germany."
@@ -716,7 +716,7 @@
       "side": "USSR",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "USSR +2 VP every time the US plays a war card, until An Evil Empire is played."
@@ -788,7 +788,7 @@
       "side": "US",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "US +1 VP, +1 Influence each in Israel/Jordan/Egypt; blocks Arab-Israeli War."
@@ -824,7 +824,7 @@
       "side": "US",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Remove 2 USSR / +1 US Influence in Poland; enables Solidarity."
@@ -992,7 +992,7 @@
       "side": "USSR",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Remove all US Influence from Iran, USSR +2 there; makes Terrorism hit the US twice."
@@ -1004,7 +1004,7 @@
       "side": "US",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "US +1 VP, USSR +1 Influence in Argentina, remove all USSR Influence from UK; blocks Socialist Governments."
@@ -1040,7 +1040,7 @@
       "side": "US",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "OPEC can no longer be played as an event; US gets one extra action round this turn."
@@ -1052,7 +1052,7 @@
       "side": "USSR",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "USSR +1 Influence in Europe, total 6 if USSR is ahead on VP else 4, max 2 per country; USSR may no longer coup in Europe."
@@ -1160,7 +1160,7 @@
       "side": "US",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "Cancels Willy Brandt; US +3 Influence in East Germany; US gets a free Coup-or-Realignment op in Europe."
@@ -1172,7 +1172,7 @@
       "side": "US",
       "period": "LATE_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": false,
       "in_deck": true,
       "event_summary": "US +1 VP; cancels Flower Power."
@@ -1280,7 +1280,7 @@
       "side": "US",
       "period": "EARLY_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": true,
       "in_deck": true,
       "event_summary": "If Canada is US-controlled, whenever DEFCON moves to 2, US adds 1 Influence to a country where it already has some."
@@ -1328,7 +1328,7 @@
       "side": "US",
       "period": "MID_WAR",
       "scoring": false,
-      "remove_after_event": true,
+      "remove_after_event": false,
       "optional": true,
       "in_deck": true,
       "event_summary": "US +2 Influence in Saudi Arabia; blocks Muslim Revolution."
