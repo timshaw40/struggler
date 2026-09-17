@@ -338,6 +338,8 @@ def _score_setup_place(board: Board, side: Side, country: str) -> float:
 
 def _score_place_influence(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
+    if action.payload.get("stop"):  # end the "up to" Ops spend (6.1.3)
+        return 0.0
     country = action.payload["country"]
     if observation.pending_decision.context.get("setup"):
         return _score_setup_place(board, side, country)
@@ -381,6 +383,8 @@ def _score_realignment_target(
 ) -> float:
     side = observation.side
     opponent = side.opponent
+    if action.payload.get("stop"):  # end the Ops spend on realignment rolls
+        return 0.0
     country = action.payload["country"]
     own_bonus = _realignment_bonus(board, side, country)
     opp_bonus = _realignment_bonus(board, opponent, country)

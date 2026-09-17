@@ -452,7 +452,8 @@ def test_china_card_grants_five_ops_used_entirely_in_asia():
     def asian(opts):
         return next(
             a for a in opts
-            if engine.board.countries[a.payload["country"]].region is not None
+            if a.payload.get("country")
+            and engine.board.countries[a.payload["country"]].region is not None
             and engine.board.countries[a.payload["country"]].region.value == "ASIA"
         )
     steps = 0
@@ -475,7 +476,8 @@ def test_china_card_bonus_forfeited_by_leaving_asia():
         opts = engine.pending_decision.options
         non_asia = [
             a for a in opts
-            if engine.board.countries[a.payload["country"]].region.value != "ASIA"
+            if a.payload.get("country")
+            and engine.board.countries[a.payload["country"]].region.value != "ASIA"
         ]
         engine.step(non_asia[0] if non_asia else opts[0])
         steps += 1
@@ -858,7 +860,7 @@ def test_junta_places_two_then_offers_a_free_regional_operation():
     target = engine.pending_decision
     assert target.kind is DecisionKind.REALIGNMENT_TARGET
     assert all(
-        engine.board.countries[a.payload["country"]].region.value
+        engine.board.countries[a.payload.get("country")].region.value
         in ("CENTRAL_AMERICA", "SOUTH_AMERICA")
         for a in target.options
     )
@@ -1219,7 +1221,7 @@ def test_cambridge_five_places_in_a_revealed_scoring_region():
     decision = engine.pending_decision
     assert decision.kind is DecisionKind.EVENT_INFLUENCE and decision.actor is Side.USSR
     assert all(
-        engine.board.countries[a.payload["country"]].region.value == "ASIA"
+        engine.board.countries[a.payload.get("country")].region.value == "ASIA"
         for a in decision.options
     )
 

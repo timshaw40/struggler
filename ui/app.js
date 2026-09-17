@@ -746,6 +746,7 @@ const cardOption = (cid) => findOption((o) => o.payload && o.payload.card === ci
 
 function optionLabel(o) {
   const p = o.payload || {};
+  if (p.stop) return "Done";  // end the "up to" Ops spend early (6.1.3 / 6.2.2)
   if (p.country) return pretty(p.country);
   if (p.card) return p.card === "none" ? "Pass" : cardName(p.card);
   if (p.mode) return MODE_LABELS[p.mode] || pretty(p.mode);
@@ -1570,8 +1571,12 @@ function renderDecision() {
 
   // Country-picking happens on the map: the glowing markers are the options
   // (every one of this decision's options names a country). The view never
-  // moves on its own — it stays where the player put it.
-  if (d.options.length && d.options.every((o) => o.payload && o.payload.country)) {
+  // moves on its own — it stays where the player put it. An "up to" Ops spend
+  // (6.1.3 / 6.2.2) also offers a stop option, which is not a country: keep
+  // the map picker for the countries and render stop as its own button.
+  const countryOpts = d.options.filter((o) => o.payload && o.payload.country);
+  const stopOpts = d.options.filter((o) => o.payload && o.payload.stop);
+  if (countryOpts.length && countryOpts.length + stopOpts.length === d.options.length) {
     if (d.kind === "place_influence" && !d.context.setup) {
       const left = placementOpsLeft(d);
       if (left != null) {
@@ -1584,7 +1589,7 @@ function renderDecision() {
       }
     }
     const anyDouble = d.kind === "place_influence" && !d.context.setup
-      && d.options.some((o) => placementCost(o.payload.country, state.influence) === 2);
+      && countryOpts.some((o) => placementCost(o.payload.country, state.influence) === 2);
     const hint = document.createElement("em");
     hint.className = "hint";
     hint.textContent = "Click a glowing country on the map, or pick one here."
@@ -1595,7 +1600,7 @@ function renderDecision() {
     // keyboard use must not strand a legal choice.
     const list = document.createElement("div");
     list.className = "countrybtns";
-    for (const o of d.options) {
+    for (const o of countryOpts) {
       const doubles = d.kind === "place_influence" && !d.context.setup
         && placementCost(o.payload.country, state.influence) === 2;
       const b = document.createElement("button");
@@ -1607,6 +1612,15 @@ function renderDecision() {
       list.append(b);
     }
     main.append(list);
+    for (const o of stopOpts) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "stopbtn";
+      b.innerHTML = `<b>${esc(optionLabel(o))}</b>`;
+      b.disabled = busy;
+      b.addEventListener("click", () => act(o.index));
+      main.append(b);
+    }
     return;
   }
   for (const o of d.options) {

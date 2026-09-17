@@ -1057,10 +1057,17 @@
                 "payload": {
                   "country": "Chinese_Civil_War"
                 }
+              },
+              {
+                "kind": "place_influence",
+                "payload": {
+                  "stop": true
+                }
               }
             ],
             "context": {
-              "ops_remaining": 2
+              "ops_remaining": 2,
+              "spent": 2
             }
           }
         ],
