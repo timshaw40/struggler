@@ -5,12 +5,6 @@ way.
 
 ## Rules fidelity
 
-- **Shuttle Diplomacy** is filed to the discard pile when played, rather
-  than kept "in front of you" until its delayed effect triggers. Only the
-  effect flag matters mechanically. A card-manipulation event such as Star
-  Wars could in principle retrieve it slightly earlier than the physical
-  game allows, but the effect it would re-apply is idempotent, so this has
-  no actual gameplay consequence.
 - **Aldrich Ames Remix**'s "USA reveals their hand face-up until end of
   turn" is modeled as a momentary reveal — the decision options — rather
   than an ongoing visibility grant surfaced through `observe()`. Modeling
