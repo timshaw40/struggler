@@ -1341,16 +1341,18 @@ class Engine:
             {"side": side.value, "ops": ops, "bonus": self._ops_bonus_region(side, china)},
         )
 
-    def _ops_bonus_region(self, side: Side, china: bool) -> str | None:
-        """The region a play earns its "+1 Op if all Ops used here" bonus in:
-        "asia" for the China Card, "se_asia" for a USSR play while Vietnam
-        Revolts is in effect this turn, else None. (China takes precedence; the
-        rare China+Vietnam stack is not modeled.)"""
+    def _ops_bonus_region(self, side: Side, china: bool) -> list[str]:
+        """The regions a play earns its "+1 Op if all Ops used here" bonus
+        in: "asia" for the China Card (9.6), "se_asia" for a USSR play while
+        Vietnam Revolts is in effect this turn. 7.4: modifiers aggregate —
+        a China Card play spent entirely in Southeast Asia earns BOTH
+        bonuses (its worked example: 4 + 1 + 1 = 6 Ops)."""
+        bonuses = []
         if china:
-            return "asia"
+            bonuses.append("asia")
         if side is Side.USSR and self.turn_effects.get("vietnam_revolts"):
-            return "se_asia"
-        return None
+            bonuses.append("se_asia")
+        return bonuses
 
     def _in_bonus_region(self, cid: str, bonus: str) -> bool:
         info = self.board.countries[cid]
@@ -1379,10 +1381,11 @@ class Engine:
         ops_type = action.payload["type"]
         if ops_type == "influence":
             if bonus:
-                # A region-bonus play's +1 applies only if every Op is spent in
-                # that region; the placement step enforces the all-or-nothing
-                # rule (China Card -> Asia, Vietnam Revolts -> Southeast Asia).
-                self._maybe_push_bonus_influence(side, ops, 0, 0, bonus)
+                # A region-bonus play's +1 per bonus applies only if every Op
+                # is spent in that bonus's region; the placement step enforces
+                # the all-or-nothing rule (China Card -> Asia, Vietnam Revolts
+                # -> Southeast Asia; both can stack).
+                self._maybe_push_bonus_influence(side, ops, 0, list(bonus))
             else:
                 self._maybe_push_place_influence(side, ops)
         elif ops_type == "coup":
@@ -2424,13 +2427,17 @@ class Engine:
         self._push(side, DecisionKind.PLACE_INFLUENCE, options, {"ops_remaining": ops_remaining})
 
     def _bonus_influence_options(
-        self, side: Side, base: int, spent: int, non_bonus: int, bonus: str
+        self, side: Side, base: int, spent: int, alive: list[str]
     ) -> tuple[Action, ...]:
-        """Legal placements for a region-bonus influence spend. The +1 bonus
-        point is available only while nothing has been (and nothing would be)
-        placed outside the bonus region: a placement of cost `c` is legal iff
-        `spent + c <= base`, or all Ops (this one included) stay in the region
-        and `spent + c <= base + 1`."""
+        """Legal placements for a region-bonus influence spend.
+
+        `alive` holds the bonus regions every Op so far has stayed inside
+        (a bonus is only earned if ALL Ops go to its region). Each bonus
+        still alive adds +1 to the budget, so a placement of cost `c` at a
+        country inside the intersection is legal while
+        `spent + c <= base + len(new_alive)` — placing outside a bonus's
+        region kills that bonus (and with it its budget share) permanently.
+        """
         snapshot = self._ops_round_snapshot
         options = []
         for cid in self.board.countries:
@@ -2439,28 +2446,26 @@ class Engine:
             if self._chernobyl_blocks(side, cid):
                 continue
             cost = self.board.influence_cost(side, cid)
-            in_region = self._in_bonus_region(cid, bonus)
-            new_spent = spent + cost
-            new_non_bonus = non_bonus + (0 if in_region else cost)
-            if new_spent <= base or (new_non_bonus == 0 and new_spent <= base + 1):
+            new_alive = [b for b in alive if self._in_bonus_region(cid, b)]
+            if spent + cost <= base + len(new_alive):
                 options.append(Action(DecisionKind.PLACE_INFLUENCE, {"country": cid}))
         return tuple(options)
 
     def _maybe_push_bonus_influence(
-        self, side: Side, base: int, spent: int, non_bonus: int, bonus: str
+        self, side: Side, base: int, spent: int, alive: list[str]
     ) -> None:
         if self.is_terminal:
             self._ops_round_snapshot = None
             return
         if self._ops_round_snapshot is None:
             self._ops_round_snapshot = copy.deepcopy(self.board.influence)
-        options = self._bonus_influence_options(side, base, spent, non_bonus, bonus)
+        options = self._bonus_influence_options(side, base, spent, alive)
         if not options:
             self._ops_round_snapshot = None
             return
         self._push(
             side, DecisionKind.PLACE_INFLUENCE, options,
-            {"bonus": bonus, "base": base, "spent": spent, "non_bonus": non_bonus},
+            {"bonus": alive, "base": base, "spent": spent},
         )
 
     def _handle_place_influence(self, decision: Decision, action: Action) -> None:
@@ -2469,17 +2474,17 @@ class Engine:
             return
         side = decision.actor
         country = action.payload["country"]
+        if action.payload.get("stop"):
+            return
         cost = self.board.influence_cost(side, country)
         self.board.influence[country][side.value] += 1
         bonus = decision.context.get("bonus")
-        if bonus:
-            in_region = self._in_bonus_region(country, bonus)
+        if bonus is not None:
             self._maybe_push_bonus_influence(
                 side,
                 decision.context["base"],
                 decision.context["spent"] + cost,
-                decision.context["non_bonus"] + (0 if in_region else cost),
-                bonus,
+                [b for b in bonus if self._in_bonus_region(country, b)],
             )
             return
         self._maybe_push_place_influence(side, decision.context["ops_remaining"] - cost)
@@ -2511,12 +2516,14 @@ class Engine:
         side = decision.actor
         country = action.payload["country"]
         ops = decision.context["ops"]
-        # Region-bonus play: +1 Op (and +1 military Op) when the coup target is
-        # in the bonus region (China Card -> Asia, Vietnam Revolts -> SE Asia).
-        bonus = decision.context.get("bonus")
-        if bonus and self._in_bonus_region(country, bonus):
-            ops += 1
-            self._add_military_ops(side, 1)
+        # Region-bonus play: +1 Op (and +1 military Op) per bonus whose region
+        # contains the target (China Card -> Asia, Vietnam Revolts -> SE Asia;
+        # a Southeast Asia target under both earns +2, 7.4's worked example).
+        bonus = decision.context.get("bonus") or []
+        n = sum(1 for b in bonus if self._in_bonus_region(country, b))
+        if n:
+            ops += n
+            self._add_military_ops(side, n)
         self._push(
             Side.CHANCE,
             DecisionKind.COUP_ROLL,
@@ -2647,7 +2654,7 @@ class Engine:
             if options:
                 self._push(
                     side, DecisionKind.REALIGNMENT_TARGET, options,
-                    {"card_ops": ops, "spent": 0, "bonus": None, "non_bonus": 0},
+                    {"card_ops": ops, "spent": 0, "bonus": []},
                 )
 
     # -- reclaim a card from the (public) discard pile ----------------------
@@ -2879,18 +2886,19 @@ class Engine:
         side: Side,
         card_ops: int,
         spent: int,
-        bonus: str | None = None,
-        non_bonus: int = 0,
+        bonus: list[str] | None = None,
     ) -> None:
         """Push the next Realignment-attempt decision, if any attempts are
         still available. `spent` attempts are always allowed up to
-        `card_ops`; one extra attempt (`card_ops + 1`) is allowed on top of
+        `card_ops`; one extra attempt per bonus region is allowed on top of
         that only while `bonus` is active and every attempt so far has
-        stayed inside the bonus region (`non_bonus == 0`) -- the same
-        all-or-nothing rule `_maybe_push_bonus_influence` uses."""
+        stayed inside every still-alive bonus region (`alive` shrinks as an
+        attempt lands outside one of its regions) — the same all-or-nothing
+        rule `_maybe_push_bonus_influence` uses."""
+        alive = [b for b in (bonus or [])]
         if self.is_terminal:
             return
-        if not (spent < card_ops or (bonus and non_bonus == 0 and spent < card_ops + 1)):
+        if not spent < card_ops + len(alive):
             return
         options = self._realignment_target_options(side)
         if not options:
@@ -2899,11 +2907,13 @@ class Engine:
             side,
             DecisionKind.REALIGNMENT_TARGET,
             options,
-            {"card_ops": card_ops, "spent": spent, "bonus": bonus, "non_bonus": non_bonus},
+            {"card_ops": card_ops, "spent": spent, "bonus": alive},
         )
 
     def _handle_realignment_target(self, decision: Decision, action: Action) -> None:
         side = decision.actor
+        if action.payload.get("stop"):
+            return
         country = action.payload["country"]
         self._push(
             Side.CHANCE,
@@ -2914,8 +2924,7 @@ class Engine:
                 "country": country,
                 "card_ops": decision.context["card_ops"],
                 "spent": decision.context["spent"],
-                "bonus": decision.context["bonus"],
-                "non_bonus": decision.context["non_bonus"],
+                "bonus": list(decision.context.get("bonus") or []),
             },
         )
 
@@ -2933,8 +2942,7 @@ class Engine:
         country = decision.context["country"]
         card_ops = decision.context["card_ops"]
         spent = decision.context["spent"]
-        bonus = decision.context["bonus"]
-        non_bonus = decision.context["non_bonus"]
+        bonus = list(decision.context.get("bonus") or [])
         actor_roll = decision.context["actor_roll"]
         opp_roll = action.payload["value"]
 
@@ -2955,9 +2963,10 @@ class Engine:
             removed = min(-margin, self.board.influence[country][side.value])
             self.board.influence[country][side.value] -= removed
 
-        if bonus and not self._in_bonus_region(country, bonus):
-            non_bonus += 1
-        self._maybe_push_realignment_target(side, card_ops, spent + 1, bonus, non_bonus)
+        # An attempt outside a bonus's region kills that bonus's extra
+        # attempt for the rest of the spend.
+        alive = [b for b in bonus if self._in_bonus_region(country, b)]
+        self._maybe_push_realignment_target(side, card_ops, spent + 1, alive)
 
     def _realignment_bonus(self, side: Side, country: str) -> int:
         bonus = 1 if self.board.is_adjacent(side.value, country) else 0

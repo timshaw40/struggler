@@ -180,12 +180,19 @@ def _sync_board(board: Board, observation: Observation) -> None:
 # -- shared per-country rule replicas (public game data/rules, not hidden state) --
 
 
-def _in_bonus_region(info: CountryInfo, bonus: str | None) -> bool:
-    if bonus == "asia":
-        return info.region is Region.ASIA
-    if bonus == "se_asia":
-        return Subregion.SOUTHEAST_ASIA in info.subregions
-    return False
+def _in_bonus_region(info: CountryInfo, bonus: str | list[str] | None) -> bool:
+    # `bonus` is a list of live region bonuses (7.4 aggregates: a China Card
+    # play in SE Asia under Vietnam Revolts earns both), but older callers may
+    # still pass a single region name.
+    if isinstance(bonus, str):
+        bonus = [bonus]
+    if not bonus:
+        return False
+    return any(
+        (b == "asia" and info.region is Region.ASIA)
+        or (b == "se_asia" and Subregion.SOUTHEAST_ASIA in info.subregions)
+        for b in bonus
+    )
 
 
 def _coup_roll_modifier_estimate(observation: Observation, side: Side, info: CountryInfo) -> float:
@@ -345,9 +352,11 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
     info = board.countries[country]
     decision = observation.pending_decision
     ops = decision.context["ops"]
-    bonus = decision.context.get("bonus")
-    if bonus and _in_bonus_region(info, bonus):
-        ops += 1
+    bonus = decision.context.get("bonus") or []
+    # 7.4 aggregates: each live region bonus whose region contains the target
+    # adds +1 Op to the coup (China Card in Asia + Vietnam Revolts in SE Asia
+    # on a SE Asia target = +2).
+    ops += sum(1 for b in bonus if _in_bonus_region(info, b))
 
     if _coup_is_suicide(observation, side):
         return -weights.defcon_self_kill_penalty
@@ -409,7 +418,7 @@ def _best_influence_value(
 
 
 def _best_coup_value(
-    weights: GreedyWeights, board: Board, observation: Observation, side: Side, ops: int, bonus: str | None
+    weights: GreedyWeights, board: Board, observation: Observation, side: Side, ops: int, bonus: list[str] | None
 ) -> float | None:
     """Best expected Coup value among proxy-legal targets, or None if every
     one of them would be a DEFCON self-kill. Region-lock effects beyond
@@ -426,7 +435,7 @@ def _best_coup_value(
             continue
         if observation.defcon <= 2 and _coup_risks_defcon(observation, side, info):
             continue
-        target_ops = ops + 1 if bonus and _in_bonus_region(info, bonus) else ops
+        target_ops = ops + sum(1 for b in (bonus or []) if _in_bonus_region(info, b))
         gain = _expected_coup_gain(weights, board, observation, side, cid, info, target_ops)
         if best is None or gain > best:
             best = gain

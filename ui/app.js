@@ -964,7 +964,8 @@ function actionText(e, prev) {
   } else if (kind === "ops_type") {
     const ops = c.ops != null ? ` ${c.ops}` : "";
     line = `${who} spends${ops} ops on ${pretty(p.type)}`;
-    if (c.bonus) line += ` (+1 ${pretty(c.bonus)})`;
+    const bonuses = c.bonus || [];
+    if (bonuses.length) line += ` (+${bonuses.length} ${bonuses.map(pretty).join(" + ")})`;
   } else if (kind === "coup_target") {
     line = `${who} targets ${pretty(p.country)} for a coup`;
   } else if (kind === "coup_roll") {
@@ -1192,7 +1193,9 @@ function placementOpsLeft(d) {
   if (c.setup) return null;
   if (c.ops_remaining != null) return c.ops_remaining;
   if (c.base != null && c.spent != null) {
-    return (c.non_bonus === 0 ? c.base + 1 : c.base) - c.spent;
+    // Region-bonus spend: each still-alive bonus region contributes +1 to the
+    // budget (7.4 aggregates — China Card in Asia + Vietnam Revolts in SE Asia).
+    return c.base + (c.bonus || []).length - c.spent;
   }
   return null;
 }

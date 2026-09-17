@@ -5903,8 +5903,7 @@
             "context": {
               "card_ops": 3,
               "spent": 1,
-              "bonus": null,
-              "non_bonus": 0
+              "bonus": []
             }
           }
         ],
@@ -7055,7 +7054,7 @@
             "context": {
               "side": "USSR",
               "ops": 2,
-              "bonus": null
+              "bonus": []
             }
           }
         ],
