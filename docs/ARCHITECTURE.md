@@ -85,11 +85,26 @@ replay logs diffable, hashable, and greppable, and what makes
 `serialize()`/`deserialize()` trivial to keep in sync — the wire format
 *is* the internal shape, not a projection of it.
 
+Public board state travels in that dict alongside the per-side data: the
+**draw**, **discard**, **removed-from-game**, and **in-play** (`in_play_cards`,
+the face-up permanent events — see `docs/CARDS.md`) piles, the hands, the
+turn effects and game effects, and the current decision stack.
+
 ## Public API surface
 
 ```python
 class Engine:
     def __init__(self, seed: int, ...): ...
+
+    @classmethod
+    def new_game(
+        cls, seed: int, *, include_optional: bool = True, board: Board | None = None,
+        events: bool = True, include_ccw: bool = True, setup_us_extra: int = 0,
+        physical_mode: bool = False, physical_side: Side | None = None,
+        replay_mode: bool = False,
+    ) -> "Engine":
+        """Start a complete game: deck, deal, first headline.
+        See 'Game variants and modes' below."""
 
     @property
     def pending_decision(self) -> Decision | None:
@@ -181,13 +196,26 @@ Event-driven placement (`push_event_influence`) is unaffected — rule
 the first place, since its candidates are fixed lists rather than
 adjacency-derived.
 
-## The Ops-only toggle
+## Game variants and modes
 
-`Engine.new_game(..., events=False)` runs the game with the card-event
-layer switched off entirely: all 110 cards exist as data and are playable
-for their Ops value, the headline phase, space race, China Card and DEFCON
-degradation all function, but **no card event ever fires** — every card
-play is Ops. `events=True` is the default.
+`Engine.new_game(...)` takes the following options:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `include_optional` | `True` | Includes the optional-card expansion in the deck. |
+| `include_ccw` | `True` | Includes the Chinese Civil War space. The physical game treats it as optional; the sandbox default keeps it on, and `scripts/serve_ui.py` exposes a toggle. |
+| `events` | `True` | The card-event layer. See below. |
+| `setup_us_extra` | `0` | Extra US influence during opening setup. |
+| `physical_mode` / `physical_side` | off | Play a real tabletop board: hidden hands are placeholder pools, cards are **declared on play**, and search is refused ([ADR-0003](../docs/adr/0003-hidden-hands-declared-on-play.md)). |
+| `replay_mode` | off | Drive a recorded expert game: both hands hidden and declared on play, for `scripts/extract_training.py`. |
+
+### The Ops-only toggle
+
+`events=False` runs the game with the card-event layer switched off
+entirely: all 110 cards exist as data and are playable for their Ops value,
+the headline phase, space race, China Card and DEFCON degradation all
+function, but **no card event ever fires** — every card play is Ops.
+`events=True` is the default.
 
 The toggle exists because "a complete game is playable start to finish
 through the public API alone, with no event mechanics involved" is a

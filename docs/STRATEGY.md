@@ -23,7 +23,8 @@ and annotated-games (theory). These are **our** operational rules for
 
 ## DEFCON
 
-- You lose if DEFCON hits 1 **on your turn**.
+- You lose if DEFCON hits 1 while **you** are the phasing player (8.1.3) —
+  even when the opponent's choice or event is what moved the marker.
 - Never play Duck and Cover / We Will Bury You / KAL-007 as the event
   at DEFCON 2. Space or hold opponent suicide cards. CIA Created / Lone
   Gunman / Grain Sales are suicide if the opponent can coup a

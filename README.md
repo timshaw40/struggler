@@ -60,6 +60,7 @@ The options for the players are:
 - greedy
 - mcts
 - llm
+- rl (a self-play PPO checkpoint; see [docs/BOTS.md](docs/BOTS.md))
 
 But you can create your own implementation using the engine like this:
 
@@ -154,9 +155,12 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The public API, core types |
 | [docs/CARDS.md](docs/CARDS.md) | Card data policy, the event layer, per-card coverage |
-| [docs/BOTS.md](docs/BOTS.md) | The `Player` interface, physical mode, bot roadmap |
+| [docs/BOTS.md](docs/BOTS.md) | The `Player` interface, physical mode, bot roadmap, training tooling |
 | [docs/TESTING.md](docs/TESTING.md) | Replay logs, property tests, test-writing policy |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What the engine does not model |
+| [docs/STRATEGY.md](docs/STRATEGY.md) | The heuristics `GreedyPlayer` and the LLM prompt play by |
+| [CONTEXT.md](CONTEXT.md) | The domain glossary (ubiquitous language) |
+| [AGENTS.md](AGENTS.md) | Working notes for AI coding agents |
 
 ## Tests
 
@@ -166,6 +170,27 @@ python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
 ```
 
 See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approximation. The MCTS bot is lookahead on top of greedy — stronger-than-greedy territory, not an expert claim.
+
+## Train and evaluate bots
+
+The autonomous tooling writes artifacts under `data/` (gitignored). Only the
+self-play stack needs the `[rl]` extra (numpy + torch); the arena, the tuner,
+and the value fit are pure-stdlib.
+
+```sh
+pip install -e ".[rl]"
+
+python scripts/run_arena.py --help          # head-to-head / round-robin, Elo
+python scripts/tune_greedy.py --help        # CEM over GreedyWeights
+python scripts/train_value.py --help        # learned MCTS board value
+python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
+python scripts/final_eval.py --help         # the reserved final seed bank
+python scripts/extract_training.py --help   # expert-log agreement
+```
+
+See [docs/BOTS.md](docs/BOTS.md) for the arena, the league/promotion-margin
+gating, and the reserved final-evaluation seed bank that must never feed
+training.
 
 ## License
 

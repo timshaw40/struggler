@@ -240,7 +240,7 @@ built:
    perturb or depend on the engine's own dice sequence, keeping replay logs
    reproducible regardless of which bots produced them). These exist mainly
    as a floor to measure every later bot against.
-2. **Greedy / rule-based** (current — `bots/greedy.py`): observe the
+2. **Greedy / rule-based** (built — `bots/greedy.py`): observe the
    state, score every legal action of the *current* decision with
    hand-crafted heuristics, take the top score. No lookahead, no search, no
    opponent modeling — see "Greedy bot design" below.
@@ -266,8 +266,8 @@ built:
    policy. No training data, no GPU, no LLM calls. This is the first bot
    that looks ahead; it should sit in "stronger than greedy" territory, not
    expert-claim territory. See "MCTS bot" below.
-5. **Self-play reinforcement learning** (future, most promising long-term,
-   most expensive to build): train a model by having it play itself
+5. **Self-play reinforcement learning** (built, first cut — `bots/rl/`;
+   see "Neural self-play (PPO)" below): train a model by having it play itself
    repeatedly via `play_game`, using `Engine.winner` as the terminal reward.
    The most future-relevant reason `GreedyPlayer` is built as weighted
    features over `board_value()` rather than an if/elif cascade: a linear
@@ -302,8 +302,9 @@ touched; search uses `random.Random(seed)` and reseeds each clone from that.
 Invalid simulations are **excluded, not scored**: with `strict=True` (the
 default) a determinized clone whose unknown pool is too short raises
 `ShortPoolError` and the simulation is dropped, tracked in
-`player.stats` (`sims` / `scored` / `short_pool` / `action_miss` /
-`exception` / `root_options` / `visited_options`). If every simulation was
+`player.stats` (`sims` / `scored` / `terminal` / `depth_capped` /
+`short_pool` / `action_miss` / `exception` / `root_options` /
+`visited_options` / `unvisited_options`). If every simulation was
 invalid the player falls back to the heuristic.
 
 ### Imperfect-information approximation
