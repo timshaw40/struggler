@@ -33,3 +33,9 @@ data/
 # User-supplied art (scans/PDF-derived images). Never commit these.
 ui/assets/
 *.pdf
+
+# User-supplied data archives. Never commit these (same rule as the PDFs).
+twilight_struggle_sessions.txt
+
+# Local tool caches / vendor downloads (e.g. the VASSAL module).
+.cache/
