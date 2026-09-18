@@ -149,6 +149,61 @@ def test_observe_does_not_leak_in_progress_secret_headline_pick():
     assert picked_card not in obs.discard_pile
 
 
+def test_observe_hides_the_acting_sides_hand_options():
+    # Mandate #4: whichever side is picking from its own hand (secret headline
+    # or action-round play), the opponent must not see those options -- even
+    # though it can still see that *a* choice is pending and whose it is.
+    for kind in (DecisionKind.HEADLINE_PLAY, DecisionKind.ACTION_ROUND_PLAY):
+        engine = Engine.new_game(seed=3, events=False)
+        while (
+            not engine.is_terminal
+            and engine.pending_decision is not None
+            and engine.pending_decision.kind is not kind
+        ):
+            engine.step(engine.legal_actions()[0])
+        assert engine.pending_decision.kind is kind
+        actor = engine.pending_decision.actor
+        assert engine.observe(actor).pending_decision.options  # actor keeps them
+        opponent_view = engine.observe(actor.opponent).pending_decision
+        assert opponent_view.actor is actor and opponent_view.kind is kind
+        assert opponent_view.options == ()  # opponent sees none of them
+
+
+def test_observe_redacts_a_private_event_choice_from_the_non_actor():
+    # Blockade asks the US to discard from their own hand: those options are a
+    # hidden hand, so the USSR's observation must not carry them.
+    from conftest import bare_engine as _bare
+
+    engine = _bare()
+    engine.hands["US"] = ["Duck_and_Cover"]
+    engine._fire_event(Side.USSR, "Blockade")
+    assert engine.pending_decision.kind is DecisionKind.EVENT_CHOICE
+    assert engine.pending_decision.actor is Side.US
+
+    assert engine.observe(Side.US).pending_decision.options  # actor keeps them
+    assert engine.observe(Side.USSR).pending_decision.options == ()  # opponent: none
+    # The engine-private marker is stripped from the player-facing context too.
+    assert "_private" not in engine.observe(Side.US).pending_decision.context
+
+
+def test_history_redacts_opponent_hidden_options_but_keeps_the_record():
+    from conftest import bare_engine as _bare
+    from struggler.engine.replay import HistoryBuilder
+
+    engine = _bare()
+    engine.hands["US"] = ["Duck_and_Cover"]
+    engine._fire_event(Side.USSR, "Blockade")
+    decision = engine.pending_decision
+    action = decision.options[0]
+    engine.step(action)
+    builder = HistoryBuilder()
+    builder.record(decision, action, engine)
+
+    assert builder.for_player(Side.USSR)[0].decision.options == ()  # redacted
+    assert builder.for_player(Side.US)[0].decision.options  # actor keeps it
+    assert builder.history[0].decision.options  # authoritative record intact
+
+
 @settings(max_examples=15, deadline=None)
 @given(seed=st.integers(min_value=0, max_value=MAX_INT32),
        driver_seed=st.integers(min_value=0, max_value=MAX_INT32))
@@ -164,6 +219,10 @@ def test_observe_never_reveals_opponent_hand(seed, driver_seed):
             assert set(obs.hand).isdisjoint(opponent_hand)
             assert obs.opponent_hand_size == len(opponent_hand)
             assert obs.hand == tuple(engine.hands[player.value])
+            # The opponent's cards must not leak through the pending decision's
+            # options either (action-round / headline / quagmire hand picks).
+            option_cards = {a.payload.get("card") for a in obs.pending_decision.options}
+            assert option_cards.isdisjoint(opponent_hand)
         engine.step(driver.choice(engine.legal_actions()))
         steps += 1
 

@@ -61,14 +61,13 @@ def test_influence_cost_doubles_in_opponent_controlled_country():
     assert board.influence_cost(Side.USSR, "Guatemala") == 1
 
 
-def test_controls_all_of_europe():
+def test_region_control_of_europe_scores_auto_victory():
     board = Board()
-    europe = board.countries_in(Region.EUROPE)
-    assert board.controls_all_of_europe() is None
-    for cid in europe:
-        stability = board.countries[cid].stability
-        board.influence[cid]["US"] = stability
-    assert board.controls_all_of_europe() is Side.US
+    assert board.region_tier(Side.US, Region.EUROPE) is not ScoringTier.CONTROL
+    for cid in board.countries_in(Region.EUROPE):
+        board.influence[cid]["US"] = board.countries[cid].stability
+    assert board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
+    assert board.score_region(Region.EUROPE) == 20  # 10.3.1 auto-victory
 
 
 def test_region_tier_presence_domination_control():
@@ -129,12 +128,13 @@ def test_score_region_rulebook_worked_example_10_1_2():
     assert board.score_region(Region.CENTRAL_AMERICA) == 1 - 5
 
 
-def test_score_region_europe_control_raises_instead_of_guessing():
-    import pytest
-
+def test_score_region_europe_control_scores_auto_victory():
+    # 10.3.1: Controlling Europe (the 10.1.1 Control tier: all European
+    # Battlegrounds and more countries than the opponent) makes the Europe
+    # card a +/-20 auto-victory, not a Domination approximation.
     board = Board()
     europe = board.countries_in(Region.EUROPE)
     for cid in europe:
         board.influence[cid]["US"] = board.countries[cid].stability
-    with pytest.raises(RuntimeError):
-        board.score_region(Region.EUROPE)
+    assert board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
+    assert board.score_region(Region.EUROPE) == 20

@@ -42,7 +42,9 @@ import warnings
 from pathlib import Path
 from typing import Any, Sequence
 
-from struggler.engine.core import Engine
+from dataclasses import replace
+
+from struggler.engine.core import Engine, redact_decision_for
 from struggler.engine.player import Event
 from struggler.engine.types import Action, Decision, DecisionKind, Side
 
@@ -141,7 +143,11 @@ def build_event(decision: Decision, action: Action, engine: Engine) -> Event:
     `action` was applied to `decision`, matching `Event`'s "totals right
     after the decision resolved" contract.
     """
-    country = action.payload.get("country")
+    country = (
+        action.payload.get("country")
+        or decision.context.get("country")
+        or decision.context.get("target")
+    )
     country_influence: Any = {}
     country_control: str | None = None
     if country is not None and country in engine.board.influence:
@@ -199,6 +205,16 @@ class HistoryBuilder:
         self.history.extend(self._pending_headline)
         self._pending_headline = []
         return self.history
+
+    def for_player(self, side: Side) -> list[Event]:
+        """`history` as `side` is allowed to see it: a past decision the
+        opponent made from a hidden hand has its options redacted, and
+        engine-private context keys are stripped. The authoritative
+        `self.history` (and the on-disk log) are never touched."""
+        return [
+            replace(event, decision=redact_decision_for(event.decision, side))
+            for event in self.history
+        ]
 
 
 def replay_history(log: dict[str, Any]) -> tuple[Engine, list[Event]]:

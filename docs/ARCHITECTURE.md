@@ -85,6 +85,12 @@ replay logs diffable, hashable, and greppable, and what makes
 `serialize()`/`deserialize()` trivial to keep in sync — the wire format
 *is* the internal shape, not a projection of it.
 
+Public board state travels in that dict alongside the per-side data: the
+**draw**, **discard**, **removed-from-game**, and **in-play**
+(`in_play_cards`, the face-up permanent events — see `docs/CARDS.md`) piles,
+the hands, the turn effects and game effects, and the current decision
+stack.
+
 ## Public API surface
 
 ```python

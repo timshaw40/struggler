@@ -4,10 +4,17 @@ fallback behavior, and a win-rate sanity check against RandomPlayer."""
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
 
 import pytest
 
-from struggler.bots.greedy import GreedyPlayer, GreedyWeights, board_value
+from struggler.bots.greedy import (
+    GreedyPlayer,
+    GreedyWeights,
+    _in_bonus_region,
+    _score_coup_target,
+    board_value,
+)
 from struggler.bots.naive import FirstLegalPlayer, RandomPlayer
 from struggler.engine import Action, Decision, DecisionKind, Engine, Side
 from struggler.engine.board import Board
@@ -89,3 +96,44 @@ def test_greedy_aldrich_ames_remix_discards_the_opponents_highest_ops_card():
     action = GreedyPlayer().choose_action(observation, [])
 
     assert action.payload["choice"] == "Duck_and_Cover"
+
+
+def test_in_bonus_region_reads_the_aggregated_bonus_list():
+    """7.4 aggregates region bonuses, so the engine now hands the decision
+    context a *list* of live bonuses (China Card's Asia plus Vietnam Revolts'
+    SE Asia both apply to a SE Asia target). A bare region name still has to
+    work: the China Card alone and callers written against the old shape pass
+    a single string."""
+    board = Board()
+    thailand = board.countries["Thailand"]  # Asia and SE Asia
+    india = board.countries["India"]  # Asia, not SE Asia
+
+    assert _in_bonus_region(thailand, "se_asia")
+    assert _in_bonus_region(thailand, ["se_asia"])
+    assert _in_bonus_region(thailand, ["asia", "se_asia"])
+    assert _in_bonus_region(india, ["asia"])
+    assert not _in_bonus_region(india, ["se_asia"])
+    assert not _in_bonus_region(india, [])
+    assert not _in_bonus_region(india, None)
+
+
+def test_coup_scoring_aggregates_every_live_region_bonus():
+    """The coup scorer adds +1 Op per satisfied bonus, so the same target is
+    worth strictly more as more live bonuses cover it: none, then SE Asia
+    alone (Vietnam Revolts), then Asia and SE Asia together (China Card plus
+    Vietnam Revolts, 7.4's worked example)."""
+    weights = GreedyWeights()
+    action = Action(DecisionKind.COUP_TARGET, {"country": "Laos_Cambodia"})
+
+    def score(bonus):
+        board = Board()
+        board.influence["Laos_Cambodia"]["US"] = 3
+        observation = SimpleNamespace(
+            side=Side.USSR,
+            defcon=5,
+            turn_effects={},
+            pending_decision=SimpleNamespace(context={"ops": 1, "bonus": bonus}),
+        )
+        return _score_coup_target(weights, board, observation, action)
+
+    assert score([]) < score(["se_asia"]) < score(["asia", "se_asia"])

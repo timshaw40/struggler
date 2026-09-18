@@ -160,3 +160,22 @@ def test_realignment_blocked_by_defcon_same_as_coup():
     offered = {a.payload["country"] for a in engine._realignment_target_options(Side.US)}
     assert "Egypt" not in offered  # Middle East now below its threshold
     assert "Guatemala" in offered  # Central America stays unrestricted throughout
+
+
+def test_realignment_may_stop_early_between_attempts():
+    # 6.2.2: each Realignment roll costs one Operations point, and nothing
+    # compels a player to spend them all. The stop only appears after the
+    # first attempt has resolved, not before it.
+    engine = Engine(seed=1)
+    engine.board.influence["Guatemala"]["USSR"] = 1
+    engine.begin_realignment_operations(Side.US, ops=2)
+    first = engine.pending_decision
+    assert not any(a.payload.get("stop") for a in first.options)
+    engine.step(first.options[0])  # target
+    engine.step(engine.pending_decision.options[0])  # actor roll
+    engine.step(engine.pending_decision.options[0])  # opponent roll
+    second = engine.pending_decision
+    stops = [a for a in second.options if a.payload.get("stop")]
+    assert len(stops) == 1
+    engine.step(stops[0])
+    assert engine.pending_decision is None

@@ -17,6 +17,7 @@ import json
 import random
 from pathlib import Path
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -31,6 +32,41 @@ from struggler.engine.rules import RULES
 
 MAX_INT32 = 2**31 - 1
 REPLAY_DIR = Path(__file__).parent / "replays"
+
+
+# -- scoring preview (hover) --------------------------------------------------
+
+
+def _europe_setup(engine):
+    for cid in ("UK", "West_Germany", "France", "Italy"):
+        engine.board.influence[cid]["US"] = engine.board.countries[cid].stability
+
+
+def test_preview_scoring_matches_real_resolution():
+    engine = _bare()
+    _europe_setup(engine)
+    pv = engine.preview_scoring("Europe_Scoring")
+    before = engine.vp
+    engine._resolve_scoring_card("Europe_Scoring")
+    assert pv["net"] == engine.vp - before
+    assert pv["vp_after"] == engine.vp
+
+
+def test_preview_scoring_does_not_consume_shuttle():
+    engine = _bare()
+    engine.game_effects["shuttle_diplomacy"] = True
+    pv1 = engine.preview_scoring("Asia_Scoring")
+    pv2 = engine.preview_scoring("Asia_Scoring")
+    assert pv1 == pv2
+    assert "shuttle_diplomacy" in engine.game_effects
+
+
+def test_preview_scoring_europe_control_is_a_win():
+    engine = _bare()
+    for cid in engine.board.countries_in(Region.EUROPE):
+        engine.board.influence[cid]["US"] = engine.board.countries[cid].stability
+    pv = engine.preview_scoring("Europe_Scoring")
+    assert pv["wins"] == "US"
 
 
 # -- tier 1: immediate state change -----------------------------------------
@@ -416,7 +452,8 @@ def test_china_card_grants_five_ops_used_entirely_in_asia():
     def asian(opts):
         return next(
             a for a in opts
-            if engine.board.countries[a.payload["country"]].region is not None
+            if a.payload.get("country")
+            and engine.board.countries[a.payload["country"]].region is not None
             and engine.board.countries[a.payload["country"]].region.value == "ASIA"
         )
     steps = 0
@@ -439,7 +476,8 @@ def test_china_card_bonus_forfeited_by_leaving_asia():
         opts = engine.pending_decision.options
         non_asia = [
             a for a in opts
-            if engine.board.countries[a.payload["country"]].region.value != "ASIA"
+            if a.payload.get("country")
+            and engine.board.countries[a.payload["country"]].region.value != "ASIA"
         ]
         engine.step(non_asia[0] if non_asia else opts[0])
         steps += 1
@@ -629,27 +667,31 @@ def test_puppet_governments_only_targets_empty_countries():
 # -- forced random discard subsystem (CHANCE) -------------------------------
 
 
-def test_five_year_plan_fires_a_discarded_ussr_event():
+def test_five_year_plan_fires_a_discarded_us_event():
+    # Card text: "If the card has a US associated Event, the Event occurs
+    # immediately. If the card has a USSR associated Event or an Event
+    # applicable to both players, then the card must be discarded without
+    # triggering the Event."
     engine = _bare(seed=2)
-    engine.hands["USSR"] = ["Fidel"]  # single card -> deterministic draw
-    engine.board.influence["Cuba"] = {"US": 2, "USSR": 0}
+    engine.hands["USSR"] = ["Duck_and_Cover"]  # a US event
+    engine.defcon = 5
     engine._fire_event(Side.US, "Five_Year_Plan")
     d = engine.pending_decision
     assert d.kind is DecisionKind.RANDOM_DISCARD and d.actor is Side.CHANCE
     assert len(d.options) == 1  # only the drawn card, never the rest of the hand
     engine.step(d.options[0])
-    assert engine.board.control("Cuba") is Side.USSR  # Fidel fired
-    assert "Fidel" in engine.removed_cards
+    assert engine.defcon == 4  # Duck and Cover fired
+    assert engine.vp == 1  # ...and awarded the US 5 - 4 VP
 
 
-def test_five_year_plan_just_discards_a_non_ussr_card():
+def test_five_year_plan_just_discards_a_non_us_card():
     engine = _bare(seed=2)
-    engine.hands["USSR"] = ["Duck_and_Cover"]  # a US event: discarded, not fired
-    engine.defcon = 5
+    engine.hands["USSR"] = ["Fidel"]  # a USSR event: discarded, not fired
+    engine.board.influence["Cuba"] = {"US": 2, "USSR": 0}
     engine._fire_event(Side.US, "Five_Year_Plan")
     engine.step(engine.pending_decision.options[0])
-    assert engine.defcon == 5  # Duck and Cover did NOT fire
-    assert "Duck_and_Cover" in engine.discard_pile
+    assert engine.board.control("Cuba") is not Side.USSR  # Fidel did NOT fire
+    assert "Fidel" in engine.discard_pile
 
 
 def test_random_discard_leaks_only_the_drawn_card():
@@ -771,7 +813,7 @@ def test_vietnam_revolts_places_and_grants_se_asia_ops_bonus():
     engine.board.influence["Vietnam"]["USSR"] = 2  # a reachable SE Asia foothold
     engine.hands["USSR"] = ["Socialist_Governments"]  # 3-Ops card
     _play_card_for(engine, Side.USSR, "Socialist_Governments", "ops")
-    assert engine.pending_decision.context["bonus"] == "se_asia"
+    assert engine.pending_decision.context["bonus"] == ["se_asia"]
     engine.step(Action(DecisionKind.OPS_TYPE, {"type": "influence"}))
 
     def se_asia(opts):
@@ -792,8 +834,8 @@ def test_region_bonus_does_not_apply_to_us_or_outside_se_asia():
     engine = _bare()
     engine.turn_effects["vietnam_revolts"] = True
     # US plays are unaffected; only the USSR gets the SE Asia bonus.
-    assert engine._ops_bonus_region(Side.US, china=False) is None
-    assert engine._ops_bonus_region(Side.USSR, china=False) == "se_asia"
+    assert engine._ops_bonus_region(Side.US, china=False) == []
+    assert engine._ops_bonus_region(Side.USSR, china=False) == ["se_asia"]
 
 
 # -- influence + optional free operation (Junta) -----------------------------
@@ -818,7 +860,7 @@ def test_junta_places_two_then_offers_a_free_regional_operation():
     target = engine.pending_decision
     assert target.kind is DecisionKind.REALIGNMENT_TARGET
     assert all(
-        engine.board.countries[a.payload["country"]].region.value
+        engine.board.countries[a.payload.get("country")].region.value
         in ("CENTRAL_AMERICA", "SOUTH_AMERICA")
         for a in target.options
     )
@@ -918,7 +960,7 @@ def test_tear_down_this_wall_free_op_ignores_defcon_region_restriction():
 def test_yuri_and_samantha_scores_ussr_on_us_coups():
     engine = _bare(seed=1)
     engine.defcon = 5
-    engine.game_effects["yuri_samantha"] = True
+    engine.turn_effects["yuri_samantha"] = True  # turn-scoped, not game-long
     engine.board.influence["Cuba"] = {"US": 0, "USSR": 1}
     _resolve_coup_roll(engine, Side.US, "Cuba", ops=3, value=1)
     assert engine.vp == -1  # 1 VP to the USSR for the US coup attempt
@@ -926,6 +968,15 @@ def test_yuri_and_samantha_scores_ussr_on_us_coups():
     engine.vp = 0
     _resolve_coup_roll(engine, Side.USSR, "Cuba", ops=3, value=1)
     assert engine.vp == 0
+
+
+def test_yuri_and_samantha_expires_at_end_of_turn():
+    engine = Engine.new_game(seed=1, events=True)
+    engine._fire_event(Side.USSR, "Yuri_and_Samantha")
+    assert engine.turn_effects.get("yuri_samantha") is True
+    assert "yuri_samantha" not in engine.game_effects
+    engine._end_of_turn()
+    assert "yuri_samantha" not in engine.turn_effects
 
 
 def test_iran_contra_penalises_only_us_realignment():
@@ -1103,15 +1154,17 @@ def test_grain_sales_reveals_exactly_one_ussr_card():
     assert choice.actor is Side.US
     assert {a.payload["choice"] for a in choice.options} == {"take", "return"}
     engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": "take"}))
-    # "play the card": the US gets the normal Event/Ops choice for it, not
-    # just its fixed Ops value -- it moved to the US hand, not filed away yet.
+    # "play the card": the US gets the normal choice for it, not just its
+    # fixed Ops value -- it moved to the US hand, not filed away yet. A
+    # taken USSR card is still a USSR card, so (like any opponent card)
+    # "event" is not offered: its event fires on an Ops play, if at all.
     assert revealed not in engine.hands["USSR"] and revealed not in engine.discard_pile
     assert revealed in engine.hands["US"]
     play = engine.pending_decision
     assert play.kind is DecisionKind.PLAY_MODE and play.actor is Side.US
     assert play.context["card"] == revealed
     assert "ops" in {a.payload["mode"] for a in play.options}
-    assert "event" in {a.payload["mode"] for a in play.options}
+    assert "event" not in {a.payload["mode"] for a in play.options}
 
 
 def test_grain_sales_with_empty_ussr_hand_grants_the_us_two_ops():
@@ -1168,7 +1221,7 @@ def test_cambridge_five_places_in_a_revealed_scoring_region():
     decision = engine.pending_decision
     assert decision.kind is DecisionKind.EVENT_INFLUENCE and decision.actor is Side.USSR
     assert all(
-        engine.board.countries[a.payload["country"]].region.value == "ASIA"
+        engine.board.countries[a.payload.get("country")].region.value == "ASIA"
         for a in decision.options
     )
 
@@ -1847,6 +1900,7 @@ def test_glasnost_scores_and_grants_ops_only_after_the_reformer():
 
 def test_norad_fires_only_when_defcon_moves_to_two():
     engine = _bare()
+    engine.phase = "action_rounds"  # card text: only during an Action Round
     engine.defcon = 5
     engine._fire_event(Side.US, "NORAD")
     engine.board.influence["Canada"]["US"] = 4  # "If Canada is US-controlled"
@@ -1859,6 +1913,18 @@ def test_norad_fires_only_when_defcon_moves_to_two():
     assert "France" in offered  # only countries the US already has Influence in
     engine.step(Action(DecisionKind.EVENT_INFLUENCE, {"country": "France"}))
     assert engine.board.influence["France"]["US"] == 3
+
+
+def test_norad_does_not_fire_on_a_headline_defcon_drop():
+    engine = _bare()
+    engine.phase = "headline"  # not an Action Round
+    engine.defcon = 5
+    engine._fire_event(Side.US, "NORAD")
+    engine.board.influence["Canada"]["US"] = 4
+    engine.board.influence["France"] = {"US": 2, "USSR": 0}
+    engine._change_defcon(-3, caused_by=Side.US)  # 5 -> 2 during the headline
+    assert engine.defcon == 2
+    assert engine.pending_decision is None  # NORAD did not trigger
 
 
 def test_norad_inactive_without_us_controlling_canada():
@@ -1944,6 +2010,7 @@ def test_nixon_plays_the_china_card_two_unconditional_branches():
 
 def test_our_man_in_tehran_examines_up_to_five_cards_without_leaking_identity():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}  # precondition: US controls a ME country
     engine.draw_pile = ["Fidel", "Nasser", "Allende", "COMECON", "Duck_and_Cover", "Blockade"]
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     assert len(engine._our_man_queue) == 5  # only the top 5 are examined
@@ -1953,13 +2020,15 @@ def test_our_man_in_tehran_examines_up_to_five_cards_without_leaking_identity():
     for choice in ("keep", "remove", "keep", "keep", "remove"):
         engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": choice}))
     assert engine.pending_decision is None
-    assert len(engine.removed_cards) == 2
+    assert len(engine.discard_pile) == 2  # "remove" means discard, not remove-from-game
+    assert len(engine.removed_cards) == 0
     assert len(engine.draw_pile) == 4  # 1 untouched + 3 kept, reshuffled back in
     assert engine._our_man_queue == [] and engine._our_man_kept == []
 
 
 def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}
     engine.draw_pile = ["Fidel", "Nasser", "Allende"]
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     for player in (Side.US, Side.USSR):
@@ -1969,9 +2038,19 @@ def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
 
 def test_our_man_in_tehran_no_op_with_an_empty_draw_pile():
     engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}
     engine.draw_pile = []
     engine._fire_event(Side.US, "Our_Man_In_Tehran")
     assert engine.pending_decision is None
+
+
+def test_our_man_in_tehran_requires_us_control_of_a_middle_east_country():
+    engine = _bare()
+    engine.board.influence["Iran"] = {"US": 0, "USSR": 4}  # no US control in the ME
+    engine.draw_pile = ["Fidel", "Nasser", "Allende"]
+    assert not EVENTS["Our_Man_In_Tehran"].eligible(engine, Side.US)
+    engine._fire_event(Side.US, "Our_Man_In_Tehran")
+    assert engine.pending_decision is None  # unplayable as an Event (rule 7.5)
 
 
 def test_defectors_cancels_the_ussr_headline():
@@ -2136,6 +2215,74 @@ def test_quagmire_nullifies_norad():
     assert engine.game_effects.get("quagmire") is True
 
 
+# -- event eligibility gates what a card does when played --------------------
+
+
+def test_ineligible_remove_after_event_is_not_offered_as_an_event():
+    # NATO is asterisked (remove-after-event) but unplayable before Marshall
+    # Plan / Warsaw Pact: rule 7.5 lets it be used for Ops but not as an
+    # Event, so "event" is not offered and is not a legal action.
+    engine = _bare()
+    engine.hands["US"] = ["NATO"]
+    engine.push_full_card_play(Side.US, "NATO")
+    modes = {a.payload["mode"] for a in engine.pending_decision.options}
+    assert "event" not in modes
+    with pytest.raises(ValueError):
+        engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+
+    # Once eligible it is offered, fires, and — NATO's printed footer says
+    # "persists" — the card goes face-up beside the board.
+    eligible = _bare()
+    eligible.hands["US"] = ["NATO"]
+    eligible.game_effects["marshall_or_warsaw"] = True
+    eligible.push_full_card_play(Side.US, "NATO")
+    assert "event" in {a.payload["mode"] for a in eligible.pending_decision.options}
+    eligible.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "NATO" in eligible.in_play_cards
+    assert "NATO" not in eligible.removed_cards
+    assert eligible.game_effects.get("nato") is True
+
+
+def test_ineligible_remove_after_event_headlined_is_discarded_not_removed():
+    engine = _bare()
+    engine.hands["US"] = ["NATO"]
+    engine._resolve_headline_card(Side.US, "NATO")
+    assert "NATO" in engine.discard_pile
+    assert "NATO" not in engine.removed_cards
+
+
+# -- Ops-modifier caps (Containment / Brezhnev) ------------------------------
+
+
+def test_containment_and_brezhnev_cap_ops_at_four():
+    engine = _bare()
+    four_op = next(c for c in engine.cards.values() if c.ops == 4 and not c.scoring)
+    one_op = next(c for c in engine.cards.values() if c.ops == 1 and not c.scoring)
+
+    engine.turn_effects["containment"] = True
+    assert engine._effective_ops(Side.US, four_op) == 4  # +1 does not exceed the cap
+    assert engine._effective_ops(Side.US, one_op) == 2
+    # The modifier is side-specific: the USSR gains nothing from Containment.
+    assert engine._effective_ops(Side.USSR, four_op) == 4
+
+    engine.turn_effects.clear()
+    engine.turn_effects["brezhnev"] = True
+    assert engine._effective_ops(Side.USSR, four_op) == 4
+
+
+def test_flower_power_headline_that_ends_the_game_still_files_the_card():
+    # Flower Power's 2 VP can reach the 20-VP autovictory before the
+    # headlined war card is filed; the card must still end up in a tracked
+    # location, not nowhere (card-conservation invariant).
+    engine = _bare()
+    engine.game_effects["flower_power"] = True
+    engine.vp = -18
+    engine.hands["US"] = ["Korean_War"]
+    engine._resolve_headline_card(Side.US, "Korean_War")
+    assert engine.is_terminal and engine.winner is Side.USSR
+    assert "Korean_War" in engine.removed_cards or "Korean_War" in engine.discard_pile
+
+
 # -- golden replay -----------------------------------------------------------
 
 
@@ -2166,3 +2313,381 @@ def test_golden_events_replay_actually_fires_events():
         for a in log["actions"]
     )
     assert fired
+
+
+# -- Tier 2 rules-gap fixes --------------------------------------------------
+
+
+def test_target_choice_wars_do_not_count_the_target_itself():
+    # Brush War / Indo-Pakistani War / Iran-Iraq War penalise only *adjacent*
+    # enemy-controlled countries, never the target (card texts).
+    for card in ("Brush_War", "Indo_Pakistani_War", "Iran_Iraq_War"):
+        engine = _bare()
+        engine._fire_event(Side.USSR, card)
+        assert engine.pending_decision.kind is DecisionKind.WAR_TARGET, card
+        engine.step(engine.pending_decision.options[0])
+        assert engine.pending_decision.kind is DecisionKind.WAR_ROLL
+        assert engine.pending_decision.context["count_target_control"] is False
+
+
+def test_arab_israeli_war_counts_the_target_itself():
+    # Its printed text explicitly subtracts for Israel if US-controlled.
+    engine = _bare()
+    engine._fire_event(Side.USSR, "Arab_Israeli_War")
+    assert engine.pending_decision.kind is DecisionKind.WAR_ROLL
+    assert engine.pending_decision.context["count_target_control"] is True
+
+
+def test_awacs_blocks_muslim_revolution():
+    engine = _bare()
+    engine._fire_event(Side.US, "AWACS_Sale_to_Saudis")
+    assert not EVENTS["Muslim_Revolution"].eligible(engine, Side.USSR)
+    engine._fire_event(Side.USSR, "Muslim_Revolution")
+    assert engine.pending_decision is None  # unplayable as an Event (rule 7.5)
+
+
+def test_u2_incident_extra_vp_when_un_intervention_played_this_turn():
+    engine = _bare()
+    engine._fire_event(Side.USSR, "U2_Incident")
+    assert engine.vp == -1
+    assert engine.turn_effects.get("u2_incident") is True
+
+    engine.hands["US"] = ["UN_Intervention", "Fidel"]
+    engine.push_full_card_play(Side.US, "Fidel")
+    assert "un_intervention" in {a.payload["mode"] for a in engine.pending_decision.options}
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "un_intervention"}))
+    assert engine.vp == -2  # the extra U2 VP
+
+
+def test_missile_envy_ops_respect_per_turn_modifiers():
+    engine = _bare()
+    engine.turn_effects["containment"] = True  # US Ops +1 (cap 4)
+    engine.missile_envy_use(Side.US, "Fidel", "ops")  # Fidel is 2 Ops
+    assert engine.pending_decision.kind is DecisionKind.OPS_TYPE
+    assert engine.pending_decision.context["ops"] == 3
+
+
+def test_un_intervention_cannot_be_headlined():
+    engine = _bare()
+    engine.hands["US"] = ["UN_Intervention", "Duck_and_Cover"]
+    engine._push_headline(Side.US)
+    cards = {a.payload["card"] for a in engine.pending_decision.options}
+    assert "UN_Intervention" not in cards
+    assert "Duck_and_Cover" in cards
+
+
+def test_military_ops_never_exceed_five():
+    engine = _bare()
+    engine.military_ops["US"] = 5
+    engine._add_military_ops(Side.US, 4)
+    assert engine.military_ops["US"] == 5
+    engine.military_ops["US"] = 3
+    engine._add_military_ops(Side.US, 1)
+    assert engine.military_ops["US"] == 4
+
+
+def test_ask_not_offers_scoring_cards():
+    # Card text: "discard up to their entire hand of cards (including scoring
+    # cards)".
+    engine = _bare()
+    engine.hands["US"] = ["Asia_Scoring", "Duck_and_Cover"]
+    engine._fire_event(Side.US, "Ask_Not_What_Your_Country_Can_Do_For_You")
+    offered = {a.payload["choice"] for a in engine.pending_decision.options}
+    assert "Asia_Scoring" in offered
+    assert "Duck_and_Cover" in offered
+
+
+def test_final_scoring_scores_all_regions_before_victory():
+    # 10.3.2: "Every Region's score must be calculated before final victory
+    # is determined. Reaching 20 VPs does not result in Automatic Victory
+    # during scoring at the end of turn 10." The engine used to stop the
+    # loop the moment the running total crossed +/-20, which can crown the
+    # wrong winner.
+    engine = Engine(seed=1)
+    engine.events_enabled = True
+    board = engine.board
+    engine.vp = 19  # one moderate US region still crosses 20 mid-loop
+    # Europe: US presence (+3) -- pushes the running total past 20.
+    spain = next(c for c in board.countries_in(Region.EUROPE)
+                 if not board.countries[c].battleground
+                 and not board.is_adjacent("USSR", c))
+    board.influence[spain]["US"] = board.countries[spain].stability
+    # Asia + Middle East: USSR Control -- swings the total far back to USSR.
+    for region in (Region.ASIA, Region.MIDDLE_EAST):
+        for cid in board.countries_in(region):
+            if board.countries[cid].battleground:
+                board.influence[cid]["USSR"] = board.countries[cid].stability
+        non_bg = next(c for c in board.countries_in(region)
+                      if not board.countries[c].battleground)
+        board.influence[non_bg]["USSR"] = board.countries[non_bg].stability
+    engine._finish_game()
+    assert engine.is_terminal
+    # 19 + 3 (Europe) far exceeds 20 mid-loop, but Asia + Middle East take
+    # the total back to the USSR: the correct winner is the USSR.
+    assert engine.winner is Side.USSR and engine._game_over_reason == "final_vp"
+
+
+def test_final_scoring_awards_china_card_holder_one_vp():
+    # The China Card's printed end-game bonus (+1 VP to its holder; rule 12.2
+    # references "the victory point for possession of the China Card during
+    # end game scoring"). The engine never awarded it.
+    engine = Engine(seed=1)
+    engine.china_card_owner = "US"
+    engine._finish_game()
+    assert engine.winner is Side.US and engine._game_over_reason == "final_vp"
+
+    engine = Engine(seed=1)
+    engine.china_card_owner = "USSR"
+    engine._finish_game()
+    assert engine.winner is Side.USSR and engine._game_over_reason == "final_vp"
+
+
+def test_event_granted_ops_gain_ops_modifiers():
+    # 7.4.2 "for all purposes", example 3: "If the US player played
+    # 'Containment' earlier in the turn, he could play 'CIA Created'
+    # subsequently and use 2 Ops."
+    engine = _bare()
+    engine.turn_effects["containment"] = True
+    engine.push_event_operations(Side.US, 1)
+    assert engine.pending_decision.context["ops"] == 2
+
+    # ...and the same floor as card plays: a 1-op grant under Red Scare
+    # still grants 1.
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "US"
+    engine.push_event_operations(Side.US, 1)
+    assert engine.pending_decision.context["ops"] == 1
+
+
+def test_trap_discard_threshold_uses_effective_ops():
+    # 7.4.2 example 2: under Brezhnev Doctrine (+1), a 1-Ops card can pay a
+    # Bear Trap/Quagmire 2+ discard -- and under Red Scare (-1) a 2-Ops card
+    # cannot. The threshold used printed Ops.
+    from struggler.engine.types import DecisionKind as DK
+
+    engine = _bare()
+    engine.turn_effects["brezhnev"] = True
+    engine.hands = {"US": [], "USSR": ["Lone_Gunman"]}  # 1 Ops USSR card
+    engine._push_trap_step(Side.USSR, "bear_trap")
+    assert engine.pending_decision is not None
+    assert engine.pending_decision.kind is DK.QUAGMIRE_DISCARD
+
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "USSR"
+    engine.hands = {"US": [], "USSR": ["Lone_Gunman"]}
+    engine._push_trap_step(Side.USSR, "bear_trap")
+    assert engine.pending_decision is None  # 2 Ops - 1 = 1: not payable
+
+
+def test_blockade_payable_uses_effective_ops():
+    # Blockade's "discard a 3+ Ops card" is an Operations-value requirement,
+    # so a 2-Ops card under Containment (+1) satisfies it (7.4.2), and a
+    # 2-Ops card under Red Scare (-1) does not.
+    from struggler.engine.events import _payable_cards
+
+    engine = _bare()
+    engine.turn_effects["containment"] = True
+    engine.hands = {"USSR": [], "US": ["Nixon_Plays_The_China_Card"]}  # 2 Ops
+    assert "Nixon_Plays_The_China_Card" in _payable_cards(engine, Side.US)
+
+    engine = _bare()
+    engine.turn_effects["red_scare"] = "US"
+    engine.hands = {"USSR": [], "US": ["Nixon_Plays_The_China_Card"]}
+    assert "Nixon_Plays_The_China_Card" not in _payable_cards(engine, Side.US)
+
+
+def test_summit_lower_to_defcon_1_loses_the_phasing_player():
+    # 8.1.3 + the Olympic Games example: "The phasing player is responsible
+    # for the status marker moving to DEFCON 1, and loses the game" -- even
+    # when the opponent's choice moved the marker. The engine blamed
+    # `_change_defcon`'s caused_by (the chooser) instead.
+    # US headlined Summit (the phasing player); the USSR must win the dice
+    # contest and choose "lower", dropping DEFCON to 1. Find a seed where
+    # the defender (USSR) wins the unmodified contest.
+    for seed in range(60):
+        engine = _bare(seed)
+        engine.defcon = 2
+        _headline_setup(engine, "Asia_Scoring", "Summit")
+        engine.step(engine.legal_actions()[0])  # USSR headline pick
+        engine.step(engine.legal_actions()[0])  # US headline pick; Summit resolves first
+        engine.step(engine.legal_actions()[0])  # the (single) pre-rolled contest
+        dec = engine.pending_decision
+        if dec is None or dec.context.get("event") != "Summit_defcon":
+            continue  # contest tie (washed) or other seed quirk: try again
+        assert dec.kind is DecisionKind.EVENT_CHOICE
+        if dec.actor is not Side.USSR:
+            continue  # US won the contest: not the case under test
+        engine.step(Action(DecisionKind.EVENT_CHOICE, {"choice": "lower"}))
+        assert engine.is_terminal
+        # The phasing player (US) loses, even though the USSR rolled the
+        # marker down; the old code made the USSR (the chooser) lose.
+        assert engine.winner is Side.USSR
+        return
+    raise AssertionError("no seed in range produced a USSR-won Summit contest")
+
+
+def test_defcon_1_coup_by_opponent_event_ops_blames_phasing_player():
+    # 8.1.3: an event-granted coup by the opponent during MY action round
+    # (Lone Gunman / CIA Created / Olympic boycott ops) that drops DEFCON to
+    # 1 makes ME lose -- the phasing player -- not the opponent who rolled.
+    engine = _bare()
+    engine.defcon = 2
+    engine.phasing_side = Side.US  # US's action round
+    engine.board.influence["Cuba"]["US"] = 3
+    engine.push_event_operations(Side.USSR, 1)
+    engine.step(Action(DecisionKind.OPS_TYPE, {"type": "coup"}))
+    engine.step(Action(DecisionKind.COUP_TARGET, {"country": "Cuba"}))
+    engine.step(engine.legal_actions()[0])  # the (single) pre-rolled coup die
+    assert engine.is_terminal
+    assert engine.winner is Side.USSR  # phasing US lost
+
+
+def test_china_card_not_compelled_when_it_is_the_only_play():
+    # 9.8: play of The China Card can never be compelled "by events or a
+    # shortage of cards". With an empty hand the card used to be the only
+    # option on offer -- playing it was compulsory.
+    engine = _bare()
+    engine.phase = "action_rounds"
+    engine.turn = 1
+    engine._decision_stack = []
+    engine._ars_played = 1
+    engine.china_card_owner = "US"
+    engine.hands = {"US": [], "USSR": ["Duck_and_Cover"]}
+    engine._push_action_round_play(Side.US)
+    cards = [a.payload.get("card") for a in engine.legal_actions()]
+    assert "The_China_Card" in cards
+    assert "sit_out" in cards  # 9.8: declining is legal
+
+    # Sitting out concedes the remaining rounds (the USSR completes the
+    # turn) and keeps the China Card.
+    engine.step(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "sit_out"}))
+    assert engine.sat_out["US"] is True
+    assert engine.china_card_owner == "US"
+
+
+def test_cardless_side_sits_out_and_opponent_completes_the_turn():
+    # 4.5-D: "that player must sit out of the remaining Action Rounds while
+    # the opposing player completes the turn." The engine used to simply
+    # skip the cardless side's rounds; the opponent must take them instead.
+    engine = _bare()
+    engine.phase = "action_rounds"
+    engine.turn = 1
+    engine._decision_stack = []
+    engine._ars_played = 0
+    engine.china_card_owner = "US"  # the USSR can't even play the China Card
+    engine.hands = {"US": [], "USSR": []}
+    # The US takes over the USSR's rounds: give it 12 playable cards (the
+    # sandbox ignores the deal-time hand limit; the cards are stepped past,
+    # not played for their text).
+    engine.hands["US"] = ["Duck_and_Cover"] * 12
+    plays = []
+    while len(plays) < 12 and engine.turn == 1:
+        engine._advance_once()
+        while engine.pending_decision is not None and engine.turn == 1:
+            dec = engine.pending_decision
+            if dec.kind is DecisionKind.ACTION_ROUND_PLAY:
+                plays.append(dec.actor)
+            engine.step(dec.options[0])
+    # Slot 0 is where the USSR's empty hand is discovered (the round burns
+    # as it sits out); its remaining five rounds transfer, giving the US
+    # 6 own + 5 transferred = 11 turn-1 plays, all its own. (Turn 2's
+    # reshuffled deal re-arms the USSR; that is not what this test pins.)
+    assert len(plays) == 11
+    assert all(a is Side.US for a in plays)
+
+
+def test_permanent_events_live_in_play_not_in_the_discard_pile():
+    # 2.2.5: an underlined event card is displayed face-up beside the board
+    # until cancelled -- it is not in any draw/discard pile, so it can never
+    # be reshuffled back into a hand, reclaimed by SALT Negotiations, or
+    # re-fired from the discard by Star Wars while its effect is live.
+    engine = _bare()
+    engine.hands = {"USSR": ["Flower_Power"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Flower_Power")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is True
+
+    # Cancellation (An Evil Empire): Flower Power's printed footer says
+    # "persists until nullified ... then cut from play" -- the card leaves the
+    # game, not the discard pile.
+    engine.hands = {"USSR": [], "US": ["An_Evil_Empire"]}
+    engine.push_full_card_play(Side.US, "An_Evil_Empire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Flower_Power" in engine.removed_cards
+    assert "Flower_Power" not in engine.in_play_cards
+    assert "Flower_Power" not in engine.discard_pile
+    assert engine.game_effects.get("flower_power") is None
+    # ...and the cancelling card is itself on the table.
+    assert "An_Evil_Empire" in engine.in_play_cards
+
+
+def test_trap_card_leaves_play_when_freed_by_the_roll():
+    engine = _bare()
+    engine.hands = {"USSR": ["Quagmire"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Quagmire")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Quagmire" in engine.in_play_cards
+    # The freeing roll (1-4) cancels the trap: the card goes to the discard.
+    from struggler.engine.types import DecisionKind as DK
+    engine._push(Side.CHANCE, DK.QUAGMIRE_ROLL,
+                 (Action(DK.QUAGMIRE_ROLL, {"value": 3}),), {"key": "quagmire"})
+    engine.step(engine.legal_actions()[0])
+    assert "Quagmire" in engine.discard_pile
+    assert engine.game_effects.get("quagmire") is None
+
+
+def test_shuttle_diplomacy_leaves_play_when_consumed_at_scoring():
+    engine = _bare()
+    engine.board.influence["Egypt"]["USSR"] = 3
+    engine.board.influence["Israel"]["US"] = 3
+    engine.hands = {"USSR": [], "US": ["Shuttle_Diplomacy"]}
+    engine.push_full_card_play(Side.US, "Shuttle_Diplomacy")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "event"}))
+    assert "Shuttle_Diplomacy" in engine.in_play_cards
+    engine._score_region_net(Region.MIDDLE_EAST)
+    assert "Shuttle_Diplomacy" in engine.discard_pile
+    assert "Shuttle_Diplomacy" not in engine.in_play_cards
+
+
+def test_china_card_and_vietnam_revolts_ops_stack():
+    # 7.4's own worked example: The China Card (4 Ops) spent entirely in
+    # Southeast Asia while Vietnam Revolts is in effect = 4 + 1 (Asia bonus)
+    # + 1 (Southeast Asia bonus) = 6 Ops. The engine gave China precedence
+    # and dropped the second bonus.
+    engine = _bare()
+    engine.turn_effects["vietnam_revolts"] = True
+    engine.china_card_owner = "USSR"
+    engine.board.influence["Vietnam"]["USSR"] = 2  # a reachable SE Asia foothold
+    engine.push_full_card_play(Side.USSR, "The_China_Card")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "ops"}))
+    dec = engine.pending_decision
+    assert dec.context["bonus"] == ["asia", "se_asia"]
+    engine.step(Action(DecisionKind.OPS_TYPE, {"type": "influence"}))
+    # All six points placeable in Southeast Asia.
+    for _ in range(6):
+        engine.step(next(a for a in engine.legal_actions()
+                         if a.payload.get("country") == "Vietnam"))
+    assert engine.board.influence["Vietnam"]["USSR"] == 8
+
+    # A USSR non-China play still earns just the Southeast Asia bonus.
+    engine = _bare()
+    engine.turn_effects["vietnam_revolts"] = True
+    engine.hands = {"USSR": ["Lone_Gunman"], "US": []}
+    engine.push_full_card_play(Side.USSR, "Lone_Gunman")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "ops"}))
+    dec = engine.pending_decision
+    assert dec.context["bonus"] == ["se_asia"]
+
+    # A coup in Southeast Asia earns both bonuses (+2 ops).
+    engine = _bare()
+    engine.turn_effects["vietnam_revolts"] = True
+    engine.china_card_owner = "USSR"
+    engine.board.influence["Burma"]["US"] = 1
+    engine.push_full_card_play(Side.USSR, "The_China_Card")
+    engine.step(Action(DecisionKind.PLAY_MODE, {"mode": "ops"}))
+    engine.step(Action(DecisionKind.OPS_TYPE, {"type": "coup"}))
+    engine.step(Action(DecisionKind.COUP_TARGET, {"country": "Burma"}))
+    dec = engine.pending_decision  # COUP_ROLL
+    assert dec.context["ops"] == 6  # 4 + 1 + 1

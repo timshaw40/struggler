@@ -5,15 +5,22 @@ correctness *is* the product.
 
 ## Deterministic replay logs (primary strategy)
 
-A replay log is a JSON file:
+A replay log is a JSON file. A full-game log:
 
 ```json
 {
   "seed": 12345,
+  "new_game": true,
+  "events": true,
+  "include_optional": true,
   "actions": [ {"kind": "place_influence", "payload": {"country": "Poland"}}, ... ],
   "checkpoints": [ {"after_step": 10, "state": { ...full serialize() dict... } } ]
 }
 ```
+
+A sandbox log has no `new_game`; it carries a `setup` block instead and is
+primed by `replay.make_engine` directly. `events`, `include_optional`,
+`physical_mode`, and `physical_side` are optional, read by `make_engine`.
 
 - Replaying `seed` + `actions` through a fresh `Engine` must reproduce every
   checkpoint's state exactly (`==` on the deserialized dict, not a hash —
@@ -27,6 +34,24 @@ A replay log is a JSON file:
 
 The current goldens are `influence_basic.json`, `full_game_ops_only.json`,
 `events.json` and `physical_basic.json`.
+
+### Regenerating a golden after an intentional engine change
+
+The checkpoints pin current behaviour, so any change that alters serialized
+state (a rules fix, a new serialized field) makes them fail. That failure is
+the signal, not the problem:
+
+1. Run `pytest -q`. Read *which* checkpoint fields changed — the failure is
+   an exact dict diff, deliberately.
+2. Confirm the change is intended (and that the prose in `docs/` says so;
+   see [ADR-0002](adr/0002-docs-are-the-binding-contract.md)).
+3. `python scripts/regen_goldens.py` — replays each golden's existing
+   `actions` and rewrites only its `checkpoints`. It never touches
+   `actions`, so it cannot invent a game, but it will absorb a regression if
+   you skip step 2.
+4. Review `git diff tests/replays/` (it should be exactly the fields you
+   expected — e.g. a new serialized field, or a card moving between piles),
+   then run `pytest -q` again.
 
 ## Property-based invariant tests
 

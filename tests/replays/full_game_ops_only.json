@@ -4758,6 +4758,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "CIA_Created",
           "Decolonization",
@@ -4784,6 +4785,7 @@
           "De_Stalinization"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Vietnam_Revolts",
@@ -4819,6 +4821,11 @@
           "USSR": 0
         },
         "ars_played": 1,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": "USSR",
         "headline": {
           "US": null,
           "USSR": null
@@ -5891,13 +5898,18 @@
                 "payload": {
                   "country": "Colombia"
                 }
+              },
+              {
+                "kind": "realignment_target",
+                "payload": {
+                  "stop": true
+                }
               }
             ],
             "context": {
               "card_ops": 3,
               "spent": 1,
-              "bonus": null,
-              "non_bonus": 0
+              "bonus": []
             }
           }
         ],
@@ -5905,6 +5917,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Indo_Pakistani_War",
           "Central_America_Scoring",
@@ -5980,6 +5993,7 @@
           "Brush_War"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "De_Gaulle_Leads_France",
@@ -6012,6 +6026,11 @@
           "USSR": 0
         },
         "ars_played": 5,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": "USSR",
         "headline": {
           "US": null,
           "USSR": null
@@ -7041,7 +7060,7 @@
             "context": {
               "side": "USSR",
               "ops": 2,
-              "bonus": null
+              "bonus": []
             }
           }
         ],
@@ -7049,6 +7068,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Iranian_Hostage_Crisis",
           "Glasnost",
@@ -7152,6 +7172,7 @@
         "removed_cards": [
           "Southeast_Asia_Scoring"
         ],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "An_Evil_Empire",
@@ -7178,6 +7199,11 @@
           "USSR": 0
         },
         "ars_played": 11,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": "USSR",
         "headline": {
           "US": null,
           "USSR": null
@@ -8175,7 +8201,7 @@
           }
         },
         "defcon": 5,
-        "vp": 6,
+        "vp": 7,
         "turn": 10,
         "action_round": 7,
         "next_decision_id": 618,
@@ -8184,6 +8210,7 @@
         "game_over_reason": "final_vp",
         "phase": "complete",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "Soviets_Shoot_Down_KAL_007",
           "Africa_Scoring",
@@ -8289,6 +8316,7 @@
         "removed_cards": [
           "Southeast_Asia_Scoring"
         ],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Cultural_Revolution"
@@ -8313,6 +8341,11 @@
           "USSR": 0
         },
         "ars_played": 14,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": "US",
         "headline": {
           "US": null,
           "USSR": null

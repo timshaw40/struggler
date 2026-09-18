@@ -49,6 +49,9 @@ def cards_in_play(engine: Engine) -> Counter:
     c.update(cid for cid in engine.draw_pile if cid != HIDDEN_CARD)
     c.update(engine.discard_pile)
     c.update(engine.removed_cards)
+    # Underlined event cards whose permanent effect is live sit beside the
+    # board (2.2.5) — outside every pile, but still exactly one location.
+    c.update(getattr(engine, "in_play_cards", []))
     for cid in engine._headline.values():
         if cid is not None:
             c.update([cid])

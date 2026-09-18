@@ -1057,10 +1057,17 @@
                 "payload": {
                   "country": "Chinese_Civil_War"
                 }
+              },
+              {
+                "kind": "place_influence",
+                "payload": {
+                  "stop": true
+                }
               }
             ],
             "context": {
-              "ops_remaining": 2
+              "ops_remaining": 2,
+              "spent": 2
             }
           }
         ],
@@ -1068,9 +1075,11 @@
         "game_over_reason": null,
         "phase": "idle",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [],
         "discard_pile": [],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [],
           "USSR": []
@@ -1090,6 +1099,11 @@
           "USSR": 0
         },
         "ars_played": 0,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": null,
         "headline": {
           "US": null,
           "USSR": null
@@ -2437,9 +2451,11 @@
         "game_over_reason": null,
         "phase": "idle",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [],
         "discard_pile": [],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [],
           "USSR": []
@@ -2459,6 +2475,11 @@
           "USSR": 0
         },
         "ars_played": 0,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": null,
         "headline": {
           "US": null,
           "USSR": null

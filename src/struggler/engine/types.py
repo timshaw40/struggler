@@ -186,3 +186,6 @@ class Observation:
     military_ops: Mapping[str, int]
     turn_effects: Mapping[str, Any]
     game_effects: Mapping[str, Any]
+    # Underlined event cards whose permanent effect is live, face-up beside
+    # the board (2.2.5) — public, like the discard pile.
+    in_play_cards: tuple[str, ...]
