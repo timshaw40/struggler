@@ -503,7 +503,9 @@ const ROLL_KIND = {
   coup_roll: 1, war_roll: 1, space_race_roll: 1, contest_roll: 1,
   quagmire_roll: 1, realignment_actor_roll: 1, realignment_opponent_roll: 1,
 };
-const DIE = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+/* Past this many queued FX, an opponent's roll is dropped rather than burying
+ * the player's own move behind bot animation (see drainRolls). */
+const FX_ROLL_DROP_LIMIT = 5;
 let seenTotal = -1;
 let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
 /* One ordered FX queue: card reveals, dice and scoring popups all run in the
@@ -656,10 +658,12 @@ function drainRolls() {
 
   // One pass, in event order, queueing each event's FX onto the shared chain.
   const enqueueDiceItem = (item) => {
-    // Always show the player's own rolls; drop opponent rolls once the queue is
-    // deep, so the player's action can't sit behind a wall of bot animation.
+    // Always show the player's own rolls, and every roll in a watched game --
+    // there is no player action to protect there, and dropping both sides'
+    // rolls is why watch mode looked like it never rolled.
     const who = item.kind === "score" ? null : actorOf(item.e || item.actor || item.opp);
-    if (who !== null && who !== state.human_side && fxBacklog >= 3) return;
+    const protectingPlayer = who !== null && !state.watch && who !== state.human_side;
+    if (protectingPlayer && fxBacklog >= FX_ROLL_DROP_LIMIT) return;
     enqueueFx(() => (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item)));
   };
 
@@ -785,32 +789,117 @@ function rollOutcome(item) {
   return out;
 }
 
+/* Dice are drawn, not typed. The old version spun the font's die glyphs
+ * (⚀-⚅) with a setInterval, which looked different on every machine and could
+ * not turn; these are 3x3 pip faces on a CSS 3D cube that tumbles and lands
+ * showing the number that was actually rolled. */
+const PIP_LAYOUT = {
+  1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+/* Where each value sits on the cube, as the cube rotation that brings that
+ * side to the front: [rotateX, rotateY]. Whole extra turns are free, so the
+ * tumble adds multiples of 360 to whichever axis the face does not use. */
+const FACE_SPIN = {
+  1: [0, 0], 2: [0, 180], 3: [0, -90], 4: [0, 90], 5: [-90, 0], 6: [90, 0],
+};
+
+function dieFace(value) {
+  const face = document.createElement("div");
+  face.className = `dieface f${value}`;
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement("span");
+    if (PIP_LAYOUT[value].includes(i)) cell.className = "pip";
+    face.append(cell);
+  }
+  return face;
+}
+
+function buildDie() {
+  const die = document.createElement("div");
+  die.className = "die";
+  const cube = document.createElement("div");
+  cube.className = "cube";
+  for (const v of [1, 2, 3, 4, 5, 6]) cube.append(dieFace(v));
+  die.append(cube);
+  return die;
+}
+
+/* Short wooden rattle on the bounce, firmer clack on the landing. Same lazy
+ * AudioContext and the same Sound switch as the influence chits. */
+function diceNoise(kind) {
+  if (localStorage.getItem("struggler.sound") === "0") return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = placeSound.ctx || (placeSound.ctx = new AC());
+  if (ctx.state === "suspended") ctx.resume();
+  const now = ctx.currentTime;
+  const clack = kind === "clack";
+  const noise = ctx.createBufferSource();
+  noise.buffer = placeSound.noise || (placeSound.noise = noiseBuffer(ctx));
+  const band = ctx.createBiquadFilter();
+  band.type = "bandpass";
+  band.frequency.value = clack ? 1400 : 2900;
+  band.Q.value = clack ? 1.1 : 0.7;
+  const gain = ctx.createGain();
+  const peak = clack ? 0.11 : 0.045;
+  const decay = clack ? 0.07 : 0.03;
+  gain.gain.setValueAtTime(peak, now);
+  gain.gain.exponentialRampToValueAtTime(0.0005, now + decay);
+  noise.connect(band).connect(gain).connect(ctx.destination);
+  noise.start(now);
+  noise.stop(now + decay + 0.02);
+}
+
+/* Tumble every die and land it on its value. Returns the time the last one
+ * settles, so the caller knows when to show the result line. */
+function rollDice(host, values) {
+  host.textContent = "";
+  const settle = 1050, stagger = 110;
+  values.forEach((value, i) => {
+    const die = buildDie();
+    const cube = die.querySelector(".cube");
+    const [faceX, faceY] = FACE_SPIN[value] || [0, 0];
+    cube.style.transition = "none";
+    cube.style.transform =
+      `rotateX(${Math.round(200 + Math.random() * 220)}deg) rotateY(${Math.round(200 + Math.random() * 260)}deg)`;
+    host.append(die);
+    setTimeout(() => {
+      cube.style.transition = `transform ${settle}ms cubic-bezier(.18, 1.12, .3, 1)`;
+      cube.style.transform = `rotateX(${720 + faceX}deg) rotateY(${1080 + faceY}deg)`;
+      diceNoise("tick");
+      setTimeout(() => { die.classList.add("landed"); diceNoise("clack"); }, settle - 60);
+    }, 50 + i * stagger);
+  });
+  return 50 + Math.max(0, values.length - 1) * stagger + settle + 220;
+}
+
 function showDice(item) {
   return new Promise((resolve) => {
     const box = $("#dicebox");
     clearDiceBox();
     box.querySelector(".dtitle").textContent = rollTitle(item);
-    const dice = box.querySelector(".dice");
-    const vals = rollValues(item);
+    const values = rollValues(item);
+    const settled = rollDice(box.querySelector(".dice"), values);
     box.hidden = false;
-    let n = 0;
-    const tick = setInterval(() => {
-      dice.textContent = vals.map(() => DIE[(Math.random() * 6 | 0) + 1]).join(" ");
-      if (++n < 14) return;
-      clearInterval(tick);
-      dice.textContent = vals.map((v) => DIE[v]).join(" ");
+    box.classList.add("rolling");
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      box.hidden = true;
+      box.classList.remove("rolling");
+      box.onclick = null;
+      resolve();
+    };
+    // The result reads once the dice have stopped, then holds long enough to
+    // take in; a click moves on immediately.
+    setTimeout(() => {
+      box.classList.remove("rolling");
       box.querySelector(".doutcome").textContent = rollOutcome(item);
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        box.hidden = true;
-        box.onclick = null;
-        resolve();
-      };
-      box.onclick = finish;
-      setTimeout(finish, 2800);
-    }, 70);
+    }, settled);
+    box.onclick = finish;
+    setTimeout(finish, settled + 1700);
   });
 }
 
