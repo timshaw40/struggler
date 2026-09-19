@@ -73,13 +73,20 @@ A card is not considered done until it has a replay-log regression test
   only the event id and the chosen option — never a function). These steps
   live on the same decision stack, so they are hosted correctly inside a
   headline or an opponent's Ops play.
-- **China Card bonus.** Playing the China Card for Ops grants its +1 ("all
-  Ops used in Asia") for influence (an all-or-nothing invariant in the
-  placement step: the 5th point is offered only while nothing has gone
-  outside Asia), for coups (+1 Op and +1 military Op against an Asian
-  target), and for realignment (one extra roll, offered only while every
-  attempt this Ops-spend has targeted Asia — the same all-or-nothing rule,
-  in `_maybe_push_realignment_target`).
+- **Region-bonus Ops (China Card + Vietnam Revolts).** A play can earn more
+  than one "all Ops used here" +1: `_ops_bonus_region` returns a *list*
+  (`"asia"` for the China Card, `"se_asia"` for a USSR play under Vietnam
+  Revolts) and 7.4 aggregates them — the rulebook's own worked example is a
+  China Card spent entirely in Southeast Asia = 4 + 1 + 1 = 6 Ops. Each
+  still-alive bonus adds +1 to the influence budget (an Op outside a bonus's
+  region kills that bonus's share for the rest of the spend), +1 Op and +1
+  military Op per containing bonus on a coup, and one extra attempt per
+  satisfied bonus on realignment (`_maybe_push_bonus_influence` /
+  `_maybe_push_realignment_target`).
+- **"Up to" spends.** Influence (6.1.3) and realignment (6.2.2) spend "up
+  to" the card's Ops, so once at least one point/roll is down the spend also
+  offers an explicit stop option (`{"stop": true}` on the placement /
+  realignment-target decision) — the unspent points are simply not spent.
 
 ## Coverage
 
@@ -158,17 +165,19 @@ the public discard back to hand.
 sanctioned by the card, so surfacing the involved cards as decision options
 is correct, not a leak. Aldrich Ames Remix (USSR discards a chosen US
 card), Grain Sales to Soviets (one random USSR card revealed via a CHANCE
-step; the US plays it in full — Event or Ops, via
-`Engine.push_full_card_play` — or returns it for 2 Ops of its own, and an
-empty USSR hand grants the US 2 Ops directly), Ask Not… (discard any own
-cards and redraw as many, via `draw_cards_to_hand`), The Cambridge Five
+step; the US plays it for its Ops via `Engine.push_full_card_play` — a USSR
+card is an opponent card, so its Event is never offered — or returns it for
+2 Ops of its own, and an empty USSR hand grants the US 2 Ops directly),
+Ask Not… (discard any own cards and redraw as many, via
+`draw_cards_to_hand`), The Cambridge Five
 (place in a region whose scoring card the US holds; blocked during Late
 War).
 
 **Per-turn regional Ops bonus.** Vietnam Revolts generalizes the China
-Card's all-in-region +1 into a reusable "bonus region" (`_ops_bonus_region`
+Card's all-in-region +1 into a reusable bonus region (`_ops_bonus_region`
 / `_in_bonus_region`): the China Card is `"asia"`, Vietnam Revolts sets a
-turn effect giving USSR plays `"se_asia"`.
+turn effect giving USSR plays `"se_asia"`. Both can be live at once and
+stack (7.4).
 
 **Player-choice influence** (`EVENT_INFLUENCE`). COMECON, Marshall Plan,
 Decolonization, Suez Crisis, Truman Doctrine, Warsaw Pact Formed (branch),
@@ -233,8 +242,8 @@ Ask Not… does.
 `_total_action_rounds`/`_side_for_play_index`). Formosan Resolution (Taiwan
 scores as an Asian Battleground while the US controls it; nullified once
 the US plays the China Card), Shuttle Diplomacy (one USSR-controlled
-Battleground is dropped at the next Middle East/Asia scoring, then
-consumed), North Sea Oil (OPEC becomes ineligible game-long; the US plays
+Battleground is dropped at the next Middle East/Asia scoring, then the card
+leaves play), North Sea Oil (OPEC becomes ineligible game-long; the US plays
 one extra action round this turn), Arms Race (scores off the Military
 Operations track), Ussuri River Skirmish (take the China Card from the
 USSR, or +4 Influence in Asia). `board.region_tier` takes optional
@@ -289,7 +298,8 @@ of turn.
 ## Space Race boxes
 
 Box 2 (a second Space Race attempt per turn), box 4 (see below), box 6 (may
-discard the Held Card at end of turn), and box 8 (an extra Action Round) are
+discard the Held Card at end of turn), and box 8 (an absolute 8 Action Rounds
+per turn — not base + 1) are
 implemented. Each is granted only to the first side to reach the box and is
 cancelled outright — not transferred — the instant the second side also
 reaches it (rule 6.4.4), via `Engine._update_space_race_ability` and the

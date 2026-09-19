@@ -46,5 +46,6 @@
   "hand_limit_early": 8,
   "hand_limit_mid_late": 9,
   "action_rounds_early": 6,
-  "action_rounds_mid_late": 7
+  "action_rounds_mid_late": 7,
+  "space_race_box8_rounds": 8
 }

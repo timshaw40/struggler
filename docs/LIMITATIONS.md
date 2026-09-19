@@ -5,12 +5,6 @@ way.
 
 ## Rules fidelity
 
-- **Shuttle Diplomacy** is filed to the discard pile when played, rather
-  than kept "in front of you" until its delayed effect triggers. Only the
-  effect flag matters mechanically. A card-manipulation event such as Star
-  Wars could in principle retrieve it slightly earlier than the physical
-  game allows, but the effect it would re-apply is idempotent, so this has
-  no actual gameplay consequence.
 - **Aldrich Ames Remix**'s "USA reveals their hand face-up until end of
   turn" is modeled as a momentary reveal — the decision options — rather
   than an ongoing visibility grant surfaced through `observe()`. Modeling
@@ -54,30 +48,34 @@ routed to the operator is described in [BOTS.md](BOTS.md).
 
 ## Bots
 
-- **`GreedyPlayer` scores only the 7 core decision kinds**
-  (`PLACE_INFLUENCE`, `COUP_TARGET`, `REALIGNMENT_TARGET`, `OPS_TYPE`,
-  `HEADLINE_PLAY`, `ACTION_ROUND_PLAY`, `PLAY_MODE`). Every event-specific
-  decision kind falls back to the first legal option. This is approved
-  scope, not an oversight: extend `_SCORERS` as each one earns a heuristic
-  worth writing, rather than guessing at all ~13 up front.
-- **`LLMPlayer` resends its whole conversation every call** and has no
-  context-budget safety valve. What gets *persisted* per turn is trimmed to
-  the event delta only (`prompt.build_history_entry`) -- the board report,
-  hand dossier, and cards-in-play a call was answered against are a snapshot
-  of that instant and are never resent from history, only ever recomputed
-  fresh for the live call -- but the event history and the model's own past
-  responses still grow without bound. A long enough game can still in theory
-  approach the model's context limit or a provider's tokens-per-minute rate
-  limit.
+- **`GreedyPlayer` scores the core decision kinds** (`PLACE_INFLUENCE`,
+  `COUP_TARGET`, `REALIGNMENT_TARGET`, `OPS_TYPE`, `HEADLINE_PLAY`,
+  `ACTION_ROUND_PLAY`, `PLAY_MODE`) plus one card-specific `EVENT_CHOICE`
+  (Aldrich Ames Remix). Other event-specific decision kinds fall back to the
+  first legal option. This is approved scope, not an oversight: extend
+  `_SCORERS` as each one earns a heuristic worth writing. Note the fallback is
+  a measurable strength debt — `MCTSPlayer`'s rollouts run on this policy, so
+  a missing heuristic weakens search too.
+- **`LLMPlayer` resends its conversation every call**, now with a
+  character-budget safety valve: `STRUGGLER_LLM_CONTEXT_CHARS` (or the
+  `max_context_chars` constructor arg) drops the oldest turns with a marker
+  when exceeded; 0 disables it. What gets *persisted* per turn is still
+  trimmed to the event delta only (`prompt.build_history_entry`); the board
+  report, hand dossier, and cards-in-play a call was answered against are
+  recomputed fresh each call. With compaction off, a long game can still
+  approach the model's context or tokens-per-minute limits.
 - **Resuming an `LLMPlayer` from its log does not restore `_rng`'s exact
   position.** Acceptable because `_rng` is only consulted on the fallback
   path (picking *a* legal action after total LLM failure); mandate #3's
   determinism guarantee is about the engine's own RNG, not a bot's internal
   fallback RNG.
-- **The LLM plan-queue matcher checks legality, not optimality.** A step
-  predicted past a CHANCE roll can be silently consumed if it happens to
-  remain legal regardless of the roll's actual outcome. The system prompt
-  asks the model to avoid this; the mechanism itself does not enforce it.
+- **The LLM plan-queue matcher checks legality, not optimality.** A step is
+  re-validated against the live decision's *kind* and options before it is
+  consumed (`_try_consume_plan`), so an interruption that changes the decision
+  kind mechanically drops the stale plan. But a step of the same kind that
+  happens to stay legal after a CHANCE roll or opponent reply can still be
+  consumed. The system prompt asks the model to avoid this; the mechanism
+  itself does not enforce intent.
 - **The OpenAI adapter's exact SDK call shape is unverified** against a
   live API. The Anthropic adapter's is current.
 - **`MCTSPlayer` cannot play physical mode.** `bind_engine` refuses it: a
@@ -85,8 +83,11 @@ routed to the operator is described in [BOTS.md](BOTS.md).
   determinize step does not redact, so searching a physical game would read
   identities nobody is supposed to know. Use `--us greedy --ussr mcts`
   ordering (`--physical <side>` with greedy) instead.
-- **`MCTSPlayer` swallows rollout errors as neutral 0.5.** A determinized
-  clone can be internally inconsistent (the unknown pool can come up short
-  on mid-resolution accounting drift, and the fill recycles ids rather than
-  crashing); such clones score 0.5. The tradeoff: a genuine engine bug
-  surfaced mid-search is masked as a bland score instead of failing loudly.
+- **`MCTSPlayer` excludes invalid simulations (strict by default).** A
+  determinized clone can be internally inconsistent when the unknown pool
+  comes up short; `strict=True` raises `ShortPoolError` and the simulation is
+  dropped rather than scored, with per-search diagnostics
+  (`stats["short_pool"]/["action_miss"]/["exception"]`) instead of a silent
+  neutral 0.5. If every simulation is invalid the player falls back to the
+  heuristic. Pass `strict=False` for the old recycle-and-score-0.5 behaviour
+  (research/debugging only — it fabricates illegal positions).

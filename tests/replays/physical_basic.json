@@ -1258,6 +1258,7 @@
         "game_over_reason": null,
         "phase": "action_rounds",
         "include_optional": false,
+        "setup_us_extra": 0,
         "draw_pile": [
           "?",
           "?",
@@ -1287,6 +1288,7 @@
           "Romanian_Abdication"
         ],
         "removed_cards": [],
+        "in_play_cards": [],
         "hands": {
           "US": [
             "Middle_East_Scoring",
@@ -1319,6 +1321,11 @@
           "USSR": 2
         },
         "ars_played": 4,
+        "sat_out": {
+          "US": false,
+          "USSR": false
+        },
+        "phasing_side": "US",
         "headline": {
           "US": null,
           "USSR": null

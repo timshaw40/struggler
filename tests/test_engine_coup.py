@@ -1,6 +1,6 @@
 """Engine: coup mechanics, DEFCON interaction, region restrictions."""
 
-from struggler.engine import DecisionKind, Engine, Region, Side
+from struggler.engine import DecisionKind, Engine, Region, ScoringTier, Side
 
 
 def test_coup_pushes_chance_decision_then_resolves_by_formula():
@@ -97,7 +97,7 @@ def test_full_control_of_europe_does_not_auto_win():
     action = next(a for a in engine.legal_actions() if a.payload["country"] == last)
     engine.step(action)
 
-    assert engine.board.controls_all_of_europe() is Side.US
+    assert engine.board.region_tier(Side.US, Region.EUROPE) is ScoringTier.CONTROL
 
 
 def test_coup_requires_opponent_influence_in_target():

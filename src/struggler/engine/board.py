@@ -42,13 +42,15 @@ class Board:
     bug.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, include_ccw: bool = True) -> None:
         raw = load_json("countries.json")
 
         self.countries: dict[str, CountryInfo] = {}
         self._adjacency: dict[str, set[str]] = {"US": set(), "USSR": set()}
 
         for cid, entry in raw["countries"].items():
+            if cid == "Chinese_Civil_War" and not include_ccw:
+                continue
             self.countries[cid] = CountryInfo(
                 id=cid,
                 name=entry["name"],
@@ -59,12 +61,17 @@ class Board:
             )
             self._adjacency.setdefault(cid, set())
 
+        keep = lambda n: include_ccw or n != "Chinese_Civil_War"
         for cid, entry in raw["countries"].items():
+            if cid not in self.countries:
+                continue
             for neighbor in entry["adjacent_to"]:
-                self._adjacency[cid].add(neighbor)
+                if keep(neighbor):
+                    self._adjacency[cid].add(neighbor)
         for side_id, entry in raw["superpowers"].items():
             for neighbor in entry["adjacent_to"]:
-                self._adjacency[side_id].add(neighbor)
+                if keep(neighbor):
+                    self._adjacency[side_id].add(neighbor)
 
         self._validate_symmetric()
 
@@ -156,16 +163,6 @@ class Board:
     def countries_in(self, region: Region) -> tuple[str, ...]:
         return tuple(cid for cid, info in self.countries.items() if info.region == region)
 
-    def controls_all_of_europe(self) -> Side | None:
-        """Whether one side currently controls every country in Europe.
-        """
-        europe = self.countries_in(Region.EUROPE)
-        if all(self.control(cid) is Side.US for cid in europe):
-            return Side.US
-        if all(self.control(cid) is Side.USSR for cid in europe):
-            return Side.USSR
-        return None
-
     # -- region scoring ---------------------------------------------------------
 
     def region_tier(
@@ -236,10 +233,19 @@ class Board:
         return bonus
 
     def score_region(self, region: Region) -> int:
-        """Net VP swing from scoring `region` now (positive favors US,
-        negative favors USSR): each side's Presence/Domination/Control tier
-        value, plus its 10.1.2 bonuses (+1 VP per Battleground Controlled,
-        +1 VP per country Controlled adjacent to the enemy superpower)."""
+        """Net VP swing from scoring `region` now (positive favors US):
+        each side's Presence/Domination/Control tier value, plus its 10.1.2
+        bonuses (+1 VP per Battleground Controlled, +1 VP per country
+        Controlled adjacent to the enemy superpower).
+
+        Europe is the exception (10.3.1): if either side holds the Control
+        TIER there (10.1.1 — more countries than the opponent and all
+        European Battlegrounds), the Europe card is an automatic victory,
+        not a VP total. Report that as the full ±20 auto-victory score."""
+        if region is Region.EUROPE:
+            for side in (Side.US, Side.USSR):
+                if self.region_tier(side, region) is ScoringTier.CONTROL:
+                    return 20 if side is Side.US else -20
         presence_vp, domination_vp, control_vp = RULES["scoring"][region.name]
         tier_value = {
             ScoringTier.NONE: 0,
@@ -249,16 +255,7 @@ class Board:
 
         def value_for(side: Side) -> int:
             tier = self.region_tier(side, region)
-            if tier is ScoringTier.CONTROL:
-                if control_vp is None:
-                    raise RuntimeError(
-                        f"{region} reached CONTROL tier for {side}, but has no scoring "
-                        "value defined (Europe's full control is an immediate win, not "
-                        "a scoring-card outcome — see Board.controls_all_of_europe)."
-                    )
-                base = control_vp
-            else:
-                base = tier_value[tier]
+            base = tier_value[tier] if tier is not ScoringTier.CONTROL else control_vp
             return base + self.region_bonus_vp(side, region)
 
         return value_for(Side.US) - value_for(Side.USSR)
