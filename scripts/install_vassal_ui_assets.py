@@ -310,10 +310,15 @@ def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[in
     # Right border: trim the run end to the badge's right border — dark on
     # the top row, strip-colored just inside, map-colored just outside.
     right = run[1] + 2
-    for x in range(run[1], max(run[1] - 80, run[0]), -1):
+    # Start at the run's last dark pixel. `run[1]` is the first pixel *past*
+    # the border, so testing it (as this loop used to) always failed, and the
+    # scan then walked in until it hit the stability badge's left edge — a
+    # box 12-29 px too narrow, which shifted every pip left of its printed
+    # column.
+    for x in range(run[1] - 1, max(run[1] - 80, run[0]), -1):
         if (dark(x, y) and strip_like(x - 4, y + 15)
                 and not strip_like(x + 4, y + 15)):
-            right = x + 2
+            right = x + 1
             break
     if left is None:
         left = run[0]
@@ -348,6 +353,30 @@ def find_box(img, cx: int, cy: int) -> tuple[tuple[int, int, int, int], tuple[in
     else:
         box_h = 2 * (strip_bottom - y)
         center_y = strip_bottom + (strip_bottom - y) // 2
+    # Snap the side edges onto the printed body borders. The box comes from the
+    # strip's top border, which the stability badge interrupts on some
+    # countries: the run stops at the badge's left edge and the box lands 12-30
+    # px narrow, shifting every pip left of its printed column. Flags and
+    # badges only live in the strip, so the body's side borders are clean
+    # vertical lines and say where the box really ends.
+    def col_ratio(x: int, y_from: int, y_to: int) -> float:
+        return sum(1 for yy in range(y_from, y_to) if dark(x, yy)) / max(1, y_to - y_from)
+
+    def snap(edge: int, y_from: int, y_to: int) -> int:
+        best, best_d, best_r = None, None, 0.0
+        for x in range(max(edge - 40, 0), min(edge + 41, win_w)):
+            ratio = col_ratio(x, y_from, y_to)
+            if ratio < 0.9:
+                continue
+            d = abs(x - edge)
+            if best is None or d < best_d or (d == best_d and ratio > best_r):
+                best, best_d, best_r = x, d, ratio
+        return edge if best is None else best
+
+    body_from, body_to = strip_bottom + 6, y + box_h - 6
+    if body_to - body_from >= 20:
+        left = snap(left, body_from, body_to)
+        right = snap(right, body_from, body_to) + 2
     return ((x0 + left, y0 + y, x0 + right, y0 + strip_bottom),
             (x0 + (left + right) // 2, y0 + center_y), box_h,
             box_bottom is not None)
