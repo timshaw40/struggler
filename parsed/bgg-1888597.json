@@ -1,0 +1,5631 @@
+{
+ "source": "bgg-1888597",
+ "title": "Ziemowit vs Wojciech Pietrzak",
+ "format": "wgr",
+ "include_optional": true,
+ "winner": null,
+ "vp_final": 27,
+ "actions": [
+  {
+   "kind": "setup",
+   "turn": 0,
+   "side": "USSR",
+   "card": null,
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "East_Germany",
+     1
+    ],
+    [
+     "Poland",
+     4
+    ],
+    [
+     "Austria",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "extras": [],
+   "post": [
+    [
+     "East_Germany",
+     "USSR",
+     4
+    ],
+    [
+     "Poland",
+     "USSR",
+     4
+    ],
+    [
+     "Austria",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "setup",
+   "turn": 0,
+   "side": "US",
+   "card": null,
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "West_Germany",
+     4
+    ],
+    [
+     "Italy",
+     3
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "extras": [
+    [
+     "Iran",
+     2
+    ]
+   ],
+   "post": [
+    [
+     "West_Germany",
+     "US",
+     4
+    ],
+    [
+     "Italy",
+     "US",
+     3
+    ],
+    [
+     "Iran",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 1,
+   "side": "USSR",
+   "card": "The_Cambridge_Five",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 1,
+   "side": "US",
+   "card": "Europe_Scoring",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "NATO",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Italy",
+    "roll": 5
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Italy",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Italy",
+     "US",
+     3
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Italy",
+     "US",
+     0
+    ],
+    [
+     "Italy",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "De_Gaulle_Leads_France",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "USSR",
+     1
+    ],
+    [
+     "France",
+     "US",
+     1
+    ],
+    [
+     "Afghanistan",
+     "US",
+     1
+    ],
+    [
+     "Malaysia",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "France",
+     "US",
+     0
+    ],
+    [
+     "France",
+     "USSR",
+     1
+    ],
+    [
+     "France",
+     "US",
+     1
+    ],
+    [
+     "Afghanistan",
+     "US",
+     1
+    ],
+    [
+     "Malaysia",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "COMECON",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Iran",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Iran",
+     "US",
+     3
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "US",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "Duck_and_Cover",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Iran",
+     "US",
+     2
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "US",
+     2
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "Arab_Israeli_War",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Iran",
+    "roll": 5
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Iran",
+     "US",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "US",
+     0
+    ],
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "Indo_Pakistani_War",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Pakistan",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Pakistan",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "Defectors",
+   "mode": "un_intervention",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Lebanon",
+     "USSR",
+     1
+    ],
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Lebanon",
+     "USSR",
+     1
+    ],
+    [
+     "Iran",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "Korean_War",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Korea",
+     "USSR",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "South_Korea",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "South_Korea",
+     "US",
+     0
+    ],
+    [
+     "South_Korea",
+     "USSR",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": -2,
+   "raw": [],
+   "ar": 4,
+   "war": [
+    {
+     "roll": 4,
+     "mod": 0
+    }
+   ]
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "De_Stalinization",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Thailand",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     1
+    ],
+    [
+     "Argentina",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Austria",
+     "USSR",
+     1
+    ],
+    [
+     "Finland",
+     "USSR",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     1
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Austria",
+     "USSR",
+     0
+    ],
+    [
+     "Finland",
+     "USSR",
+     0
+    ],
+    [
+     "Poland",
+     "USSR",
+     3
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     3
+    ],
+    [
+     "Thailand",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     1
+    ],
+    [
+     "Argentina",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "Romanian_Abdication",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Laos_Cambodia",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Romania",
+     "USSR",
+     3
+    ],
+    [
+     "Laos_Cambodia",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "USSR",
+   "card": "Blockade",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Italy",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Italy",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 1,
+   "side": "US",
+   "card": "Decolonization",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 3
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": -2,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "headline",
+   "turn": 1,
+   "side": "USSR",
+   "card": "Captured_Nazi_Scientist",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -3,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 1,
+   "side": "US",
+   "card": "Containment",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Warsaw_Pact_Formed",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Egypt",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Egypt",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Egypt",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "Nuclear_Test_Ban",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Angola",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Angola",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     2
+    ],
+    [
+     "Thailand",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Olympic_Games",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Korea",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "South_Korea",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "Suez_Crisis",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Algeria",
+     "US",
+     2
+    ],
+    [
+     "Pakistan",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "UK",
+     "US",
+     2
+    ],
+    [
+     "France",
+     "US",
+     1
+    ],
+    [
+     "Israel",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Algeria",
+     "US",
+     2
+    ],
+    [
+     "Pakistan",
+     "US",
+     3
+    ],
+    [
+     "Thailand",
+     "US",
+     4
+    ],
+    [
+     "UK",
+     "US",
+     3
+    ],
+    [
+     "France",
+     "US",
+     0
+    ],
+    [
+     "Israel",
+     "US",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Special_Relationship",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "France",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "CIA_Created",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "India",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "India",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Formosan_Resolution",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Malaysia",
+     "USSR",
+     1
+    ],
+    [
+     "Iraq",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Malaysia",
+     "USSR",
+     1
+    ],
+    [
+     "Iraq",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "Truman_Doctrine",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Indonesia",
+     "US",
+     1
+    ],
+    [
+     "India",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Indonesia",
+     "US",
+     1
+    ],
+    [
+     "India",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Fidel",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Cuba",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "Asia_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 2,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "USSR",
+   "card": "US_Japan_Mutual_Defense_Pact",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Japan",
+     "US",
+     3
+    ],
+    [
+     "Iraq",
+     "USSR",
+     1
+    ],
+    [
+     "Saudi_Arabia",
+     "USSR",
+     3
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Japan",
+     "US",
+     4
+    ],
+    [
+     "Iraq",
+     "USSR",
+     3
+    ],
+    [
+     "Saudi_Arabia",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 2,
+   "side": "US",
+   "card": "Vietnam_Revolts",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Vietnam",
+     "USSR",
+     2
+    ],
+    [
+     "Libya",
+     "US",
+     1
+    ],
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "Colombia",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Vietnam",
+     "USSR",
+     2
+    ],
+    [
+     "Libya",
+     "US",
+     1
+    ],
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "Colombia",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": 0,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "headline",
+   "turn": 2,
+   "side": "USSR",
+   "card": "Red_Scare_Purge",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "headline",
+   "turn": 2,
+   "side": "US",
+   "card": "Defectors",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "NORAD",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Egypt",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "Marshall_Plan",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Venezuela",
+     "US",
+     3
+    ],
+    [
+     "Libya",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "US",
+     3
+    ],
+    [
+     "Libya",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "Olympic_Games",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Brazil",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Brazil",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "Middle_East_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -3,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "Independent_Reds",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "Nasser",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Cameroon",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Egypt",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Cameroon",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "USSR",
+     2
+    ],
+    [
+     "Egypt",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "East_European_Unrest",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 6,
+    "needed": 3
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "Truman_Doctrine",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "Arab_Israeli_War",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Argentina",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Argentina",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "The_Cambridge_Five",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Angola",
+     "US",
+     1
+    ],
+    [
+     "Panama",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Angola",
+     "US",
+     2
+    ],
+    [
+     "Panama",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "USSR",
+   "card": "NATO",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Brazil",
+     "USSR",
+     1
+    ],
+    [
+     "Chile",
+     "USSR",
+     3
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Brazil",
+     "USSR",
+     3
+    ],
+    [
+     "Chile",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 3,
+   "side": "US",
+   "card": "Socialist_Governments",
+   "mode": "un_intervention",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "France",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": -5,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "headline",
+   "turn": 3,
+   "side": "USSR",
+   "card": "Cuban_Missile_Crisis",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 3,
+   "side": "US",
+   "card": "Grain_Sales_to_Soviets",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "France",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Warsaw_Pact_Formed",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Colombia",
+     "USSR",
+     4
+    ]
+   ],
+   "removals": [
+    [
+     "Colombia",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "US",
+     0
+    ],
+    [
+     "Colombia",
+     "USSR",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Flower_Power",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "US",
+     2
+    ],
+    [
+     "Mexico",
+     "US",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "West_Germany",
+     "US",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "West_Germany",
+     "US",
+     2
+    ],
+    [
+     "France",
+     "US",
+     6
+    ],
+    [
+     "Mexico",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Nuclear_Test_Ban",
+   "mode": "ops",
+   "ops_type": "realignment",
+   "coup": null,
+   "realignments": [
+    {
+     "country": "Venezuela",
+     "rolls": {
+      "USSR": 5,
+      "USA": 2
+     }
+    },
+    {
+     "country": "Panama",
+     "rolls": {
+      "USSR": 2,
+      "USA": 6
+     }
+    },
+    {
+     "country": "Panama",
+     "rolls": {
+      "USSR": 6,
+      "USA": 2
+     }
+    },
+    {
+     "country": "Mexico",
+     "rolls": {
+      "USSR": 1,
+      "USA": 5
+     }
+    }
+   ],
+   "placements": [],
+   "removals": [
+    [
+     "Venezuela",
+     "US",
+     3
+    ],
+    [
+     "Panama",
+     "US",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "US",
+     0
+    ],
+    [
+     "Panama",
+     "US",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Our_Man_In_Tehran",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Colombia",
+     "USSR",
+     4
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Europe_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -11,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "ABM_Treaty",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Venezuela",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Venezuela",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Duck_and_Cover",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 3
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": -13,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Quagmire",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Africa",
+     "US",
+     3
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "South_Africa",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Puppet_Governments",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 5,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Decolonization",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Camp_David_Accords",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Israel",
+     "US",
+     1
+    ],
+    [
+     "Jordan",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     1
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Israel",
+     "US",
+     1
+    ],
+    [
+     "Jordan",
+     "US",
+     1
+    ],
+    [
+     "Egypt",
+     "US",
+     2
+    ],
+    [
+     "Venezuela",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": -12,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "Liberation_Theology",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Five_Year_Plan",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Cameroon",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Cameroon",
+     "USSR",
+     6
+    ]
+   ],
+   "removals": [
+    [
+     "Cameroon",
+     "US",
+     1
+    ]
+   ],
+   "discards": [
+    "Southeast_Asia_Scoring"
+   ],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Cameroon",
+     "US",
+     0
+    ],
+    [
+     "Cameroon",
+     "USSR",
+     6
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "South_African_Unrest",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ],
+    [
+     "Angola",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "South_Africa",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 4,
+   "side": "USSR",
+   "card": "Junta",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Venezuela",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 4,
+   "side": "US",
+   "card": "Missile_Envy",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true,
+   "exchanged": "We_Will_Bury_You"
+  },
+  {
+   "kind": "play",
+   "turn": 4,
+   "side": "US",
+   "card": "We_Will_Bury_You",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Venezuela",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Venezuela",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Missile_Envy",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ],
+    [
+     "South_Africa",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Brush_War",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Brazil",
+     "US",
+     3
+    ]
+   ],
+   "removals": [
+    [
+     "Brazil",
+     "USSR",
+     3
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Brazil",
+     "USSR",
+     0
+    ],
+    [
+     "Brazil",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": -13,
+   "raw": [],
+   "ar": 1,
+   "war": [
+    {
+     "roll": 4,
+     "mod": -1
+    }
+   ]
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "U2_Incident",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Panama",
+     "USSR",
+     2
+    ],
+    [
+     "Haiti",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Panama",
+     "USSR",
+     2
+    ],
+    [
+     "Haiti",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Latin_American_Death_Squads",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Haiti",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Haiti",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Haiti",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Haiti",
+     "USSR",
+     0
+    ],
+    [
+     "Haiti",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Kitchen_Debates",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Haiti",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Haiti",
+     "USSR",
+     4
+    ]
+   ],
+   "removals": [
+    [
+     "Haiti",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Haiti",
+     "US",
+     0
+    ],
+    [
+     "Haiti",
+     "USSR",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Alliance_for_Progress",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Africa",
+     "US",
+     2
+    ],
+    [
+     "Saharan_States",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "South_Africa",
+     "US",
+     6
+    ],
+    [
+     "Saharan_States",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Central_America_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -17,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Africa_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -7,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Colonial_Rear_Guards",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Muslim_Revolution",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 2,
+    "needed": 3
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Allende",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Saharan_States",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Saharan_States",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Saharan_States",
+     "US",
+     0
+    ],
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Portuguese_Empire_Crumbles",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "SE_African_States",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "SE_African_States",
+     "USSR",
+     2
+    ],
+    [
+     "Angola",
+     "USSR",
+     4
+    ],
+    [
+     "Angola",
+     "US",
+     6
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Che",
+   "mode": "ops",
+   "ops_type": "realignment",
+   "coup": null,
+   "realignments": [
+    {
+     "country": "Nigeria",
+     "rolls": {
+      "USSR": 5,
+      "USA": 4
+     }
+    },
+    {
+     "country": "Brazil",
+     "rolls": {
+      "USSR": 1,
+      "USA": 3
+     }
+    },
+    {
+     "country": "Brazil",
+     "rolls": {
+      "USSR": 4,
+      "USA": 3
+     }
+    }
+   ],
+   "placements": [],
+   "removals": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ],
+    [
+     "Brazil",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "US",
+     0
+    ],
+    [
+     "Brazil",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 5,
+   "side": "US",
+   "card": "Nuclear_Subs",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 4
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Colombia",
+     "US",
+     3
+    ]
+   ],
+   "removals": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "USSR",
+     0
+    ],
+    [
+     "Colombia",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 5,
+   "side": "USSR",
+   "card": "Salt_Negotiations",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 5,
+   "side": "US",
+   "card": "OAS_Founded",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Venezuela",
+     "US",
+     1
+    ],
+    [
+     "Panama",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "US",
+     1
+    ],
+    [
+     "Panama",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "The_China_Card",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Thailand",
+    "roll": 5
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Thailand",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Thailand",
+     "US",
+     4
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Thailand",
+     "US",
+     0
+    ],
+    [
+     "Thailand",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "Shuttle_Diplomacy",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Thailand",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "Lone_Gunman",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Zaire",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "COMECON",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Panama",
+     "US",
+     3
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     1
+    ],
+    [
+     "Czechoslovakia",
+     "USSR",
+     1
+    ],
+    [
+     "Yugoslavia",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Panama",
+     "US",
+     4
+    ],
+    [
+     "East_Germany",
+     "USSR",
+     4
+    ],
+    [
+     "Poland",
+     "USSR",
+     4
+    ],
+    [
+     "Czechoslovakia",
+     "USSR",
+     1
+    ],
+    [
+     "Yugoslavia",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "Arms_Race",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -10,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "One_Small_Step",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -7,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "Asia_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "Special_Relationship",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Venezuela",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "ABM_Treaty",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Brazil",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Brazil",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Brazil",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "How_I_Learned_to_Stop_Worrying",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Venezuela",
+     "US",
+     1
+    ],
+    [
+     "Brazil",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Venezuela",
+     "US",
+     4
+    ],
+    [
+     "Brazil",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "OPEC",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -10,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "South_America_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "USSR",
+   "card": "Blockade",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 6,
+   "side": "US",
+   "card": "Willy_Brandt",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "West_Germany",
+     "USSR",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "West_Germany",
+     "USSR",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": -11,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "USSR",
+   "card": "Indo_Pakistani_War",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "India",
+     "USSR",
+     3
+    ]
+   ],
+   "removals": [
+    [
+     "India",
+     "US",
+     3
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "India",
+     "US",
+     0
+    ],
+    [
+     "India",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": -13,
+   "raw": [],
+   "_resolved": true,
+   "war": [
+    {
+     "roll": 6,
+     "mod": -1
+    }
+   ]
+  },
+  {
+   "kind": "headline",
+   "turn": 6,
+   "side": "US",
+   "card": "Ask_Not_What_Your_Country_Can_Do_For_You",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "Summit",
+    "Blockade",
+    "Nuclear_Subs",
+    "South_African_Unrest",
+    "Europe_Scoring"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "CIA_Created",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Thailand",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Angola",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Angola",
+     "USSR",
+     2
+    ],
+    [
+     "Thailand",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "The_China_Card",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Thailand",
+     "US",
+     4
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Thailand",
+     "US",
+     5
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Nixon_Plays_The_China_Card",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Nigeria",
+     "USSR",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Nigeria",
+     "USSR",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     5
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Duck_and_Cover",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "Israel",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Zaire",
+     "US",
+     2
+    ],
+    [
+     "Israel",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Ussuri_River_Skirmish",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 3,
+    "needed": 3
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": -14,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Alliance_for_Progress",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -10,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Panama_Canal_Returned",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Panama",
+     "US",
+     1
+    ],
+    [
+     "Costa_Rica",
+     "US",
+     1
+    ],
+    [
+     "Venezuela",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Colombia",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Panama",
+     "US",
+     5
+    ],
+    [
+     "Costa_Rica",
+     "US",
+     1
+    ],
+    [
+     "Venezuela",
+     "US",
+     5
+    ],
+    [
+     "Colombia",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Sadat_Expels_Soviets",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Egypt",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Egypt",
+     "USSR",
+     0
+    ],
+    [
+     "Egypt",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Independent_Reds",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Spain_Portugal",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Romania",
+     "US",
+     3
+    ],
+    [
+     "Spain_Portugal",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Muslim_Revolution",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 5,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "John_Paul_II_Elected_Pope",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Poland",
+     "US",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     1
+    ],
+    [
+     "Syria",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Poland",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Poland",
+     "USSR",
+     3
+    ],
+    [
+     "Poland",
+     "US",
+     1
+    ],
+    [
+     "Poland",
+     "USSR",
+     4
+    ],
+    [
+     "Syria",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Arab_Israeli_War",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Saharan_States",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Saharan_States",
+     "US",
+     4
+    ]
+   ],
+   "removals": [
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Saharan_States",
+     "USSR",
+     0
+    ],
+    [
+     "Saharan_States",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Cultural_Revolution",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 7,
+   "side": "US",
+   "card": "Bear_Trap",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 7,
+   "side": "USSR",
+   "card": "Red_Scare_Purge",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 7,
+   "side": "US",
+   "card": "Colonial_Rear_Guards",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ],
+    [
+     "Burma",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     1
+    ],
+    [
+     "Philippines",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ],
+    [
+     "Burma",
+     "US",
+     1
+    ],
+    [
+     "Thailand",
+     "US",
+     6
+    ],
+    [
+     "Philippines",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Grain_Sales_to_Soviets",
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "The_Cambridge_Five",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nigeria",
+    "roll": 3
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Nigeria",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "USSR",
+     0
+    ],
+    [
+     "Nigeria",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "OPEC",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -13,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "North_Sea_Oil",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Israel",
+     "US",
+     1
+    ],
+    [
+     "France",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Israel",
+     "US",
+     4
+    ],
+    [
+     "France",
+     "US",
+     7
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Puppet_Governments",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Nicaragua",
+    "roll": 2
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Guatemala",
+     "US",
+     1
+    ],
+    [
+     "Nicaragua",
+     "US",
+     1
+    ],
+    [
+     "Greece",
+     "US",
+     1
+    ],
+    [
+     "Nicaragua",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Nicaragua",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Guatemala",
+     "US",
+     1
+    ],
+    [
+     "Nicaragua",
+     "US",
+     1
+    ],
+    [
+     "Greece",
+     "US",
+     1
+    ],
+    [
+     "Nicaragua",
+     "US",
+     0
+    ],
+    [
+     "Nicaragua",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Kitchen_Debates",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -11,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Special_Relationship",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Guatemala",
+    "roll": 3
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Guatemala",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Guatemala",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Guatemala",
+     "US",
+     0
+    ],
+    [
+     "Guatemala",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "We_Will_Bury_You",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 6,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Che",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Saharan_States",
+    "roll": 5
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Saharan_States",
+     "US",
+     4
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Saharan_States",
+     "US",
+     0
+    ],
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Che",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Colombia",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Colombia",
+     "US",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "US",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Iran_Iraq_War",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Iran",
+     "US",
+     2
+    ]
+   ],
+   "removals": [
+    [
+     "Iran",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "USSR",
+     0
+    ],
+    [
+     "Iran",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": -11,
+   "raw": [],
+   "ar": 5,
+   "war": [
+    {
+     "roll": 6,
+     "mod": -1
+    }
+   ]
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Chernobyl",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Iran",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Liberation_Theology",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Saharan_States",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Panama",
+     "USSR",
+     2
+    ],
+    [
+     "Mexico",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Panama",
+     "USSR",
+     4
+    ],
+    [
+     "Mexico",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "USSR",
+   "card": "Warsaw_Pact_Formed",
+   "mode": "ops",
+   "ops_type": "realignment",
+   "coup": null,
+   "realignments": [
+    {
+     "country": "Nigeria",
+     "rolls": {
+      "USSR": 5,
+      "USA": 6
+     }
+    },
+    {
+     "country": "Nigeria",
+     "rolls": {
+      "USSR": 2,
+      "USA": 4
+     }
+    },
+    {
+     "country": "Nigeria",
+     "rolls": {
+      "USSR": 2,
+      "USA": 2
+     }
+    }
+   ],
+   "placements": [],
+   "removals": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 8,
+   "side": "US",
+   "card": "Brezhnev_Doctrine",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Mexico",
+     "US",
+     1
+    ],
+    [
+     "Panama",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Mexico",
+     "US",
+     3
+    ],
+    [
+     "Panama",
+     "US",
+     6
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Missile_Envy",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "Missile_Envy"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true,
+   "exchanged": "Wargames"
+  },
+  {
+   "kind": "headline",
+   "turn": 9,
+   "side": "US",
+   "card": "Five_Year_Plan",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "Middle_East_Scoring"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "AWACS_Sale_to_Saudis",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Mexico",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Saudi_Arabia",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Saudi_Arabia",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Missile_Envy",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Nigeria",
+     "US",
+     1
+    ],
+    [
+     "Ivory_Coast",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Nigeria",
+     "US",
+     2
+    ],
+    [
+     "Ivory_Coast",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Tear_Down_This_Wall",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 4,
+    "needed": 4
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "One_Small_Step",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": -7,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Iran_Contra_Scandal",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Arms_Race",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Saharan_States",
+    "roll": 6
+   },
+   "realignments": [],
+   "placements": [
+    [
+     "Saharan_States",
+     "US",
+     5
+    ]
+   ],
+   "removals": [
+    [
+     "Saharan_States",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Saharan_States",
+     "USSR",
+     0
+    ],
+    [
+     "Saharan_States",
+     "US",
+     5
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Pershing_II_Deployed",
+   "mode": "ops",
+   "ops_type": "realignment",
+   "coup": null,
+   "realignments": [
+    {
+     "country": "Panama",
+     "rolls": {
+      "USSR": 3,
+      "USA": 2
+     }
+    },
+    {
+     "country": "Panama",
+     "rolls": {
+      "USSR": 6,
+      "USA": 1
+     }
+    },
+    {
+     "country": "Mexico",
+     "rolls": {
+      "USSR": 1,
+      "USA": 3
+     }
+    }
+   ],
+   "placements": [],
+   "removals": [
+    [
+     "Panama",
+     "US",
+     1
+    ],
+    [
+     "Panama",
+     "US",
+     5
+    ],
+    [
+     "Mexico",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Panama",
+     "US",
+     5
+    ],
+    [
+     "Panama",
+     "US",
+     0
+    ],
+    [
+     "Mexico",
+     "USSR",
+     0
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Terrorism",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Shuttle_Diplomacy",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Saudi_Arabia",
+     "USSR",
+     2
+    ],
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Saudi_Arabia",
+     "USSR",
+     5
+    ],
+    [
+     "Iran",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Star_Wars",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": "The_Voice_Of_America",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Korea",
+     "USSR",
+     1
+    ],
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "India",
+     "USSR",
+     2
+    ],
+    [
+     "South_Korea",
+     "USSR",
+     2
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "India",
+     "USSR",
+     1
+    ],
+    [
+     "South_Korea",
+     "USSR",
+     1
+    ],
+    [
+     "South_Korea",
+     "USSR",
+     2
+    ],
+    [
+     "Iran",
+     "USSR",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Soviets_Shoot_Down_KAL_007",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "India",
+     "US",
+     4
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "India",
+     "US",
+     4
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "USSR",
+   "card": null,
+   "mode": null,
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 9,
+   "side": "US",
+   "card": "Aldrich_Ames_Remix",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Brazil",
+     "US",
+     1
+    ],
+    [
+     "Afghanistan",
+     "US",
+     1
+    ],
+    [
+     "Burma",
+     "US",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Brazil",
+     "US",
+     3
+    ],
+    [
+     "Afghanistan",
+     "US",
+     2
+    ],
+    [
+     "Burma",
+     "US",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "headline",
+   "turn": 9,
+   "side": "USSR",
+   "card": "Lone_Gunman",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Colombia",
+     "USSR",
+     1
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "_resolved": true
+  },
+  {
+   "kind": "headline",
+   "turn": 9,
+   "side": "US",
+   "card": "ABM_Treaty",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Iran",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Iran",
+     "USSR",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": []
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "U2_Incident",
+   "mode": "ops",
+   "ops_type": "coup",
+   "coup": {
+    "country": "Brazil",
+    "roll": 1
+   },
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "South_America_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 1
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Latin_American_Death_Squads",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "South_Korea",
+     "USSR",
+     1
+    ],
+    [
+     "Spain_Portugal",
+     "USSR",
+     1
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "South_Korea",
+     "USSR",
+     3
+    ],
+    [
+     "Spain_Portugal",
+     "USSR",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "Asia_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 1,
+   "raw": [],
+   "ar": 2
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Brush_War",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3,
+   "war": [
+    {
+     "roll": 2,
+     "mod": -1
+    }
+   ]
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "An_Evil_Empire",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Iran",
+     "US",
+     3
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Iran",
+     "US",
+     5
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 3
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Africa_Scoring",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": 11,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "Ortega_Elected_in_Nicaragua",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Jordan",
+     "US",
+     1
+    ],
+    [
+     "West_Germany",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "Costa_Rica",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Nicaragua",
+     "US",
+     0
+    ],
+    [
+     "Costa_Rica",
+     "US",
+     0
+    ],
+    [
+     "Jordan",
+     "US",
+     2
+    ],
+    [
+     "West_Germany",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 4
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Yuri_and_Samantha",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Turkey",
+     "USSR",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Turkey",
+     "USSR",
+     2
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "Glasnost",
+   "mode": "space_race",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [],
+   "space": {
+    "roll": 6,
+    "needed": 2
+   },
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 5
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Defectors",
+   "mode": "ops",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [
+    [
+     "Zaire",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "Zaire",
+     "US",
+     1
+    ]
+   ],
+   "vp_after": 12,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "Socialist_Governments",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "France",
+     "US",
+     1
+    ],
+    [
+     "Zaire",
+     "US",
+     1
+    ],
+    [
+     "West_Germany",
+     "US",
+     1
+    ]
+   ],
+   "removals": [
+    [
+     "France",
+     "US",
+     2
+    ],
+    [
+     "West_Germany",
+     "US",
+     1
+    ]
+   ],
+   "discards": [],
+   "space": null,
+   "event_first": true,
+   "post": [
+    [
+     "France",
+     "US",
+     5
+    ],
+    [
+     "West_Germany",
+     "US",
+     2
+    ],
+    [
+     "France",
+     "US",
+     6
+    ],
+    [
+     "Zaire",
+     "US",
+     2
+    ],
+    [
+     "West_Germany",
+     "US",
+     3
+    ]
+   ],
+   "vp_after": null,
+   "raw": [],
+   "ar": 6
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "USSR",
+   "card": "Latin_American_Debt_Crisis",
+   "mode": "event",
+   "ops_type": null,
+   "coup": null,
+   "realignments": [],
+   "placements": [],
+   "removals": [],
+   "discards": [
+    "Iranian_Hostage_Crisis"
+   ],
+   "space": null,
+   "event_first": null,
+   "post": [],
+   "vp_after": null,
+   "raw": [],
+   "ar": 7
+  },
+  {
+   "kind": "play",
+   "turn": 10,
+   "side": "US",
+   "card": "The_China_Card",
+   "mode": "ops",
+   "ops_type": "influence",
+   "coup": null,
+   "realignments": [],
+   "placements": [
+    [
+     "Cuba",
+     "US",
+     1
+    ],
+    [
+     "West_Germany",
+     "US",
+     2
+    ]
+   ],
+   "removals": [],
+   "discards": [],
+   "space": null,
+   "event_first": null,
+   "post": [
+    [
+     "Cuba",
+     "US",
+     1
+    ],
+    [
+     "West_Germany",
+     "US",
+     5
+    ]
+   ],
+   "vp_after": 27,
+   "raw": [],
+   "ar": 7
+  }
+ ],
+ "warnings": []
+}
