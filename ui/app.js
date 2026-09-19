@@ -82,6 +82,16 @@ const MODE_LABELS = {
   un_intervention: "with UN Intervention",
 };
 
+/* Option buttons get the short form: "Operations", not "for operations". The
+ * sentence form above still reads right in the log and the map banner ("US
+ * plays De-Stalinization for operations"). */
+const MODE_BUTTONS = {
+  ops: "Operations",
+  event: "Event",
+  space_race: "Space race",
+  un_intervention: "UN Intervention",
+};
+
 const pretty = (s) => String(s).replace(/_/g, " ");
 const cardName = (cid) => (META[cid] && META[cid].name) || pretty(cid);
 // Escape any string interpolated into innerHTML: engine ids are safe today,
@@ -842,7 +852,7 @@ function optionLabel(o) {
   if (p.stop) return "Done";  // end the "up to" Ops spend early (6.1.3 / 6.2.2)
   if (p.country) return pretty(p.country);
   if (p.card) return p.card === "none" ? "Pass" : cardName(p.card);
-  if (p.mode) return MODE_LABELS[p.mode] || pretty(p.mode);
+  if (p.mode) return MODE_BUTTONS[p.mode] || MODE_LABELS[p.mode] || pretty(p.mode);
   if ("choice" in p) {
     // Same friendly mapping the banner/feed use, so buttons and log agree.
     if (p.choice in CHOICE_WORDS) return CHOICE_WORDS[p.choice];
@@ -1492,10 +1502,39 @@ const FEED_GLYPHS = {
   score: "<path d='M7 21V4'/><path d='M7 5h10.5l-2.4 3.5 2.4 3.5H7'/>",
   headline: "<path d='M12 4l2.3 4.8 5.2.7-3.8 3.5.9 5.1-4.6-2.5-4.6 2.5.9-5.1L4.5 9.5l5.2-.7z'/>",
   card: "<rect x='6' y='4' width='12' height='16' rx='2'/><path d='M9 9h6M9 12.5h6'/>",
-  space: "<path d='M12 3c2.5 1.9 3.8 4.5 3.8 7.5L13.6 13h-3.2L8.2 10.5C8.2 7.5 9.5 4.9 12 3z'/><path d='M9.6 14.2L8 18l3.4-1.2 3.4 1.2-1.6-3.8'/>",
+  space: "<path d='M12 2.8c2.4 2.2 3.6 5 3.6 7.9v2.6H8.4v-2.6c0-2.9 1.2-5.7 3.6-7.9z'/><path d='M8.4 13.3L6 17h12l-2.4-3.7'/><path d='M10.4 17.8L12 21.4l1.6-3.6'/>",
   war: "<path d='M12 3v6M12 15v6M3 12h6M15 12h6M6.4 6.4l3 3M14.6 14.6l3 3M17.6 6.4l-3 3M9.4 14.6l-3 3'/>",
+  // Ops: a counter with a plus, for "spend this card's Operations".
+  ops: "<circle cx='12' cy='12' r='8.5'/><path d='M12 8.2v7.6M8.2 12h7.6'/>",
+  // UN Intervention: a globe, for the card that cancels an event.
+  un: "<circle cx='12' cy='12' r='8.5'/><path d='M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17'/>",
+  done: "<path d='M4.5 12.8l5 4.7 10-11'/>",
   system: "<circle cx='12' cy='12' r='2.6'/>",
 };
+
+/* The same glyphs as markup, for the option buttons (built with innerHTML). */
+function glyphSvg(kind, cls = "ficon") {
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor"` +
+    ` stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">` +
+    `${FEED_GLYPHS[kind] || FEED_GLYPHS.system}</svg>`;
+}
+
+/* Which glyph an option button leads with. */
+function optionGlyph(o) {
+  const p = o.payload || {};
+  if (p.stop) return "done";
+  if (p.mode === "ops") return "ops";
+  if (p.mode === "space_race") return "space";
+  if (p.mode === "un_intervention") return "un";
+  if (p.mode === "event") return "headline";
+  if (p.country) return "influence";
+  if (p.type === "coup") return "coup";
+  if (p.type === "realignment") return "realign";
+  if (p.type === "influence") return "influence";
+  if ("choice" in p) return "card";
+  if (p.card) return "card";
+  return "system";
+}
 
 const CARD_KINDS = new Set([
   "headline_play", "action_round_play", "event_choice", "event_ops_order",
@@ -1948,7 +1987,13 @@ function ctxLine(d) {
     if ((k === "card" || k === "event") && (c[k] === "none" || c[k] === "HIDDEN_CARD")) continue;
     const v = val(k, c[k]);
     if (v === null) continue;
-    parts.push(`<b>${esc(k === "event" ? "Event" : pretty(k))}</b> ${esc(v)}`);
+    // The card is named by the prompt above it ("Play the card"), so a "Card"
+    // label here just repeats the heading: name it and stop.
+    if (k === "card" || k === "event") {
+      parts.push(`<b>${esc(v)}</b>`);
+      continue;
+    }
+    parts.push(`<b>${esc(pretty(k))}</b> ${esc(v)}`);
   }
   return parts.join(" · ");
 }
@@ -2081,8 +2126,8 @@ function renderDecision() {
     for (const o of stopOpts) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "stopbtn";
-      b.innerHTML = `<b>${esc(optionLabel(o))}</b>`;
+      b.className = "stopbtn opt";
+      b.innerHTML = `${glyphSvg(optionGlyph(o), "ficon opticon")}<b>${esc(optionLabel(o))}</b>`;
       b.disabled = busy;
       b.addEventListener("click", () => act(o.index));
       main.append(b);
@@ -2091,7 +2136,8 @@ function renderDecision() {
   }
   for (const o of d.options) {
     const b = document.createElement("button");
-    b.innerHTML = `<b>${esc(optionLabel(o))}</b>`;
+    b.className = "opt";
+    b.innerHTML = `${glyphSvg(optionGlyph(o), "ficon opticon")}<b>${esc(optionLabel(o))}</b>`;
     b.disabled = busy;  // a stale option while an action is in flight
     b.addEventListener("click", () => act(o.index));
     main.append(b);

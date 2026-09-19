@@ -588,7 +588,8 @@ body.decision-center #decision:not([hidden]) {
   transform: translate(-50%, -50%);
   transition: top 0.16s ease-out;
   z-index: 30;
-  width: min(560px, calc(100% - 40px));
+  width: min(460px, calc(100% - 40px));
+  padding: 12px 14px;
   max-height: calc(100% - 32px);
   margin: 0;
   background: rgba(32, 37, 48, 0.95);
@@ -602,6 +603,20 @@ body.decision-center #decision.dragging { cursor: grabbing; }
 body.decision-center #decision.dragging .dhead { cursor: grabbing; }
 body.decision-center #decision .dside { font-size: 18px; }
 body.decision-center #decision .dcol-card { width: 120px; }
+/* Roomier decision rows: the box is narrower, so the options carry the
+ * height instead of a second column of text. */
+body.decision-center #decision button { padding: 12px 14px; }
+body.decision-center #decision .opt { font-size: 15px; }
+
+/* Option buttons: icon then label, centred as a pair. */
+#decision button.opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+#decision button.opt .opticon { width: 21px; height: 21px; flex: none; color: #aab3c4; }
+#decision button.opt:hover .opticon { color: var(--gold); }
 
 #decision strong { font-size: 15px; }
 
