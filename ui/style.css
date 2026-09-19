@@ -302,7 +302,7 @@ main {
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
-  max-width: 46%;
+  max-width: 34%;
   pointer-events: none;
 }
 #effectshud[hidden] { display: none; }
@@ -354,20 +354,121 @@ main {
 .pilelist[hidden] { display: none; }
 
 .feedrow {
-  padding: 3px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 7px;
   border-bottom: 1px solid #262c37;
+  /* The rail is the side: blue US, red USSR, grey for the system. */
+  border-left: 3px solid #3a4252;
   font-size: 12.5px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+.feedrow.us { border-left-color: var(--us); }
+.feedrow.ussr { border-left-color: var(--ussr); }
+.feedrow.fresh { animation: feedin 0.28s ease-out; }
+
+@keyframes feedin {
+  from { opacity: 0; transform: translateY(-3px); background: rgba(255, 213, 74, 0.13); }
+  to { opacity: 1; transform: none; background: none; }
+}
+
+.ficon {
+  flex: none;
+  width: 14px;
+  height: 14px;
   color: var(--muted);
 }
-
-.feedmain {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+.feedrow.us .ficon { color: #6ba4ff; }
+.feedrow.ussr .ficon { color: #ff6b6b; }
+.ftitle {
+  /* flex-basis 0, not auto: the title then takes exactly what is left after
+   * the fixed pieces (glyph, delta, card, toggle) instead of pushing them
+   * onto a second line when the name is long. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fdelta {
+  flex: none;
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.fdelta.us { color: #6ba4ff; }
+.fdelta.ussr { color: #ff6b6b; }
+.fcard {
+  flex: none;
+  width: 20px;
+  height: 27px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid #000;
 }
 
-.feedmain span { flex: 1; min-width: 0; }
+/* A turn header sticks to the top of the scrolling panel, so the round you
+ * are reading is always named. */
+.feedturn {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 6px 0 2px;
+  padding: 2px 0 3px;
+  background: linear-gradient(var(--panel) 70%, rgba(29, 33, 41, 0.75));
+  color: var(--gold);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.feedfilters {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0 2px;
+  flex-wrap: wrap;
+}
+.feedfilters .chip {
+  padding: 1px 7px;
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 10px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.feedfilters .chip:hover { color: var(--text); }
+.feedfilters .chip[aria-pressed="true"] {
+  background: #33415c;
+  border-color: #4a6389;
+  color: var(--text);
+}
+
+/* VP arc: filled above the line while the US leads, below while the USSR
+ * does, with a tick where a scoring card landed. */
+.vpstrip { margin: 2px 0 0; }
+.vphead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.vphead b { font-variant-numeric: tabular-nums; }
+.vpstrip svg { display: block; width: 100%; height: 30px; }
+.vpstrip .vpmid { stroke: #3a4252; stroke-width: 0.4; }
+.vpstrip .vpline { fill: none; stroke: var(--text); stroke-width: 0.9; opacity: 0.75; }
+.vpstrip .vparea.us { fill: rgba(47, 111, 237, 0.35); }
+.vpstrip .vparea.ussr { fill: rgba(212, 58, 58, 0.32); }
+.vpstrip .vptick { stroke: var(--gold); stroke-width: 0.5; opacity: 0.7; }
 
 .feedtoggle {
   flex: none;
@@ -384,11 +485,8 @@ main {
 }
 .feedtoggle:hover { color: var(--text); border-color: #5a6572; }
 
-.feedmain b { font-weight: 700; }
-.feedmain b.us { color: #3b9eff; }
-.feedmain b.ussr { color: #ff2d2d; }
-
 .feeddetail {
+  flex-basis: 100%;
   margin-top: 2px;
   padding-left: 8px;
   border-left: 2px solid #3a4252;
