@@ -2555,6 +2555,60 @@ class Engine:
             {"side": side.value, "country": country, "ops": ops},
         )
 
+    def coup_forecast(self, decision: Decision, country: str) -> dict:
+        """What each die would do to `country`, for a pending Coup target.
+
+        Reads the same decision context the resolver will (`ops` plus the
+        region bonuses that apply to this country) and the same roll
+        modifiers, so the table is what will actually happen, not an
+        approximation of it. The UI shows this on hover so a player can see
+        the odds before committing.
+        """
+        if decision.kind is not DecisionKind.COUP_TARGET:
+            raise ValueError("coup_forecast needs the coup target decision")
+        side = decision.actor
+        opponent = side.opponent
+        info = self.board.countries[country]
+        ops = decision.context["ops"]
+        bonus = decision.context.get("bonus") or []
+        ops += sum(1 for b in bonus if self._in_bonus_region(country, b))
+        own_inf = self.board.influence[country][side.value]
+        opp_inf = self.board.influence[country][opponent.value]
+        modifier = self._coup_roll_modifier(side, info)
+        nuclear_subs = side is Side.US and bool(self.turn_effects.get("nuclear_subs"))
+        defcon_drop = info.battleground and not nuclear_subs
+
+        rows = []
+        for roll in range(1, 7):
+            margin = roll + ops - 2 * info.stability + modifier
+            removed = min(max(margin, 0), opp_inf)
+            rows.append(
+                {
+                    "roll": roll,
+                    "margin": margin,
+                    "removed": removed,
+                    "added": max(margin, 0) - removed,
+                    "defcon": -1 if defcon_drop else 0,
+                }
+            )
+        return {
+            "kind": "coup",
+            "side": side.value,
+            "country": country,
+            "ops": ops,
+            "stability": info.stability,
+            "modifier": modifier,
+            "own_influence": own_inf,
+            "opponent_influence": opp_inf,
+            "battleground": bool(info.battleground),
+            "defcon_drop": defcon_drop,
+            "nuclear_subs": nuclear_subs,
+            # A coup attempt by this side while CMC flags them ends the game.
+            "loses_game": self.turn_effects.get("cuban_missile_crisis") == side.value,
+            "yuri_vp": side is Side.US and bool(self.turn_effects.get("yuri_samantha")),
+            "rows": rows,
+        }
+
     def _handle_coup_roll(self, decision: Decision, action: Action) -> None:
         side = Side(decision.context["side"])
         country = decision.context["country"]
@@ -2997,13 +3051,24 @@ class Engine:
         self._maybe_push_realignment_target(side, card_ops, spent + 1, alive)
 
     def _realignment_bonus(self, side: Side, country: str) -> int:
-        bonus = 1 if self.board.is_adjacent(side.value, country) else 0
-        bonus += sum(1 for n in self.board.neighbors(country) if self.board.control(n) is side)
-        # 6.2.2's third modifier: +1 if this side already holds more
-        # Influence in the target than their opponent does.
-        if self.board.influence[country][side.value] > self.board.influence[country][side.opponent.value]:
-            bonus += 1
-        return bonus
+        return sum(self._realignment_bonus_parts(side, country).values())
+
+    def _realignment_bonus_parts(self, side: Side, country: str) -> dict:
+        """The 6.2.2 modifiers, itemised so the UI can explain the odds:
+        adjacency, control of neighbouring countries, and holding more
+        Influence in the target than the opponent does."""
+        return {
+            "adjacency": 1 if self.board.is_adjacent(side.value, country) else 0,
+            "neighbours": sum(
+                1 for n in self.board.neighbors(country) if self.board.control(n) is side
+            ),
+            "influence": (
+                1
+                if self.board.influence[country][side.value]
+                > self.board.influence[country][side.opponent.value]
+                else 0
+            ),
+        }
 
     def _realignment_modifier(self, side: Side) -> int:
         """Per-turn additive modifier to the acting side's realignment roll
@@ -3011,6 +3076,64 @@ class Engine:
         if side is Side.US and self.turn_effects.get("iran_contra"):
             return -1
         return 0
+
+    def realignment_forecast(self, decision: Decision, country: str) -> dict:
+        """The 36 realignment outcomes in `country`, for a pending target.
+
+        Both dice are one d6 each and the modifiers are public (adjacency,
+        control of neighbours, existing influence, Iran-Contra), so the whole
+        table is enumerable. Mirrors `_handle_realignment_opponent_roll`
+        exactly — including that this engine only ever removes the loser's
+        influence, it does not move the excess to the winner.
+        """
+        if decision.kind is not DecisionKind.REALIGNMENT_TARGET:
+            raise ValueError("realignment_forecast needs the realignment target decision")
+        side = decision.actor
+        opponent = side.opponent
+        own_bonus = self._realignment_bonus(side, country)
+        opp_bonus = self._realignment_bonus(opponent, country)
+        own_parts = self._realignment_bonus_parts(side, country)
+        opp_parts = self._realignment_bonus_parts(opponent, country)
+        modifier = self._realignment_modifier(side)
+        own_inf = self.board.influence[country][side.value]
+        opp_inf = self.board.influence[country][opponent.value]
+
+        wins = ties = losses = 0
+        outcomes: dict[int, int] = {}
+        for actor_roll in range(1, 7):
+            for opp_roll in range(1, 7):
+                margin = (actor_roll + own_bonus + modifier) - (opp_roll + opp_bonus)
+                if margin > 0:
+                    delta = min(margin, opp_inf)      # what the opponent loses
+                    wins += 1
+                elif margin < 0:
+                    delta = -min(-margin, own_inf)    # what this side loses
+                    losses += 1
+                else:
+                    delta = 0
+                    ties += 1
+                outcomes[delta] = outcomes.get(delta, 0) + 1
+        expected = sum(delta * n for delta, n in outcomes.items()) / 36
+        return {
+            "kind": "realignment",
+            "side": side.value,
+            "country": country,
+            "own_bonus": own_bonus,
+            "opponent_bonus": opp_bonus,
+            "own_parts": own_parts,
+            "opponent_parts": opp_parts,
+            "modifier": modifier,
+            "own_influence": own_inf,
+            "opponent_influence": opp_inf,
+            "wins": wins,
+            "ties": ties,
+            "losses": losses,
+            "expected_delta": round(expected, 2),
+            "outcomes": [
+                {"delta": delta, "count": count}
+                for delta, count in sorted(outcomes.items())
+            ],
+        }
 
     # -- shared -------------------------------------------------------------
 

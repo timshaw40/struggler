@@ -548,6 +548,40 @@ main {
 
 #countrytip .ussr { color: #e57373; font-weight: 600; }
 
+/* Hover odds: the per-die table for a Coup, the 36-outcome split for a
+ * Realignment. Numbers come from the engine's own forecast endpoint. */
+#countrytip .odds { margin-top: 6px; }
+#countrytip .odhead {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+#countrytip .odhead.odwait { text-transform: none; letter-spacing: 0; font-style: italic; }
+#countrytip .odtable { width: 100%; border-collapse: separate; border-spacing: 0 1px; }
+#countrytip .odtable td { padding: 1px 3px; font-size: 12.5px; }
+#countrytip .odtable td.d6 {
+  width: 20px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid #3a4252;
+  border-radius: 4px;
+}
+#countrytip .odnone { color: var(--muted); }
+#countrytip .oddefcon { color: var(--gold); font-size: 11px; white-space: nowrap; }
+#countrytip .odsum { margin-top: 4px; font-size: 12px; color: var(--text); }
+#countrytip .odwarn { margin-top: 3px; font-size: 12px; color: var(--gold); }
+#countrytip .odbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 3px 0 5px; }
+#countrytip .odbar .w { background: var(--us); }
+#countrytip .odbar .t { background: #4a5162; }
+#countrytip .odbar .l { background: var(--ussr); }
+#countrytip .odline { font-size: 12px; color: var(--muted); }
+#countrytip .odline b { color: var(--text); }
+#countrytip .odsmall { font-size: 11px; }
+
 #dicebox {
   position: absolute;
   z-index: 20;
