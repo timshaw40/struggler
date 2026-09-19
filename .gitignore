@@ -27,3 +27,14 @@ Thumbs.db
 
 # Outputs
 logs/
+
+# User-supplied art (scans/PDF-derived images). Never commit these; the
+# installer writes here from the user's own copy of the game.
+ui/assets/
+*.pdf
+
+# User-supplied data archives. Never commit these (same rule as the PDFs).
+twilight_struggle_sessions.txt
+
+# Local tool caches / vendor downloads (e.g. the VASSAL module).
+.cache/
