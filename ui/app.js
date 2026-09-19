@@ -49,6 +49,12 @@ const expandedRows = new Set();    // history rows the user opened, by absolute 
 let feedFilter = localStorage.getItem("struggler.histfilter") || "all";
 const seenRows = new Set();        // rows already drawn once, for the entrance tint
 let firstFeedBuild = true;
+/* Where the action box lives: floating in the middle of the map, or pinned to
+ * the bottom of the right column (where it has always been). One element
+ * moves between the two hosts, so a decision renders identically either way,
+ * and the settings toggle is the rollback. */
+let decisionPlace = localStorage.getItem("struggler.decisionPlace") || "center";
+let decisionDragged = false;   // once moved by hand, stop auto-positioning it
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -177,6 +183,8 @@ async function bootInner() {
   previewEl = preview;
   actionBar = $("#actionbar");
   enableDragPan();
+  enableDecisionDrag();
+  applyDecisionPlacement();
   buildViewBar();
   window.addEventListener("resize", layoutBoard);
   setView(view);
@@ -1494,6 +1502,11 @@ const CARD_KINDS = new Set([
   "event_resume", "play_mode", "ops_type", "event_influence",
 ]);
 const COUP_KINDS = new Set(["coup_target", "coup_roll"]);
+/* Decisions whose answer is a country on the map: the floating action box has
+ * to keep out of their way (see renderDecision). */
+const COUNTRY_PICK_KINDS = new Set([
+  "place_influence", "coup_target", "realignment_target", "war_target",
+]);
 const REALIGN_KINDS = new Set([
   "realignment_target", "realignment_actor_roll", "realignment_opponent_roll",
 ]);
@@ -1944,6 +1957,11 @@ function renderDecision() {
   const box = $("#decision");
   box.textContent = "";
   const d = state.decision;
+  // A country pick needs the map: the box drops to the bottom band so the
+  // countries stay clickable, and steps back to the middle for everything
+  // else. Once the player drags it, their spot wins for the session.
+  box.classList.toggle("pick", !!d && COUNTRY_PICK_KINDS.has(d.kind));
+  if (decisionDragged) box.classList.remove("pick");
   if (!d && !busy) {
     if (state.watch && !state.is_terminal) {
       const note = document.createElement("em");
@@ -2111,6 +2129,9 @@ function fillSettings() {
     `<p>Seed ${state ? state.seed : "—"}</p>` +
     `<label><input type="checkbox" id="set-sound"${localStorage.getItem("struggler.sound") !== "0" ? " checked" : ""}> Sound</label>` +
     `<label><input type="checkbox" id="set-ccw"${localStorage.getItem("struggler.ccw") !== "0" ? " checked" : ""}> Chinese Civil War (next game)</label>` +
+    `<p>Action box</p>` +
+    `<label><input type="radio" name="set-place" value="center"${decisionPlace === "center" ? " checked" : ""}> Middle of the map <em>(drag it by its header)</em></label>` +
+    `<label><input type="radio" name="set-place" value="panel"${decisionPlace === "panel" ? " checked" : ""}> Right column</label>` +
     `<p>Play as <em>(next game)</em></p>` +
     `<label><input type="radio" name="set-side" value="US"${play !== "USSR" ? " checked" : ""}> US</label>` +
     `<label><input type="radio" name="set-side" value="USSR"${play === "USSR" ? " checked" : ""}> USSR</label>` +
@@ -2126,6 +2147,13 @@ function fillSettings() {
   $("#set-ccw").addEventListener("change", (e) => {
     localStorage.setItem("struggler.ccw", e.target.checked ? "1" : "0");
   });
+  for (const r of document.querySelectorAll("input[name=set-place]")) {
+    r.addEventListener("change", () => {
+      decisionPlace = r.value;
+      localStorage.setItem("struggler.decisionPlace", decisionPlace);
+      applyDecisionPlacement();
+    });
+  }
   for (const r of document.querySelectorAll("input[name=set-side]")) {
     r.addEventListener("change", () => localStorage.setItem("struggler.side", r.value));
   }
@@ -2271,6 +2299,50 @@ function toggleSettings() {
   if (!box) return;
   box.hidden = !box.hidden;
   if (!box.hidden) fillSettings();
+}
+
+/* Move the action box between the map and the right column. */
+function applyDecisionPlacement() {
+  const box = $("#decision");
+  if (!box) return;
+  const host = decisionPlace === "center" ? $("#boardarea") : $("#panel");
+  if (host && box.parentElement !== host) host.append(box);
+  document.body.classList.toggle("decision-center", decisionPlace === "center");
+  if (decisionPlace !== "center") {
+    box.style.left = "";
+    box.style.top = "";
+    box.style.transform = "";
+  }
+  if (state) renderDecision();   // may run before the first /state reply
+}
+
+/* Drag the floating box out of the way of the countries you are picking. Only
+ * the header drags, so the option buttons keep behaving like buttons. */
+function enableDecisionDrag() {
+  const box = $("#decision");
+  let grab = null;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  box.addEventListener("pointerdown", (ev) => {
+    if (!document.body.classList.contains("decision-center")) return;
+    if (ev.target.closest("button, a, input, select")) return;
+    const rect = box.getBoundingClientRect();
+    grab = { dx: ev.clientX - rect.left, dy: ev.clientY - rect.top };
+    box.classList.add("dragging");
+    box.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  box.addEventListener("pointermove", (ev) => {
+    if (!grab) return;
+    decisionDragged = true;
+    const area = $("#boardarea").getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
+    box.style.transform = "none";
+    box.style.left = `${Math.round(clamp(ev.clientX - area.left - grab.dx, 4, area.width - rect.width - 4))}px`;
+    box.style.top = `${Math.round(clamp(ev.clientY - area.top - grab.dy, 4, area.height - rect.height - 4))}px`;
+  });
+  const release = () => { grab = null; box.classList.remove("dragging"); };
+  box.addEventListener("pointerup", release);
+  box.addEventListener("pointercancel", release);
 }
 
 boot();
