@@ -129,6 +129,17 @@ Prefer your own print-and-play PDFs instead? `scripts/render_assets.py
 same `ui/assets/` layout from them, and `scripts/calibrate_countries.py`
 derives matching marker positions.
 
+## Expert logs
+
+`parsed/` holds five complete tournament games as engine-shaped JSON.
+`scripts/replay_game.py` drives one through the engine in replay mode: both
+hands hidden, cards declared when the log plays them, and every recorded
+board/VP snapshot asserted along the way, so a mismatch names the decision it
+happened at. `scripts/extract_training.py` reads the same corpus and reports
+how often the greedy bot picks the move the expert picked, counting only
+decisions where the hand was known. See
+[docs/BOTS.md](docs/BOTS.md) for what that number is and is not.
+
 ## Add a new bot
 
 Every player, human or bot, uses the same `Player` interface:

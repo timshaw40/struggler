@@ -543,6 +543,23 @@ behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`
 over many seeds, both seat assignments) — a regression net for "the
 heuristics still actually help," not a claim of strategic strength.
 
+## Expert decisions are evidence, not labels
+
+`scripts/replay_game.py` replays a parsed expert game through the engine in
+replay mode: both hands hidden, cards declared when the log plays them, and
+every recorded board/VP snapshot asserted, so a divergence names the decision
+it happened at. The corpus under `parsed/` is derived factual data (the
+source archive stays gitignored, same rule as the PDFs).
+
+`scripts/extract_training.py` stops at the **first divergence** (fallback or
+board/VP mismatch) and flags `hand_known` per row: in replay mode a hidden hand
+is a placeholder set, so a card-choice decision's candidate list is a superset
+of what the expert held and its agreement is not comparable. Agreement is
+reported over hand-known eligible decisions only, split by whole games
+(`--holdout-every`), along with a per-game coverage report
+(`first_divergence_record`, `hand_unknown_decisions`). It is a rules/decision
+check, not a validated strength label.
+
 ## Server authority, undo, and durable games (serve_ui)
 
 - `POST /action` carries `{game_id, decision_id, index}` and the session
