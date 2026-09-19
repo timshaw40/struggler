@@ -348,20 +348,66 @@ async function act(index) {
   }
 }
 
+/* How long a chit takes to fly to the board. Must match .flypip's transform
+ * transition in style.css: the clack is scheduled for the moment of impact,
+ * not the moment the chit leaves the edge of the screen. */
+const FLY_MS = 400;
+
+/* Short white noise, made once and reused: the contact tick of a cardboard
+ * counter meeting a paper map. */
+function noiseBuffer(ctx) {
+  const frames = Math.max(1, Math.floor(ctx.sampleRate * 0.05));
+  const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+/* One influence chit landing: a filtered noise tick for the contact, over a
+ * pair of damped low partials that give it a body, with a small downward
+ * bend so it reads as something with weight rather than a beep. Each hit is
+ * detuned a little, and placements landing inside a batch step up so a drop
+ * of three influence sounds like tok, tok, tok instead of a machine. */
 function placeSound() {
   if (localStorage.getItem("struggler.sound") === "0") return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   const ctx = placeSound.ctx || (placeSound.ctx = new AC());
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = "square";
-  o.frequency.value = 880;
-  g.gain.setValueAtTime(0.07, ctx.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-  o.connect(g).connect(ctx.destination);
-  o.start();
-  o.stop(ctx.currentTime + 0.09);
+  if (ctx.state === "suspended") ctx.resume();  // first click may not have unlocked it yet
+
+  const now = ctx.currentTime;
+  const since = placeSound.last === undefined ? Infinity : now - placeSound.last;
+  const run = since < 0.3 ? Math.min((placeSound.run ?? 0) + 1, 4) : 0;
+  placeSound.last = now;
+  placeSound.run = run;
+  const pitch = (1 + run * 0.07) * (0.97 + Math.random() * 0.06);
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = placeSound.noise || (placeSound.noise = noiseBuffer(ctx));
+  const band = ctx.createBiquadFilter();
+  band.type = "bandpass";
+  band.frequency.value = 2300 * pitch;
+  band.Q.value = 0.8;
+  const tick = ctx.createGain();
+  tick.gain.setValueAtTime(0.08, now);
+  tick.gain.exponentialRampToValueAtTime(0.0006, now + 0.03);
+  noise.connect(band).connect(tick).connect(ctx.destination);
+  noise.start(now);
+  noise.stop(now + 0.05);
+
+  for (const [freq, level, decay] of [[214, 0.085, 0.15], [321, 0.04, 0.1]]) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "triangle";
+    const f = freq * pitch;
+    o.frequency.setValueAtTime(f * 1.11, now);
+    o.frequency.exponentialRampToValueAtTime(f, now + 0.05);
+    g.gain.setValueAtTime(level, now);
+    g.gain.exponentialRampToValueAtTime(0.0006, now + decay);
+    o.connect(g).connect(ctx.destination);
+    o.start(now);
+    o.stop(now + decay + 0.02);
+  }
 }
 
 /* US chits fly in from the left edge, USSR from the right, then a short
@@ -392,12 +438,33 @@ function flyDiff() {
 
 /* Queue a set of chip fly-ins and WAIT for them to land, so the next FX (the
  * opponent's move) doesn't start on top of them. */
-function enqueuePlacements(jobs) {
+function placementStagger(n) {
+  if (n < 2) return 0;
+  // A fixed 120 ms stagger makes a seven-influence setup dump run for 840 ms
+  // while the player is already clicking the next country. Shrink it so the
+  // whole batch still reads as a sequence and still lands inside its budget.
+  return Math.min(PLACEMENT_STAGGER_MS, Math.floor(PLACEMENT_STAGGER_BUDGET_MS / (n - 1)));
+}
+
+function flyBatch(jobs, stagger) {
+  return new Promise((resolve) => {
+    jobs.forEach(([cid, side], i) => setTimeout(() => flyPip(cid, side), i * stagger));
+    // Resolve when the last chit lands (plus a hair), not on a fixed guess.
+    setTimeout(resolve, (jobs.length - 1) * stagger + FLY_MS + 60);
+  });
+}
+
+function enqueuePlacements(jobs, { priority = false } = {}) {
   if (!jobs.length) return;
-  enqueueFx(() => new Promise((resolve) => {
-    jobs.forEach(([cid, side], i) => setTimeout(() => flyPip(cid, side), i * 120));
-    setTimeout(resolve, (jobs.length - 1) * 120 + 500);
-  }));
+  const stagger = placementStagger(jobs.length);
+  // Past this depth the queue is animating a board the player has already left
+  // behind. Their own chits fly at once so the click still answers; the
+  // opponent's are dropped outright, since the markers are already correct.
+  if (fxBacklog >= FX_BACKLOG_LIMIT) {
+    if (priority) flyBatch(jobs, stagger);
+    return;
+  }
+  enqueueFx(() => flyBatch(jobs, stagger));
 }
 
 /* A short beat between the player's move and the opponent's, so the two turns
@@ -409,7 +476,9 @@ function enqueueBeat(ms = 400) {
 function flyPip(cid, side) {
   const p = POS[cid];
   if (!p) return;
-  placeSound();  // only for a placement that actually hits the board
+  // Only for a placement that actually hits the board, and timed to the
+  // landing rather than the launch.
+  setTimeout(placeSound, FLY_MS);
   const box = $("#boardbox").getBoundingClientRect();
   const x = box.left + (p.x + (p.w || 0) / 2 / BOARD_W) * box.width;
   const y = box.top + (p.y + 0.62 * (p.h || 0) / BOARD_H) * box.height;
@@ -439,6 +508,14 @@ let pendingRealignActor = null;  // actor roll awaiting its opponent roll across
  * own rolls rather than bury the player's. */
 let fxChain = Promise.resolve();
 let fxBacklog = 0;
+
+/* Chit fly-in pacing. The stagger shrinks as a batch grows so one placement
+ * can't run past the player's next click, and a queue deeper than the limit
+ * stops growing: at that point the animation is describing a board the player
+ * has already moved on from (see enqueuePlacements). */
+const PLACEMENT_STAGGER_MS = 120;
+const PLACEMENT_STAGGER_BUDGET_MS = 420;
+const FX_BACKLOG_LIMIT = 3;
 
 function enqueueFx(fn) {
   fxBacklog += 1;
@@ -1068,8 +1145,13 @@ function render() {
   // Order the FX so one side's turn reads as one beat: the player's placements
   // land first, then a short pause, then the opponent's reveals/rolls/placements.
   const fly = flyDiff();
-  enqueuePlacements(fly.human);
-  enqueueBeat();
+  // The player's own chits are priority: if their click lands while the queue
+  // is still busy, it must not sit behind it.
+  enqueuePlacements(fly.human, { priority: true });
+  // Only pause between the turns when the opponent actually did something.
+  // catchUp() polls the server faster than the FX play, so an unguarded beat
+  // charged 400 ms of dead air to every one of the bot's setup placements.
+  if (fly.opp.length) enqueueBeat();
   drainRolls();
   enqueuePlacements(fly.opp);
   renderBoard();
