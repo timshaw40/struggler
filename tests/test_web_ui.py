@@ -1,0 +1,289 @@
+"""Smoke tests for the local web UI (scripts/serve_ui.py)."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import threading
+import urllib.request
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+
+_spec = importlib.util.spec_from_file_location("serve_ui", ROOT / "scripts" / "serve_ui.py")
+serve_ui = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(serve_ui)
+
+
+def make_session() -> serve_ui.Session:
+    return serve_ui.Session(seed=3, us="human", ussr="greedy", events=True)
+
+
+def test_two_human_seats_refused() -> None:
+    with pytest.raises(SystemExit):
+        serve_ui.Session(seed=1, us="human", ussr="human", events=True)
+
+
+def test_watch_mode_steps_one_move_per_poll() -> None:
+    session = serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
+    assert session.watch and session.human_side.value == "US"
+    before = len(session.history.history)
+    session.step_once()
+    assert len(session.history.history) == before + 1
+    state = session.state()
+    assert state["watch"] is True
+    # A spectator never sees a decision to act on, even while a bot's
+    # decision is pending.
+    assert state["decision"] is None
+
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        first = json.load(urllib.request.urlopen(base + "/state"))["history"]
+        second = json.load(urllib.request.urlopen(base + "/state"))["history"]
+        assert len(second) > len(first)
+    finally:
+        server.shutdown()
+
+
+def test_state_history_len_is_monotonic_while_history_is_capped() -> None:
+    # The client drains animations using `history_len` (a monotonic total);
+    # `history` is only a trailing window, so its length must stop growing at
+    # 60 while history_len keeps climbing. Otherwise all FX die at 60 events.
+    session = serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
+    for _ in range(90):
+        if session.engine.is_terminal:
+            break
+        session.step_once()
+    total = len(session.history.history)
+    payload = session.state()
+    assert payload["history_len"] == total
+    assert len(payload["history"]) == min(60, total)
+    if total > 60:
+        assert len(payload["history"]) == 60
+
+
+def test_advance_parks_on_human_decision() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    assert not state["is_terminal"]
+    assert state["decision"] is not None
+    assert state["decision"]["options"] == [
+        {"index": i, "kind": a.kind.value, "payload": dict(a.payload)}
+        for i, a in enumerate(session.engine.legal_actions())
+    ]
+
+
+def test_act_steps_option_and_advances() -> None:
+    session = make_session()
+    session.advance()
+    first = session.engine.pending_decision
+    session.act(0)
+    after = session.engine.pending_decision
+    assert after is not None and after.id != first.id
+    state = session.state()
+    # Between human decisions the server may resolve bot/CHANCE work; what
+    # it never does is surface a decision addressed to the other seat.
+    assert state["decision"] is None or not state["is_terminal"]
+
+
+def test_state_hides_opponent_hand() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    opponent = "USSR" if session.human_side.value == "US" else "US"
+    for cid in state["hand"]:
+        assert cid in session.engine.hands[session.human_side.value]
+    for cid in session.engine.hands[opponent]:
+        assert cid not in json.dumps(state)
+
+
+def test_http_state_and_action_roundtrip() -> None:
+    session = make_session()
+    session.advance()
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        static = urllib.request.urlopen(base + "/style.css")
+        assert static.status == 200
+        state = json.load(urllib.request.urlopen(base + "/state"))
+        assert state["decision"] is not None and state["decision"]["options"]
+        reply = urllib.request.urlopen(
+            urllib.request.Request(
+                base + "/action",
+                data=json.dumps({"index": 0}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+        )
+        after = json.load(reply)
+        assert after["decision"] is not None or after["is_terminal"]
+    finally:
+        server.shutdown()
+
+
+def test_forfeit_starts_a_new_game() -> None:
+    session = make_session()
+    session.advance()
+    old = session.seed
+    winner = session.forfeit()
+    assert winner == "USSR"
+    assert session.seed == old + 1
+    assert not session.engine.is_terminal
+    session.advance()
+    assert session.engine.pending_decision is not None
+    assert session.engine.pending_decision.actor is session.human_side
+
+
+def test_restart_can_switch_side_and_us_extra() -> None:
+    session = make_session()
+    session.restart(side="USSR", setup_us_extra=2)
+    assert session.human_side.value == "USSR"
+    assert session.ussr == "human" and session.us == "greedy"
+    session.advance()
+    d = session.engine.pending_decision
+    assert d.actor.value == "USSR"  # setup: USSR places first
+    session.restart(side="US", setup_us_extra=2)
+    eng = session.engine
+    # Walk USSR's 6 setup points (greedy), then US should have 7+2 remaining.
+    while (
+        eng.pending_decision
+        and eng.pending_decision.actor.value == "USSR"
+        and eng.pending_decision.context.get("setup")
+    ):
+        eng.step(eng.pending_decision.options[0])
+    d = eng.pending_decision
+    assert d.actor.value == "US" and d.context["remaining"] == 9
+
+
+def test_undo_takes_back_the_last_human_action() -> None:
+    session = make_session()
+    session.advance()
+    before = session.engine.serialize()
+    hist_len = len(session.history.history)
+    hand = list(session.engine.hands[session.human_side.value])
+    session.act(0)
+    assert len(session.history.history) > hist_len
+    session.undo()
+    assert session.engine.serialize() == before
+    assert len(session.history.history) == hist_len
+    assert list(session.engine.hands[session.human_side.value]) == hand
+    assert session.engine.pending_decision.actor is session.human_side
+
+
+def test_undo_without_an_action_fails() -> None:
+    session = make_session()
+    with pytest.raises(RuntimeError, match="nothing to undo"):
+        session.undo()
+
+
+def test_restart_can_drop_ccw() -> None:
+    session = make_session()
+    assert "Chinese_Civil_War" in session.engine.board.countries
+    session.restart(include_ccw=False)
+    assert "Chinese_Civil_War" not in session.engine.board.countries
+    assert "Chinese_Civil_War" not in session.engine.board.neighbors("USSR")
+
+
+def test_restart_opts_tolerates_bad_setup_us_extra() -> None:
+    # Tampered/legacy localStorage can send null or a string; the restart must
+    # not 500, and the value is clamped 0-6.
+    assert serve_ui._restart_opts({"setup_us_extra": None}) == {}
+    assert serve_ui._restart_opts({"setup_us_extra": "nope"}) == {}
+    assert serve_ui._restart_opts({"setup_us_extra": 99})["setup_us_extra"] == 6
+    assert serve_ui._restart_opts({"setup_us_extra": -3})["setup_us_extra"] == 0
+
+
+def test_http_forfeit_reports_the_winner_and_starts_fresh() -> None:
+    session = make_session()  # human = US
+    session.advance()
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        reply = json.load(urllib.request.urlopen(urllib.request.Request(
+            base + "/forfeit", data=b"{}", headers={"Content-Type": "application/json"},
+        )))
+        assert reply["forfeit"] is True
+        assert reply["winner"] == "USSR"  # not null (state()'s fresh-game winner)
+        assert reply["is_terminal"] is False  # forfeit also starts a new game
+    finally:
+        server.shutdown()
+
+
+def test_action_rejects_a_stale_decision_id() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    good = state["decision"]["id"]
+    with pytest.raises(RuntimeError, match="stale"):
+        session.act(0, game_id=state["game_id"], decision_id=good + 999)
+    # The right ids are accepted.
+    session.act(0, game_id=state["game_id"], decision_id=good)
+    assert session.engine.pending_decision is not None
+
+
+def test_action_rejects_a_stale_game_id() -> None:
+    session = make_session()
+    session.advance()
+    state = session.state()
+    with pytest.raises(RuntimeError, match="stale game"):
+        session.act(0, game_id=state["game_id"] + 1, decision_id=state["decision"]["id"])
+
+
+def test_undo_restores_a_buffered_opponent_headline() -> None:
+    # USSR (bot) picks its headline first and is buffered; the human then
+    # headlines. Undo must put the buffer back, not just truncate lengths.
+    session = make_session()  # human = US
+    # Drive through setup to the human's headline decision.
+    for _ in range(50):
+        d = session.engine.pending_decision
+        if d is None or (d.kind.value == "headline_play" and d.actor is session.human_side):
+            break
+        if d.actor is session.human_side:
+            session.act(0)
+        else:
+            session.advance()
+    decision = session.engine.pending_decision
+    assert decision.kind.value == "headline_play" and decision.actor.value == "US"
+    assert len(session.history._pending_headline) == 1  # USSR pick buffered
+
+    session.act(0)  # US headlined; the buffer emptied
+    assert len(session.history._pending_headline) == 0
+
+    session.undo()
+    assert len(session.history._pending_headline) == 1  # restored
+    assert session.engine.pending_decision.actor.value == "US"
+
+
+def test_game_log_is_written_and_can_resume(tmp_path) -> None:
+    session = make_session()
+    session.log_dir = str(tmp_path)
+    session._open_log()
+    session.advance()
+    session.act(0)
+    session.advance()
+
+    log_path = tmp_path / f"game_{session.game_id}.json"
+    assert log_path.is_file()
+    log = json.loads(log_path.read_text())
+    assert log["actions"] and log["new_game"] is True
+
+    resumed = serve_ui.Session.resume(
+        str(log_path), us="human", ussr="greedy", log_dir=str(tmp_path)
+    )
+    assert resumed.engine.serialize() == session.engine.serialize()
+    assert len(resumed.history.history) == len(session.history.history)
+    # It can keep playing.
+    resumed.advance()
+    assert resumed.engine.pending_decision is not None

@@ -543,3 +543,16 @@ behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`
 over many seeds, both seat assignments) — a regression net for "the
 heuristics still actually help," not a claim of strategic strength.
 
+## Server authority, undo, and durable games (serve_ui)
+
+- `POST /action` carries `{game_id, decision_id, index}` and the session
+  rejects a stale game/decision id or a non-human actor (409), so a duplicated
+  or late click can never advance a decision it wasn't answering. `/state`
+  includes `game_id` and `decision.id`; the client resyncs on a rejection.
+- Undo snapshots the full HistoryBuilder state (history **and** the buffered
+  headline pick), not just list lengths, so `← Back` restores an opponent
+  headline that had been buffered before the human's pick.
+- `--log-dir DIR` writes each game to `DIR/game_<id>.json` (the same
+  `GameLogWriter` replay format) and finalizes it on restart/forfeit; undo
+  rewrites the log to match the rewound game. `--resume-log FILE` continues a
+  saved game (via `replay_history`) instead of dealing fresh.
