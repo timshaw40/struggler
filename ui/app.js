@@ -480,7 +480,12 @@ function flyPip(cid, side) {
   // landing rather than the launch.
   setTimeout(placeSound, FLY_MS);
   const box = $("#boardbox").getBoundingClientRect();
-  const x = box.left + (p.x + (p.w || 0) / 2 / BOARD_W) * box.width;
+  // Land on the side's own influence column, not the box centre: the pips sit
+  // at 4%..48% (US) and 52%..96% (USSR) of the box width, so their midpoints
+  // are 26% and 74%. Landing on the dashed divider made every chit look a
+  // half-column off from the counter it was announcing.
+  const column = side === "USSR" ? 0.74 : 0.26;
+  const x = box.left + (p.x + (p.w || 0) * column / BOARD_W) * box.width;
   const y = box.top + (p.y + 0.62 * (p.h || 0) / BOARD_H) * box.height;
   const img = document.createElement("img");
   img.className = "flypip";
