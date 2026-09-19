@@ -10,8 +10,46 @@ vendor SDK -- so adding a new provider means writing a new adapter module
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
+
+# Explicit per-call timeout for provider SDKs (seconds). The SDKs default to
+# 600s themselves; naming it here makes it tunable and documents the bound.
+DEFAULT_TIMEOUT = 600.0
+
+_SECRET_PATTERNS = (
+    re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),  # OpenAI-style keys
+    re.compile(r"(?i)api[_-]?key['\"]?\s*[:=]\s*['\"]?[^\s'\"]+"),
+    re.compile(r"Bearer\s+[A-Za-z0-9._\-]{8,}"),
+)
+
+
+def redact_secrets(text: str) -> str:
+    """Blank out anything that looks like a credential before an error string
+    is persisted (provider auth errors often echo the offending key)."""
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub("[redacted]", text)
+    return text
+
+
+def strip_json_fence(text: str) -> str:
+    """Strip a single leading/trailing Markdown code fence from a response.
+
+    Some OpenAI-compatible servers (LM Studio, Ollama) wrap the structured
+    output in ```json ... ``` even when asked not to, which otherwise fails
+    `json.loads` and burns a retry.
+    """
+    s = text.strip()
+    if not s.startswith("```"):
+        return s
+    newline = s.find("\n")
+    if newline == -1:
+        return s
+    s = s[newline + 1:]
+    if s.rstrip().endswith("```"):
+        s = s.rstrip()[: -len("```")]
+    return s.strip()
 
 
 @dataclass(frozen=True)
@@ -71,6 +109,12 @@ class LLMClientError(Exception):
     step naming an action that isn't actually legal right now) -- that is
     `LLMPlayer`'s own retry/fallback responsibility, not the client's.
     """
+
+
+class LLMTruncatedError(LLMClientError):
+    """The response hit the output-token limit before finishing. Distinct from
+    a malformed response so a retry can (in future) raise the budget instead
+    of repeating at the same size; today it is caught as an `LLMClientError`."""
 
 
 class LLMClient(Protocol):

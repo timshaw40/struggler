@@ -23,20 +23,24 @@ pip install -e ".[llm]"  # optional if you plan to use the llm
 
 ### Configure an LLM bot
 
-To use the llm bot, you need to set up your api keys. This implementation supports anthropic and openai.
+To use the llm bot, you need to set up your api keys. This implementation supports anthropic, openai, and local OpenAI-compatible servers (LM Studio, Ollama — no key needed).
 
 ```sh
 export ANTHROPIC_API_KEY=...   # for provider=anthropic
 export OPENAI_API_KEY=...      # for provider=openai (the default)
+# for provider=openai_compatible (e.g. LM Studio):
+export STRUGGLER_LLM_BASE_URL=http://192.168.10.91:1234/v1
 ```
 
 Provider and model are picked via environment variables, each overridable per run:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic` or `openai` — used for both the per-decision client and the once-per-turn planning client |
+| `STRUGGLER_LLM_PROVIDER` | `openai` | `anthropic`, `openai`, or `openai_compatible` — used for both the per-decision client and the once-per-turn planning client |
 | `STRUGGLER_LLM_MODEL` | provider's built-in default | model for in-decision calls |
 | `STRUGGLER_LLM_PLAN_MODEL` | provider's built-in default | model for the turn-planning call (same provider as above) |
+| `STRUGGLER_LLM_BASE_URL` | `http://localhost:11434/v1` | OpenAI-compatible endpoint for `openai_compatible` |
+| `STRUGGLER_LLM_API_KEY` | `local` | key sent to the local server (required by the SDK, ignored by the server) |
 
 ## Play a game
 
@@ -56,6 +60,7 @@ The options for the players are:
 - greedy
 - mcts
 - llm
+- rl (a self-play PPO checkpoint; see [docs/BOTS.md](docs/BOTS.md))
 
 But you can create your own implementation using the engine like this:
 
@@ -93,8 +98,8 @@ A local web UI: the map on screen, you click countries and cards, a bot
 thinks and answers.
 
 ```sh
-pip install -e ".[ui]"    # PyMuPDF and Pillow, only for PDF-derived assets
-python scripts/install_vassal_ui_assets.py
+pip install -e ".[ui]"    # Pillow, used only for the board conversion
+python scripts/install_vassal_ui_assets.py --fetch-board
 python scripts/serve_ui.py --us human --ussr mcts --seed 1
 ```
 
@@ -110,35 +115,25 @@ decision's options, so it is exactly as powerful as the engine allows.
 python scripts/serve_ui.py --us mcts --ussr mcts --seed 2
 ```
 
-Spectator mode: every page poll resolves one move server-side, so the game
-plays out in the browser at the bots' own pace (MCTS think time dominates).
-A Pause/Resume control sits where the decision panel would be. Use
-`--no-open` if you'd rather open the URL yourself.
+Spectator mode: every page poll resolves one move server-side, so the
+game plays out in the browser at the bots' own pace (MCTS think time
+dominates). A Pause/Resume control sits where the decision panel would
+be. Use `--no-open` if you'd rather open the URL yourself.
 
 The board and card faces come from the official VASSAL Deluxe 3.2 art in
-`third_party/gmt-vassal/` (see that folder's LICENSE): the installer maps
-the 110 card numbers to engine card ids and writes `ui/assets/board.png`,
-`ui/assets/cards/{id}.svg`, and marker positions calibrated to that board.
-`ui/assets/` is gitignored — the derived images are never committed — so a
-clone that has not run the installer falls back to plain text cards and no
-board. `--fetch-board` pulls the board JPG from the official VASSAL module
-if you would rather use your own copy than the committed one.
+`third_party/gmt-vassal/`: `install_vassal_ui_assets.py` maps the 110 card
+numbers to engine card ids and writes `ui/assets/board.png`,
+`ui/assets/cards/{id}.svg`, plus marker positions calibrated to that board
+(`ui/assets/countries.json`, preferred by the UI when present).
+`--fetch-board` downloads the board JPG from the official VASSAL module
+when it is missing from the repo. That folder is gitignored — art is never
+committed — so a fresh clone without it falls back to plain text cards and
+no board.
 
 Prefer your own print-and-play PDFs instead? `scripts/render_assets.py
 --map-pdf "<your board pdf>" --cards-pdf "<your cards pdf>"` renders the
 same `ui/assets/` layout from them, and `scripts/calibrate_countries.py`
 derives matching marker positions.
-
-## Expert logs
-
-`parsed/` holds five complete tournament games as engine-shaped JSON.
-`scripts/replay_game.py` drives one through the engine in replay mode: both
-hands hidden, cards declared when the log plays them, and every recorded
-board/VP snapshot asserted along the way, so a mismatch names the decision it
-happened at. `scripts/extract_training.py` reads the same corpus and reports
-how often the greedy bot picks the move the expert picked, counting only
-decisions where the hand was known. See
-[docs/BOTS.md](docs/BOTS.md) for what that number is and is not.
 
 ## Add a new bot
 
@@ -160,9 +155,12 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The public API, core types |
 | [docs/CARDS.md](docs/CARDS.md) | Card data policy, the event layer, per-card coverage |
-| [docs/BOTS.md](docs/BOTS.md) | The `Player` interface, physical mode, bot roadmap |
+| [docs/BOTS.md](docs/BOTS.md) | The `Player` interface, physical mode, bot roadmap, training tooling |
 | [docs/TESTING.md](docs/TESTING.md) | Replay logs, property tests, test-writing policy |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | What the engine does not model |
+| [docs/STRATEGY.md](docs/STRATEGY.md) | The heuristics `GreedyPlayer` and the LLM prompt play by |
+| [CONTEXT.md](CONTEXT.md) | The domain glossary (ubiquitous language) |
+| [AGENTS.md](AGENTS.md) | Working notes for AI coding agents |
 
 ## Tests
 
@@ -172,6 +170,33 @@ python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
 ```
 
 See [docs/BOTS.md](docs/BOTS.md) for MCTS knobs and the imperfect-info approximation. The MCTS bot is lookahead on top of greedy — stronger-than-greedy territory, not an expert claim.
+
+## Train and evaluate bots
+
+The autonomous tooling writes artifacts under `data/` (gitignored). Only the
+self-play stack needs the `[rl]` extra (numpy + torch); the arena, the tuner,
+and the value fit are pure-stdlib.
+
+```sh
+pip install -e ".[rl]"
+
+python scripts/run_arena.py --help          # head-to-head / round-robin, Elo
+python scripts/tune_greedy.py --help        # CEM over GreedyWeights
+python scripts/train_value.py --help        # learned MCTS board value
+python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
+python scripts/final_eval.py --help         # the reserved final seed bank
+python scripts/extract_training.py --help   # expert-log agreement
+```
+
+See [docs/BOTS.md](docs/BOTS.md) for the arena, the league/promotion-margin
+gating, and the reserved final-evaluation seed bank that must never feed
+training.
+
+`parsed/` holds five complete tournament games as engine-shaped JSON.
+`scripts/replay_game.py` replays one with both hands hidden and asserts every
+recorded board/VP snapshot, naming the decision where it diverges, and
+`scripts/extract_training.py` turns the corpus into greedy's agreement with
+the expert over hand-known decisions only.
 
 ## License
 
