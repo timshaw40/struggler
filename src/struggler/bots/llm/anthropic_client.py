@@ -13,9 +13,13 @@ import json
 
 from struggler.bots.llm.client import (
     DEFAULT_MAX_TOKENS,
+    DEFAULT_TIMEOUT,
     LLMClientError,
     LLMRequest,
     LLMResponse,
+    LLMTruncatedError,
+    redact_secrets,
+    strip_json_fence,
 )
 
 
@@ -31,7 +35,8 @@ class AnthropicClient:
     """
 
     def __init__(
-        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS
+        self, *, model: str, api_key: str | None = None, max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
         try:
             import anthropic
@@ -40,7 +45,10 @@ class AnthropicClient:
                 "AnthropicClient requires the 'anthropic' package: "
                 "pip install 'struggler[llm]'"
             ) from exc
-        self._client = anthropic.Anthropic(**({"api_key": api_key} if api_key else {}))
+        kwargs: dict[str, object] = {"timeout": timeout}
+        if api_key:
+            kwargs["api_key"] = api_key
+        self._client = anthropic.Anthropic(**kwargs)
         self._model = model
         self._max_tokens = max_tokens
         self.provider_name = "anthropic"
@@ -58,13 +66,17 @@ class AnthropicClient:
                 },
             )
         except Exception as exc:  # network/HTTP/SDK failure
-            raise LLMClientError(str(exc)) from exc
+            raise LLMClientError(redact_secrets(str(exc))) from exc
 
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            raise LLMTruncatedError(
+                "Anthropic response hit the output-token limit before finishing"
+            )
         text = next((block.text for block in response.content if block.type == "text"), None)
         if text is None:
             raise LLMClientError("Anthropic response carried no text content block")
         try:
-            structured = json.loads(text)
+            structured = json.loads(strip_json_fence(text))
         except json.JSONDecodeError as exc:
             raise LLMClientError(f"unparseable structured output: {exc}") from exc
 

@@ -727,3 +727,28 @@ def _dummy_event(decision):
         turn=1,
         action_round=1,
     )
+
+
+def test_llm_compacts_context_over_budget():
+    from struggler.bots.llm.client import LLMMessage
+    from struggler.bots.llm.player import LLMPlayer
+
+    player = LLMPlayer(client=object(), max_context_chars=100)
+    player._messages = [
+        LLMMessage(role="user", content="a" * 80),
+        LLMMessage(role="assistant", content="b" * 80),
+        LLMMessage(role="user", content="c" * 10),
+    ]
+    player._compact_context()
+    assert all(m.content != "a" * 80 for m in player._messages)  # oldest dropped
+    assert player._messages[0].role == "user"
+
+
+def test_llm_context_budget_is_off_by_default():
+    from struggler.bots.llm.client import LLMMessage
+    from struggler.bots.llm.player import LLMPlayer
+
+    player = LLMPlayer(client=object())
+    player._messages = [LLMMessage(role="user", content="x" * 100_000)]
+    player._compact_context()
+    assert len(player._messages) == 1  # untouched when the budget is 0

@@ -27,9 +27,10 @@ Thumbs.db
 
 # Outputs
 logs/
+data/
+*.pt
 
-# User-supplied art (scans/PDF-derived images). Never commit these; the
-# installer writes here from the user's own copy of the game.
+# User-supplied art (scans/PDF-derived images). Never commit these.
 ui/assets/
 *.pdf
 

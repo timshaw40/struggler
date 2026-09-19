@@ -240,7 +240,7 @@ built:
    perturb or depend on the engine's own dice sequence, keeping replay logs
    reproducible regardless of which bots produced them). These exist mainly
    as a floor to measure every later bot against.
-2. **Greedy / rule-based** (current — `bots/greedy.py`): observe the
+2. **Greedy / rule-based** (built — `bots/greedy.py`): observe the
    state, score every legal action of the *current* decision with
    hand-crafted heuristics, take the top score. No lookahead, no search, no
    opponent modeling — see "Greedy bot design" below.
@@ -254,7 +254,7 @@ built:
    `step()` needs to advance — the tier is prompt engineering
    (`prompt.py`, `rules_primer.py`) plus response parsing into a legal
    `Action` (`schema.py`), over a provider-agnostic `LLMClient` with
-   Anthropic and OpenAI adapters. The one new plumbing question this tier
+   Anthropic, OpenAI, and OpenAI-compatible adapters (local servers like LM Studio or Ollama via `STRUGGLER_LLM_BASE_URL`). The one new plumbing question this tier
    raised — do the model's reasoning turns count as "moves" in a replay
    log, or stay external to it — is answered in "Game-level logging"
    above: they stay external. What the model is actually shown, and the
@@ -266,8 +266,8 @@ built:
    policy. No training data, no GPU, no LLM calls. This is the first bot
    that looks ahead; it should sit in "stronger than greedy" territory, not
    expert-claim territory. See "MCTS bot" below.
-5. **Self-play reinforcement learning** (future, most promising long-term,
-   most expensive to build): train a model by having it play itself
+5. **Self-play reinforcement learning** (built, first cut — `bots/rl/`;
+   see "Neural self-play (PPO)" below): train a model by having it play itself
    repeatedly via `play_game`, using `Engine.winner` as the terminal reward.
    The most future-relevant reason `GreedyPlayer` is built as weighted
    features over `board_value()` rather than an if/elif cascade: a linear
@@ -286,15 +286,26 @@ built:
 other bots. `runner.play_game` calls `bind_engine` once so search can
 `serialize()`/`deserialize()` clones; it never `step()`s the live engine.
 
-Each `choose_action` runs root UCT over `pending_decision.options`: untried
-actions first, then UCB1. Every simulation determinizes hidden cards, plays
-the chosen root action on a clone, then rolls out with `GreedyPlayer` for
-**both** seats (including the DEFCON self-kill penalty) until the game ends
-or `rollout_depth` steps. Terminal reward is 1 / 0.5 / 0 (win / draw /
-loss); a depth-cap uses `tanh(board_value / 20)` mapped to `[0, 1]`. Chance
-decisions use the clone's pre-drawn `options[0]`, same as `play_game`.
-The live engine's RNG is never touched; search uses `random.Random(seed)`
-and reseeds each clone from that.
+Each `choose_action` runs root UCT over `pending_decision.options`. Untried
+options are tried first, ordered by `GreedyPlayer.option_scores` (a prior, so
+a small budget looks at the promising options while still retaining the full
+legal set), then UCB1. Every simulation determinizes hidden cards, plays the
+chosen root action on a clone, then rolls out with `GreedyPlayer` for **both**
+seats (including the DEFCON self-kill penalty) until the game ends or
+`rollout_depth` **decision points** have been made — dice/CHANCE nodes no
+longer consume the horizon, so the root action's consequences get examined.
+Terminal reward is 1 / 0.5 / 0 (win / draw / loss); a depth-cap uses
+`tanh(board_value / 20)` mapped to `[0, 1]`. Chance decisions use the clone's
+pre-drawn `options[0]`, same as `play_game`. The live engine's RNG is never
+touched; search uses `random.Random(seed)` and reseeds each clone from that.
+
+Invalid simulations are **excluded, not scored**: with `strict=True` (the
+default) a determinized clone whose unknown pool is too short raises
+`ShortPoolError` and the simulation is dropped, tracked in
+`player.stats` (`sims` / `scored` / `terminal` / `depth_capped` /
+`short_pool` / `action_miss` / `exception` / `root_options` /
+`visited_options` / `unvisited_options`). If every simulation was
+invalid the player falls back to the heuristic.
 
 ### Imperfect-information approximation
 
@@ -316,7 +327,8 @@ opponent instead.
 | Knob | Default | Constructor | Env (via `build_player`) |
 | --- | --- | --- | --- |
 | simulations per decision | 16 | `sims=` | `STRUGGLER_MCTS_SIMS` |
-| greedy rollout cap | 16 | `rollout_depth=` | `STRUGGLER_MCTS_ROLLOUT_DEPTH` |
+| rollout cap, in decision points | 16 | `rollout_depth=` | `STRUGGLER_MCTS_ROLLOUT_DEPTH` |
+| exclude invalid sims | True | `strict=` | — |
 | UCB1 exploration constant | 1.4 | `uct_c=` | `STRUGGLER_MCTS_UCT_C` |
 
 Raise `sims` for stronger (slower) play. Eval uses a lower default (`--sims 8`)
@@ -543,26 +555,109 @@ behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`
 over many seeds, both seat assignments) — a regression net for "the
 heuristics still actually help," not a claim of strategic strength.
 
-## Expert decisions are evidence, not labels
 
-`scripts/replay_game.py` replays a parsed expert game through the engine in
-replay mode: both hands hidden, cards declared when the log plays them, and
-every recorded board/VP snapshot asserted, so a divergence names the decision
-it happened at. The corpus under `parsed/` is derived factual data (the
-source archive stays gitignored, same rule as the PDFs).
+## Autonomous improvement tooling
 
-`scripts/extract_training.py` stops at the **first divergence** (fallback or
-board/VP mismatch) and flags `hand_known` per row: in replay mode a hidden hand
-is a placeholder set, so a card-choice decision's candidate list is a superset
-of what the expert held and its agreement is not comparable. Agreement is
-reported over hand-known eligible decisions only, split by whole games
-(`--holdout-every`), along with a per-game coverage report
-(`first_divergence_record`, `hand_unknown_decisions`). It is a rules/decision
-check, not a validated strength label.
+Three loops for improving a bot without a human in the driver's seat. All are
+pure-stdlib (no numpy/torch) and use `multiprocessing("spawn")`.
+
+- **`arena.py`** — the evaluation backbone. `PlayerSpec` names a
+  reconstructible bot (greedy with a weights dict, mcts, random, first);
+  `run_matchup`/`round_robin` play each seed twice with the seats swapped so
+  side asymmetry cancels; `head_to_head`, `score`, `matchup_table`, and a
+  simple `elo` read the results. `scripts/run_arena.py` is the CLI.
+  **Evaluate against a ladder, and gate on head-to-head, never on win rate
+  vs one fixed opponent** — that saturates and misleads once a bot passes it.
+- **`scripts/tune_greedy.py`** — CEM over `GreedyWeights`. Sampling is a
+  Gaussian in log-weight space (all tunable weights are positive); fitness is
+  the mean score across a fixed ladder (random, first, incumbent) on
+  side-swapped seeds. `defcon_self_kill_penalty` is a guardrail and is never
+  tuned. The best candidate is re-scored on a *held-out* seed bank against the
+  incumbent and only saved if it wins. This deliberately avoids the earlier
+  champion-vs-challenger self-play tuner's failure mode (a single opponent).
+- **`bots/value.py` + `scripts/train_value.py`** — a learned, antisymmetric
+  board value (`value(US) + value(USSR) = 1`) over ~19 public-state features,
+  fit by closed-form ridge regression on self-play outcomes. Pass it to
+  `MCTSPlayer(value=...)`; it replaces the greedy rollout's terminal estimate,
+  so `rollout_depth` can drop to 0 — measured ~70x faster per decision at the
+  same sim count in one position.
+
+Runtime knobs (env, read by `build_player`): `STRUGGLER_GREEDY_WEIGHTS` (a
+weights JSON) and `STRUGGLER_MCTS_VALUE` (a value JSON) let the live game use
+a tuned artifact without code changes. Artifacts live under `data/`
+(gitignored).
+
+The intended sequence: build the arena first, tune the linear greedy with CEM,
+learn the value and cheapen MCTS, then move to PPO self-play with league
+anchors and H2H Elo gates (tier 5). Behavior cloning from the small expert
+corpus is only an opening prior — it plateaus near the teacher.
+
+### Neural self-play (PPO) — tier 5, first cut
+
+`bots/rl/` is the self-play stack, opt-in via the `rl` extra
+(`pip install 'struggler[rl]'`: numpy + torch; MPS used when available).
+
+- `encode.py` — fixed-size vectors for the acting side's `Observation` and
+  each legal `Action`. Nothing hidden is encoded (mandate #4); the state is
+  side-scoped, so one shared net plays both seats. `STATE_DIM`/`OPTION_DIM`
+  are ~523/246.
+- `net.py` — `ActorCritic`: a pointer-style policy (dot product of a state
+  embedding and each option embedding, so it handles variable branching) plus
+  a value head. `save_policy`/`load_policy`.
+- `selfplay.py` — one self-play episode per side; a fraction of seats is
+  played by the greedy **anchor** so the opponent pool is non-stationary.
+  Episodes are split by side (the value is side-scoped), always.
+- `ppo.py` — GAE per side, padded option batches, clipped PPO with value +
+  entropy losses. Sparse ±1 terminal reward.
+- `scripts/train_ppo.py` — the autonomous loop: snapshot the policy, collect
+  self-play games in a spawn pool (workers on CPU), PPO-update on the training
+  device, periodically evaluate head-to-head vs greedy with the arena, save
+  `latest`/`best`.
+- `RLPlayer` plays a checkpoint; `build_player("rl")` reads
+  `STRUGGLER_RL_POLICY` (and `STRUGGLER_RL_DEVICE`).
+
+```
+pip install 'struggler[rl]'
+python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
+STRUGGLER_RL_POLICY=data/ppo_best.pt python src/main.py --us rl --ussr greedy
+```
+
+The loop uses one **persistent actor pool** (`bots/rl/actors.py`) — created
+once, with a worker-side checkpoint cache — instead of re-spawning per
+iteration. Opponents during collection are a **league** of past promoted
+checkpoints (probability `--league-fraction`) plus the greedy anchor; the
+learner records only its own side. Promotion is a **promotion margin**: a
+paired, side-swapped head-to-head against the incumbent best over
+`--gate-seeds` (a fresh seed bank per attempt, `--gate-base`), promoting only
+when `wins - losses >= --gate-margin`. It is a *margin*, not a significance
+test — the Wilson interval is logged alongside it (`gate_ci`). Seeds at or
+above `arena.FINAL_EVAL_SEED_BASE` are reserved for `scripts/final_eval.py`
+and must never feed training or the gate; `train_ppo.py` refuses to start if a
+bank overlaps them.
+
+Per-iteration metrics to watch: `pi` policy loss, `v` value loss, `H` entropy
+(should fall slowly; a collapse toward 0 is strategy collapse), `kl`/`clip`
+update stability, and `ev` explained variance (how well the value predicts
+returns; near 0 means the value is noise). A periodic **behavior probe**
+(`profile_game`, RL-vs-greedy) prints draw/`defcon1` counts, average end turn,
+coup count, and Southeast-Asia influence — the degenerate-play smells an Elo
+number hides. `--shaping` turns on potential-based reward shaping from
+`board_value` (policy-preserving; often speeds up the sparse ±1 signal).
+
+Everything is written to `data/metrics.jsonl` (one JSON object per iteration,
+including the eval/gate/behavior blocks), and `data/run.pt` is a resumable
+checkpoint (`--resume data/run.pt`, the shaping flag is restored from it).
+`ppo_latest.pt` is the newest policy, `ppo_best.pt` the promoted one.
+
+Remaining caveats: pure-Python self-play is the throughput ceiling (the fast
+`arena.py` numbers apply only to greedy rollouts, not the net), so a
+meaningful policy is an hours-to-days run, not minutes; the value is only as
+good as the signal until many games accumulate; and a batched engine is the
+main remaining throughput lever.
 
 ## Server authority, undo, and durable games (serve_ui)
 
-- `POST /action` carries `{game_id, decision_id, index}` and the session
+- `POST /action` now carries `{game_id, decision_id, index}` and the session
   rejects a stale game/decision id or a non-human actor (409), so a duplicated
   or late click can never advance a decision it wasn't answering. `/state`
   includes `game_id` and `decision.id`; the client resyncs on a rejection.
@@ -573,3 +668,14 @@ check, not a validated strength label.
   `GameLogWriter` replay format) and finalizes it on restart/forfeit; undo
   rewrites the log to match the rewound game. `--resume-log FILE` continues a
   saved game (via `replay_history`) instead of dealing fresh.
+
+## Expert decisions are evidence, not labels
+
+`scripts/extract_training.py` stops at the **first divergence** (fallback or
+board/VP mismatch) and flags `hand_known` per row: in replay mode a hidden hand
+is a placeholder set, so a card-choice decision's candidate list is a superset
+of what the expert held and its agreement is not comparable. Agreement is
+reported over hand-known eligible decisions only, split by whole games
+(`--holdout-every`), along with a per-game coverage report
+(`first_divergence_record`, `hand_unknown_decisions`). It is a rules/decision
+check, not a validated strength label.

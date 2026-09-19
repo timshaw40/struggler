@@ -200,6 +200,16 @@ def parse_plan_response(payload: Mapping[str, Any]) -> DecisionPlan:
         populated = {k: v for k, v in raw_payload.items() if v is not None}
         if expected_key is not None:
             populated = {k: v for k, v in populated.items() if k == expected_key}
+            value = populated.get(expected_key)
+            # A step with no live payload key (all-null from a strict schema,
+            # or simply omitted) must NOT be accepted: `_find_matching_option`
+            # treats an empty payload as "matches the first option", so a
+            # malformed plan would silently play an arbitrary move instead of
+            # being retried/falling back.
+            if value is None or (isinstance(value, str) and not value.strip()):
+                raise PlanParseError(
+                    f"step {i}: {kind_value} is missing its '{expected_key}' payload"
+                )
         steps.append(PlannedStep(kind=kind, payload=populated))
 
     return DecisionPlan(justification=justification, steps=tuple(steps))

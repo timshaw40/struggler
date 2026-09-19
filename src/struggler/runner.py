@@ -63,7 +63,9 @@ def play_game(
             obs_side = decision.actor if decision.actor in (Side.US, Side.USSR) else engine.physical_side
             observation = engine.observe(obs_side)
             responder = decision.actor if decision.actor in players else Side.CHANCE
-            action = players[responder].choose_action(observation, builder.history)
+            # Player-scoped history: a bot must not read the opponent's past
+            # hidden-hand decisions (or engine-private context) out of `history`.
+            action = players[responder].choose_action(observation, builder.for_player(obs_side))
         engine.step(action)
 
         # Headline cards are picked secretly (USSR then US) and only revealed
