@@ -647,6 +647,12 @@ async function act(index) {
   } finally {
     busy = false;
     render();
+    // The board has the new counters already, but the player's chit is still
+    // flying in. Re-render the decision box once it lands, so "the opponent is
+    // thinking" is announced after their influence arrives rather than on top
+    // of it. (The FX chain also re-renders on drain; this is the case where the
+    // placement is still in the air at that point.)
+    waitForSettled(() => { if (state) renderDecision(); });
   }
 }
 
@@ -794,10 +800,52 @@ function enqueuePlacements(jobs, { priority = false } = {}) {
   // behind. Their own chits fly at once so the click still answers; the
   // opponent's are dropped outright, since the markers are already correct.
   if (fxBacklog >= FX_BACKLOG_LIMIT) {
-    if (priority) flyBatch(jobs, stagger);
+    if (priority) {
+      // Still track the flight: a deep backlog must not hide the note behind
+      // the player's own chit, which is the whole point of this path.
+      fxLanded = flyBatch(jobs, stagger);
+      trackLanded(fxLanded);
+    }
     return;
   }
-  enqueueFx(() => flyBatch(jobs, stagger));
+  const batch = enqueueFx(() => flyBatch(jobs, stagger));
+  if (batch) fxLanded = batch;
+}
+
+/* Keep the "chits are still landing" flag honest for a batch that is not on the
+ * FX chain (see the backlog branch above). Counted, not a boolean: a second
+ * batch can start while the first is still in the air. */
+let chitsInFlight = 0;
+/* Resolvers waiting for the board to settle (see waitForSettled). */
+const settleWaiters = new Set();
+
+function trackLanded(promise) {
+  chitsInFlight += 1;
+  promise.finally(() => {
+    chitsInFlight -= 1;
+    flushSettleWaiters();
+  });
+}
+
+/* Is the board still settling — an FX queued, or a chit in the air? */
+function settling() {
+  return busy || fxBacklog > 0 || chitsInFlight > 0;
+}
+
+/* Run `fn` once the board has settled, immediately when it already has. This
+ * keeps "Opponent thinking…" from appearing while the player's own influence is
+ * still flying in — the chits are an overlay, so the counters were already
+ * correct when the state arrived. */
+function waitForSettled(fn) {
+  if (!settling()) { fn(); return; }
+  settleWaiters.add(fn);
+}
+
+function flushSettleWaiters() {
+  if (settling()) return;
+  const waiting = [...settleWaiters];
+  settleWaiters.clear();
+  for (const fn of waiting) fn();
 }
 
 /* A short beat between the player's move and the opponent's, so the two turns
@@ -848,6 +896,11 @@ let pendingRealignActor = null;  // actor roll awaiting its opponent roll across
  * own rolls rather than bury the player's. */
 let fxChain = Promise.resolve();
 let fxBacklog = 0;
+/* When the last placement of a spend lands, the opponent's turn begins. The
+ * chits are an overlay — the board's counters are already correct — so the
+ * "Opponent thinking…" note has to wait for them, or it claims the turn moved
+ * on while the player is still watching their own influence arrive. */
+let fxLanded = Promise.resolve();
 
 /* Chit fly-in pacing. The stagger shrinks as a batch grows so one placement
  * can't run past the player's next click, and a queue deeper than the limit
@@ -859,15 +912,24 @@ const FX_BACKLOG_LIMIT = 3;
 
 function enqueueFx(fn) {
   fxBacklog += 1;
-  fxChain = fxChain
+  const queued = fxChain
     .then(fn)
     .catch((err) => console.error("FX error", err))  // one bad FX can't wedge the queue
     .finally(() => {
       fxBacklog -= 1;
+      flushSettleWaiters();
       // When the queue drains, refresh the decision box (it was showing
       // "Resolving…" and can now show the next decision / "Opponent thinking…").
-      if (fxBacklog === 0 && state) queueMicrotask(() => { if (state) renderDecision(); });
+      if (fxBacklog === 0 && state) queueMicrotask(() => {
+        if (!state) return;
+        renderDecision();
+        // The feed's "Thinking…" row is the other half of the same claim: drop
+        // it here too, or it lingers past the last chit landing.
+        renderPanel();
+      });
     });
+  fxChain = queued;
+  return queued;
 }
 
 function clearDiceBox() {
@@ -1894,7 +1956,9 @@ function renderCue() {
     title = playing ? "Struggler — bot vs bot" : "Struggler — paused";
   } else if (mine) {
     title = "● Your move — Struggler";
-  } else if (busy) {
+  } else if (settling()) {
+    // Same rule as the feed's row: the player's own move is still going down,
+    // so the tab says so rather than "the opponent has the floor".
     title = "Struggler — resolving…";
   } else {
     title = `Struggler — Turn ${state.turn}, Round ${state.action_round}`;
@@ -2152,7 +2216,12 @@ function renderPanel() {
   const title = document.createElement("h2");
   title.textContent = "History";
   feed.append(title);
-  const waiting = busy || (state.watch && playing && !state.is_terminal);
+  // "Thinking…" claims the opponent is considering a position. It is only
+  // honest once the player's own move is on the board: while their click is
+  // still in flight (`busy`) or their chit is still landing (`settling`), the
+  // row would announce the bot over influence the player has not seen arrive.
+  const waiting = (state.watch && playing && !state.is_terminal)
+    || (!busy && !settling());
   if (waiting) {
     const wait = document.createElement("div");
     wait.className = "feedrow wait";
@@ -2893,9 +2962,13 @@ function renderDecision() {
   box.hidden = false;
   if (!d) {
     const note = document.createElement("em");
-    // Don't claim the opponent is "thinking" while our own FX are still playing.
-    note.textContent = (busy || fxBacklog > 0) ? "Resolving…" : "Opponent thinking…";
+    // Don't claim the opponent is "thinking" while the player's own chits are
+    // still in the air: the placement they just made is what they are watching.
+    note.textContent = settling() ? "Resolving your move…" : "Opponent thinking…";
     box.append(note);
+    // …and when those chits land, say so, rather than leaving "Resolving…" up
+    // until the next poll happens to arrive.
+    if (settling()) waitForSettled(() => { if (state && !state.decision) renderDecision(); });
     return;
   }
   const side = state.human_side === "USSR" ? "ussr" : "us";
