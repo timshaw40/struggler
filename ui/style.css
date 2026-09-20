@@ -1323,6 +1323,12 @@ body:has(#dicebox:not([hidden])) #decision {
   bottom: 16px;
   transform: translateX(-50%);
   z-index: 6;  /* over the map (2/3) and viewbar (5); under #winner/#dicebox */
+  /* The bar carries the Done button during a placement spend, so it cannot be
+   * click-through any more. It is still a narrow pill at the map's bottom
+   * edge, well clear of the countries a placement clicks. */
+  display: flex;
+  align-items: center;
+  gap: 12px;
   pointer-events: none;
   max-width: min(92%, 760px);
   padding: 8px 18px;
@@ -1339,6 +1345,24 @@ body:has(#dicebox:not([hidden])) #decision {
   text-overflow: ellipsis;
 }
 #actionbar[hidden] { display: none; }
+
+/* The directive is the text; only the control it grows takes the pointer. */
+#actionbar .donebtn {
+  flex: none;
+  pointer-events: auto;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  color: #14161a;
+  background: var(--gold);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+#actionbar .donebtn:hover { background: #ffe27a; }
+#actionbar .donebtn:disabled { opacity: 0.5; cursor: default; }
+#actionbar .donebtn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 #actionbar.bump { animation: actionbump 0.18s ease-out; }
 @keyframes actionbump {
