@@ -345,6 +345,18 @@ class Session:
             "turn_effects": self._json(obs.turn_effects),
             "game_effects": self._json(obs.game_effects),
             "can_undo": self._undo is not None and not self.watch,
+            # Why the human's own hand is narrowed this round, if it is: the
+            # client dims the cards that are not on offer and says why, rather
+            # than leaving a dead click. None whenever the question does not
+            # apply (no decision, someone else's decision, watch mode).
+            "play_restriction": (
+                engine.play_restriction(self.human_side)
+                if decision is not None
+                and not self.watch
+                and decision.actor is self.human_side
+                and decision.kind is DecisionKind.ACTION_ROUND_PLAY
+                else None
+            ),
             "is_terminal": engine.is_terminal,
             "winner": engine.winner.value if engine.winner is not None else None,
             "game_over_reason": engine._game_over_reason,
@@ -438,6 +450,16 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 self._send_json(200, payload)
             elif route == "/cards":
                 self._send_json(200, cards_meta)
+            elif route == "/countryfacts":
+                # Static geography (region, Battleground, the DEFCON floor for
+                # Coups) fetched once per page: the hover tip needs it on every
+                # marker, and it must not cost a round trip per hover. Computed
+                # per request rather than cached because /new swaps the engine
+                # (and the country set moves with it). Read under the lock,
+                # written outside it, like every other handler here.
+                with session.lock:
+                    facts = session.engine.country_facts()
+                self._send_json(200, facts)
             elif route.startswith("/odds"):
                 # Hover odds: the engine computes them, so the table matches
                 # what a roll will actually do (see Engine.coup_forecast).

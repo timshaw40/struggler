@@ -7,6 +7,11 @@
 const META = {};    // card id -> {number, name, ops, side, scoring, event_summary, ...}
 const IMAGES = {};  // card id -> card-face filename under /assets/cards/ (optional)
 const POS = {};     // country id -> {x, y} box top-left fractions, w/h px, s stability
+/* Country geography from /countryfacts: region, Battleground flag, and the
+ * DEFCON floor below which no Coup/Realignment may be attempted there. Empty
+ * if that endpoint is unavailable, in which case the hover tip falls back to
+ * influence and stability alone. */
+const FACTS = {};
 
 const BOARD_W = 5100, BOARD_H = 3300;
 /* Region views: rectangles of the board image (box layout, as measured by
@@ -175,16 +180,20 @@ async function bootInner() {
   if (toast) toast.addEventListener("click", () => { toast.hidden = true; });
   installKeyboard();
 
-  const [cards, manifest, countries] = await Promise.all([
+  const [cards, manifest, countries, facts] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
     // VASSAL install ships box centers measured off the board; fall back
     // to the schematic calibration for non-VASSAL art.
     fetchJson("/assets/countries.json").catch(() => fetchJson("/countries.json")),
+    // Region/Battleground/DEFCON geography for the hover tip. Not fatal if it
+    // is missing: the tip still reads out influence and stability.
+    fetchJson("/countryfacts").catch(() => ({})),
   ]);
   Object.assign(META, cards);
   Object.assign(IMAGES, manifest);
   Object.assign(POS, countries);
+  Object.assign(FACTS, facts);
   if (!Object.keys(IMAGES).length) $("#boardwrap").classList.add("noboard");
   const preview = document.createElement("div");
   preview.id = "cardpreview";
@@ -374,6 +383,39 @@ async function act(index) {
  * not the moment the chit leaves the edge of the screen. */
 const FLY_MS = 400;
 
+/* One shared Web Audio context for every cue on the page: browsers cap how
+ * many a document may open, and the placement clack and the "your move" chime
+ * have no reason to own one each. Null where Web Audio is unavailable. */
+function audioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = audioCtx.ctx || (audioCtx.ctx = new AC());
+  if (ctx.state === "suspended") ctx.resume();  // first click may not have unlocked it yet
+  return ctx;
+}
+
+/* "The game is waiting on you": two soft rising notes. Deliberately shorter
+ * and quieter than the placement clack — it has to carry across a room to a
+ * player who has looked away, without sounding like an alarm. */
+function cueSound() {
+  if (localStorage.getItem("struggler.sound") === "0") return;
+  const ctx = audioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  for (const [freq, at, level] of [[784, 0, 0.05], [1046.5, 0.12, 0.04]]) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, t0 + at);
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(level, t0 + at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.3);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0 + at);
+    o.stop(t0 + at + 0.34);
+  }
+}
+
 /* Short white noise, made once and reused: the contact tick of a cardboard
  * counter meeting a paper map. */
 function noiseBuffer(ctx) {
@@ -391,10 +433,8 @@ function noiseBuffer(ctx) {
  * of three influence sounds like tok, tok, tok instead of a machine. */
 function placeSound() {
   if (localStorage.getItem("struggler.sound") === "0") return;
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return;
-  const ctx = placeSound.ctx || (placeSound.ctx = new AC());
-  if (ctx.state === "suspended") ctx.resume();  // first click may not have unlocked it yet
+  const ctx = audioCtx();
+  if (!ctx) return;
 
   const now = ctx.currentTime;
   const since = placeSound.last === undefined ? Infinity : now - placeSound.last;
@@ -959,10 +999,58 @@ function optionLabel(o) {
 
 let countryTip = null;
 
+/* "MIDDLE_EAST" -> "Middle East": the region names are engine enum values. */
+const regionLabel = (name) => String(name).toLowerCase().split("_")
+  .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+/* What the printed board already says, said again in words: who controls the
+ * country, whether it is a Battleground (so Scoring and the Coup DEFCON rule
+ * both treat it differently), its stability, and the region it scores in. */
+function countryFactsLine(cid, inf) {
+  const f = FACTS[cid] || {};
+  const bits = [];
+  const ctrl = controlOf(cid, inf);
+  if (ctrl) bits.push(`<b class="${ctrl === "US" ? "us" : "ussr"}">${ctrl} controls</b>`);
+  if (f.battleground) bits.push('<b class="fbg">Battleground</b>');
+  const stab = (POS[cid] && POS[cid].s) || f.stability;
+  if (stab) bits.push(`Stability ${stab}`);
+  if (f.region) bits.push(esc(regionLabel(f.region)));
+  return bits.join(" · ");
+}
+
+/* The line that answers "may I do that here?": what an Ops placement costs,
+ * or — during a Coup/Realignment target pick — why this country is not on the
+ * list. The two reasons come from the same rules the engine used to build the
+ * options, so the tip can only ever confirm what a click would do. */
+function countryChoiceLine(cid) {
+  const d = state && state.decision;
+  if (!d) return "";
+  const legal = (d.options || []).some((o) => o.payload && o.payload.country === cid);
+  if (d.kind === "place_influence" && !d.context.setup && legal) {
+    const cost = placementCost(cid, state.influence);
+    return cost === 2
+      ? '<div class="cnote warn">Costs 2 Ops — opponent-controlled</div>'
+      : '<div class="cnote">Costs 1 Op</div>';
+  }
+  if ((d.kind === "coup_target" || d.kind === "realignment_target") && !legal) {
+    const f = FACTS[cid] || {};
+    const opp = state.human_side === "US" ? "USSR" : "US";
+    const row = (state.influence || {})[cid] || {};
+    const why = (row[opp] || 0) <= 0
+      ? "No enemy influence — nothing to attack"
+      : f.min_defcon && state.defcon < f.min_defcon
+        ? `DEFCON ${state.defcon} bars ${d.kind === "coup_target" ? "Coups" : "Realignments"} in ${esc(regionLabel(f.region))}`
+        : "Not a legal target";
+    return `<div class="cnote">${why}</div>`;
+  }
+  return "";
+}
+
 /* Hover readout for a map marker: an amplification of the country's printed
  * header strip (flag | name | stability badge — red badge = battleground),
- * plus live influence. Falls back to plain text when a header asset is
- * missing. Positioned above the marker, viewport-clamped. */
+ * plus live influence, then the facts the art does not carry. Falls back to
+ * plain text when a header asset is missing. Positioned above the marker,
+ * viewport-clamped. */
 function showCountryTip(el, cid, inf) {
   // Works in every view: markers are positioned in board coordinates and the
   // tip is placed from the element's viewport rect, so region views are fine.
@@ -976,6 +1064,8 @@ function showCountryTip(el, cid, inf) {
     `<img class="chead" src="/assets/headers/${cid}.png" alt="${pretty(cid)}">`
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
     + `<span class="ussr">USSR ${inf.USSR}</span></div>`
+    + `<div class="cfacts">${countryFactsLine(cid, inf)}</div>`
+    + countryChoiceLine(cid)
     + `<div class="odds"></div>`;
   countryTip.hidden = false;
   tipCid = cid;
@@ -1400,6 +1490,7 @@ function render() {
   const d = state.decision;
   const sig = [
     state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
+    state.play_restriction || "-",
     d ? `${d.kind}:${d.options.length}` : "-",
     Object.keys(state.turn_effects || {}).length,
     Object.keys(state.game_effects || {}).length,
@@ -1426,6 +1517,59 @@ function render() {
   renderHand();
   renderDecision();
   renderWinner();
+  renderCue();
+}
+
+/* The tab is the player's HUD whenever the game is not the front window: a
+ * bot can think for a minute at a time, so whose move it is has to be legible
+ * from the tab strip alone, without coming back to the table. */
+let cueWasMine = null;     // null until the first render, so a reload is quiet
+let faviconAlert = null;
+
+function renderCue() {
+  if (!state) return;
+  const over = !!state.is_terminal;
+  // `state.decision` only ever carries the human's own decision (the server
+  // resolves bot and CHANCE steps before it answers), so a decision here
+  // really does mean "the game is waiting on you".
+  const mine = !over && !state.watch && !busy && !!state.decision;
+  let title;
+  if (over) {
+    const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
+    title = `Struggler — ${name} wins`;
+  } else if (state.watch) {
+    title = playing ? "Struggler — bot vs bot" : "Struggler — paused";
+  } else if (mine) {
+    title = "● Your move — Struggler";
+  } else if (busy) {
+    title = "Struggler — resolving…";
+  } else {
+    title = `Struggler — Turn ${state.turn}, Round ${state.action_round}`;
+  }
+  if (document.title !== title) document.title = title;
+  setFavicon(mine);
+  // One chime, only on the beat where the turn comes back to the player, and
+  // only when they are looking at something else. A reload is silent.
+  if (mine && cueWasMine === false && document.hidden) cueSound();
+  cueWasMine = mine;
+}
+
+/* A drawn favicon rather than a file: one less thing to install, and the dot
+ * is the only information the tab strip can carry at 16px. */
+function setFavicon(alert) {
+  if (faviconAlert === alert) return;
+  faviconAlert = alert;
+  const dot = alert ? "#f4c04f" : "#4a5262";
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    + '<rect width="32" height="32" rx="7" fill="#1b2029"/>'
+    + `<circle cx="16" cy="16" r="8.5" fill="${dot}"/></svg>`;
+  let link = document.querySelector("link[rel='icon']");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.append(link);
+  }
+  link.href = "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
 function renderBoard() {
@@ -2119,11 +2263,12 @@ function eventDetail(e, older) {
   return lines;
 }
 
-function cardEl(cid, actionIndex) {
+function cardEl(cid, actionIndex, locked = null) {
   const m = META[cid] || {};
   const el = document.createElement("div");
   el.className = "card" + (m.side ? ` side-${m.side.toLowerCase()}` : "")
-    + (actionIndex !== null ? " playable" : "");
+    + (actionIndex !== null ? " playable" : "")
+    + (locked ? " locked" : "");
   if (IMAGES[cid]) {
     const img = document.createElement("img");
     img.src = `/assets/cards/${IMAGES[cid]}`;
@@ -2137,7 +2282,12 @@ function cardEl(cid, actionIndex) {
   } else {
     fillCardText(el, m, cid);
   }
-  if (m.event_summary) el.title = m.event_summary;
+  // A locked card's reason outranks the card text: the player is asking why
+  // nothing happens, not what the card does.
+  if (locked) {
+    el.title = `${m.name || cid} — ${locked}` + (m.event_summary ? `\n\n${m.event_summary}` : "");
+    el.setAttribute("aria-disabled", "true");
+  } else if (m.event_summary) el.title = m.event_summary;
   el.addEventListener("mouseenter", () => showPreview(cid, el));
   el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
   if (actionIndex !== null) {
@@ -2203,10 +2353,44 @@ function fillCardText(el, m, cid) {
   el.append(name, ops);
 }
 
+/* Why a card in hand cannot be played right now, in the player's words, or
+ * null when it can. Only two of these are about the card itself (the scoring
+ * deadline and a forced Missile Envy, both reported by the engine); the rest
+ * are about the decision the game is actually waiting on. A dead click with
+ * no explanation is the thing being fixed here. */
+function cardBlockReason(cid) {
+  if (!state) return "Loading…";
+  if (state.is_terminal) return "The game is over";
+  if (busy) return "Resolving your last move…";
+  const d = state.decision;
+  if (!d) return state.watch ? "This seat is a bot" : "Waiting for the opponent";
+  if (d.kind === "headline_play" || d.kind === "action_round_play") {
+    const r = state.play_restriction;
+    if (r === "scoring_deadline") return "A Scoring card must be played this round";
+    if (r === "missile_envy") return "Missile Envy must be played this round";
+    return "Not offered this round";
+  }
+  return `Not now — ${(PROMPTS[d.kind] || pretty(d.kind)).toLowerCase()}`;
+}
+
 function renderHand() {
   const host = $("#hand");
   host.textContent = "";
-  for (const cid of state.hand) host.append(cardEl(cid, cardOption(cid)));
+  const locked = [];
+  for (const cid of state.hand) {
+    const opt = cardOption(cid);
+    const why = opt === null ? cardBlockReason(cid) : null;
+    if (why) locked.push(why);
+    host.append(cardEl(cid, opt, why));
+  }
+  // Whole hand inert: say it once in the bar instead of leaving the player to
+  // hover every card to find out why.
+  if (state.hand.length && locked.length === state.hand.length) {
+    const note = document.createElement("div");
+    note.id = "handstate";
+    note.textContent = locked[0];
+    host.prepend(note);
+  }
 }
 
 /* Human-readable decision context: curated keys only. Engine internals

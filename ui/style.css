@@ -541,6 +541,25 @@ main {
 
 .card.playable:hover { transform: translateY(-4px); }
 
+/* A card the engine did not offer this round. It used to look exactly like a
+ * legal one and swallow the click; now it is visibly inert and its reason is
+ * the tooltip (title/aria-disabled are set in cardEl). */
+.card.locked { opacity: 0.42; filter: grayscale(0.65); cursor: default; }
+
+/* Shown when nothing in hand can be played, so the whole bar can say why once
+ * instead of the player hovering each card to find out. */
+#handstate {
+  align-self: center;
+  flex: none;
+  margin-right: 4px;
+  padding: 4px 11px;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 999px;
+}
+
 .card.textcard { padding: 6px; min-height: 60px; }
 
 .cardname { font-size: 12px; font-weight: 600; }
@@ -689,6 +708,26 @@ body.decision-center #decision .opt { font-size: 15px; }
 #countrytip .us { color: #7ea4f5; font-weight: 600; }
 
 #countrytip .ussr { color: #e57373; font-weight: 600; }
+
+/* The facts the printed art does not spell out in words, and the one line that
+ * answers "may I attack here?" while a Coup/Realignment target is pending. */
+#countrytip .cfacts {
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+  padding: 3px 2px 0;
+}
+#countrytip .cfacts b { color: var(--text); }
+#countrytip .cfacts b.us { color: #7ea4f5; }
+#countrytip .cfacts b.ussr { color: #e57373; }
+#countrytip .cfacts b.fbg { color: var(--gold); }
+#countrytip .cnote {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 3px 2px 0;
+}
+#countrytip .cnote.warn { color: var(--gold); }
 
 /* Hover odds: the per-die table for a Coup, the 36-outcome split for a
  * Realignment. Numbers come from the engine's own forecast endpoint. */
