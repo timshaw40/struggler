@@ -46,6 +46,9 @@ let winnerFocused = false;
 let inFlight = false; // one poll chain at a time
 let lastRenderSig = null;          // skip redundant full re-renders
 const expandedRows = new Set();    // history rows the user opened, by absolute index
+let feedFilter = localStorage.getItem("struggler.histfilter") || "all";
+const seenRows = new Set();        // rows already drawn once, for the entrance tint
+let firstFeedBuild = true;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -1373,32 +1376,71 @@ function renderPanel() {
     feed.append(wait);
   }
   const hist = state.history || [];
+  // `hist` is a truncated window of the server's history, so use the
+  // monotonic `history_len` as the cursor, not hist.length.
   const total = state.history_len ?? hist.length;
-  const rows = hist.slice().reverse().slice(0, 60);  // server sends 60
-  rows.forEach((e, j) => {
-    const older = rows[j + 1];  // reversed: next item is earlier in time
-    const who = actorOf(e);
-    const abs = total - 1 - j;  // monotonic id, stable across polls
+  const entries = foldBookkeeping(annotateHistory(hist).map((entry, i) => ({
+    ...entry,
+    abs: total - hist.length + i,
+    parts: rowParts(entry.e, entry.before, entry.older, entry.side),
+  })));
+  feed.append(vpStrip(hist));
+  buildFeedFilters();
+
+  const shown = entries.slice().reverse().filter((entry) => feedMatches(entry, feedFilter));
+  let group = null;
+  for (const entry of shown) {
+    const { e, older, parts } = entry;
+    const label = `TURN ${e.turn} · R${e.action_round}`;
+    if (label !== group) {
+      group = label;
+      const head = document.createElement("div");
+      head.className = "feedturn";
+      head.textContent = label;
+      feed.append(head);
+    }
     const row = document.createElement("div");
-    row.className = "feedrow";
-    const main = document.createElement("div");
-    main.className = "feedmain";
-    const label = document.createElement("span");
-    let text = actionText(e, older) || pretty(e.kind);
-    if (text.startsWith(who + " ")) text = text.slice(who.length + 1);  // actor is badged
-    label.textContent = `${text} · T${e.turn} R${e.action_round}`;
+    // The rail carries who acted; the class also drives the entrance tint.
+    row.className = `feedrow ${parts.actor === "USSR" ? "ussr" : parts.actor === "US" ? "us" : "sys"}`;
+    row.dataset.abs = String(entry.abs);
+    row.setAttribute("aria-label", `${parts.actor}: ${parts.sentence}`);
+    // Animate only rows that appeared while the page was open: the first
+    // build would otherwise ripple the whole window on load.
+    if (!firstFeedBuild && !seenRows.has(entry.abs)) row.classList.add("fresh");
+    seenRows.add(entry.abs);
+
+    row.append(feedGlyph(parts.glyph));
+    const title = document.createElement("span");
+    title.className = "ftitle";
+    title.textContent = parts.title || parts.sentence;
+    title.title = parts.sentence;
+    row.append(title);
+    if (parts.delta) {
+      const delta = document.createElement("b");
+      delta.className = `fdelta${parts.deltaSide ? ` ${parts.deltaSide === "USSR" ? "ussr" : "us"}` : ""}`;
+      delta.textContent = parts.delta;
+      if (parts.deltaTitle) delta.title = parts.deltaTitle;
+      row.append(delta);
+    }
+    if (parts.card && IMAGES[parts.card]) {
+      const thumb = document.createElement("img");
+      thumb.className = "fcard";
+      thumb.src = `/assets/cards/${IMAGES[parts.card]}`;
+      thumb.alt = "";
+      thumb.loading = "lazy";
+      thumb.title = cardName(parts.card);
+      thumb.addEventListener("error", () => thumb.remove());
+      row.append(thumb);
+    }
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "feedtoggle";
-    const actor = document.createElement("b");
-    actor.className = who === "USSR" ? "ussr" : "us";
-    actor.textContent = who;
-    main.append(label, toggle, actor);
     const detail = document.createElement("div");
     detail.className = "feeddetail";
-    const open = expandedRows.has(abs);
+    const open = expandedRows.has(entry.abs);
     detail.hidden = !open;
     toggle.textContent = open ? "−" : "+";
+    toggle.setAttribute("aria-label", open ? "Hide detail" : "Show detail");
     for (const line of eventDetail(e, older)) {
       const p = document.createElement("div");
       p.textContent = line;
@@ -1408,17 +1450,336 @@ function renderPanel() {
       const nowOpen = detail.hidden;
       detail.hidden = !nowOpen;
       toggle.textContent = nowOpen ? "−" : "+";
-      if (nowOpen) expandedRows.add(abs); else expandedRows.delete(abs);
+      toggle.setAttribute("aria-label", nowOpen ? "Hide detail" : "Show detail");
+      if (nowOpen) expandedRows.add(entry.abs); else expandedRows.delete(entry.abs);
     });
-    row.append(main, detail);
+    row.append(toggle, detail);
     feed.append(row);
-  });
+  }
+  // Keep the "already seen" set from growing across a long session: anything
+  // outside the server's window can never be re-rendered.
+  for (const abs of seenRows) if (abs < total - 200) seenRows.delete(abs);
+  firstFeedBuild = false;
 }
 
 function vpSwing(e, older) {
   if (!older || e.vp === older.vp) return older ? "no swing" : "";
   const d = e.vp - older.vp;
   return d > 0 ? `US +${d}` : `USSR +${-d}`;
+}
+
+/* -- history feed ---------------------------------------------------------
+ *
+ * The feed is a browsing surface, not a transcript: rows lead with the country
+ * or card and the number that changed, a left rail carries who acted, and the
+ * sentence moves into the expansion. One glyph per kind of event, hand-drawn
+ * because the page is dependency-free, so a row can be recognised before it is
+ * read. Colour stays reserved for the two sides plus neutral for the system.
+ */
+
+const FEED_GLYPHS = {
+  influence: "<circle cx='12' cy='12' r='6'/><circle cx='12' cy='12' r='9.4' stroke-dasharray='1.5 3.2'/>",
+  coup: "<circle cx='12' cy='12' r='6'/><path d='M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4'/>",
+  realign: "<path d='M4 8.5h11l-3-3M20 15.5H9l3 3'/>",
+  score: "<path d='M7 21V4'/><path d='M7 5h10.5l-2.4 3.5 2.4 3.5H7'/>",
+  headline: "<path d='M12 4l2.3 4.8 5.2.7-3.8 3.5.9 5.1-4.6-2.5-4.6 2.5.9-5.1L4.5 9.5l5.2-.7z'/>",
+  card: "<rect x='6' y='4' width='12' height='16' rx='2'/><path d='M9 9h6M9 12.5h6'/>",
+  space: "<path d='M12 3c2.5 1.9 3.8 4.5 3.8 7.5L13.6 13h-3.2L8.2 10.5C8.2 7.5 9.5 4.9 12 3z'/><path d='M9.6 14.2L8 18l3.4-1.2 3.4 1.2-1.6-3.8'/>",
+  war: "<path d='M12 3v6M12 15v6M3 12h6M15 12h6M6.4 6.4l3 3M14.6 14.6l3 3M17.6 6.4l-3 3M9.4 14.6l-3 3'/>",
+  system: "<circle cx='12' cy='12' r='2.6'/>",
+};
+
+const CARD_KINDS = new Set([
+  "headline_play", "action_round_play", "event_choice", "event_ops_order",
+  "event_resume", "play_mode", "ops_type", "event_influence",
+]);
+const COUP_KINDS = new Set(["coup_target", "coup_roll"]);
+const REALIGN_KINDS = new Set([
+  "realignment_target", "realignment_actor_roll", "realignment_opponent_roll",
+]);
+const WAR_KINDS = new Set(["war_target", "war_roll", "contest_roll"]);
+const SYSTEM_KINDS = new Set([
+  "random_discard", "quagmire_discard", "quagmire_roll", "held_card_discard",
+  "deal_card",
+]);
+
+function feedGlyph(kind) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "ficon");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.6");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.innerHTML = FEED_GLYPHS[kind] || FEED_GLYPHS.system;
+  return svg;
+}
+
+/* One row's glanceable parts, from the event and the influence the country
+ * held before it (null when the window starts mid-game and the "before" is
+ * unknown — better a total than a wrong delta). */
+function rowParts(e, before, older, side) {
+  const actor = side || actorOf(e);
+  const p = e.payload || {};
+  const card = p.card || null;
+  const sentence = actionText(e, older) || pretty(e.kind);
+  const scoring = card && /Scoring$/.test(card);
+  const base = { actor, card, sentence, delta: "", deltaSide: null, title: "", glyph: "system" };
+
+  if (scoring) {
+    return { ...base, glyph: "score", title: cardName(card), delta: vpSwing(e, older) };
+  }
+  if (e.country && (e.kind === "place_influence" || e.kind === "event_influence")) {
+    const now = e.country_influence || {};
+    let delta = `${now.US || 0}–${now.USSR || 0}`;
+    let deltaSide = null;
+    if (before) {
+      const du = (now.US || 0) - (before.US || 0);
+      const ds = (now.USSR || 0) - (before.USSR || 0);
+      if (du > 0) { delta = `+${du} US`; deltaSide = "US"; }
+      else if (ds > 0) { delta = `+${ds} USSR`; deltaSide = "USSR"; }
+      else if (du < 0) { delta = `${du} US`; deltaSide = "US"; }
+      else if (ds < 0) { delta = `${ds} USSR`; deltaSide = "USSR"; }
+    }
+    return { ...base, glyph: "influence", title: pretty(e.country), delta, deltaSide };
+  }
+  if (COUP_KINDS.has(e.kind) && e.country) {
+    const ops = e.context && e.context.ops !== undefined ? ` · ops ${e.context.ops}` : "";
+    return {
+      ...base, glyph: "coup", title: pretty(e.country),
+      delta: p.value !== undefined ? `rolled ${p.value}${ops}` : `coup${ops}`,
+    };
+  }
+  if (REALIGN_KINDS.has(e.kind) && e.country) {
+    const rolls = e.context && e.context.actor_roll !== undefined
+      ? `${e.context.actor_roll} v ${p.value}` : "";
+    return { ...base, glyph: "realign", title: pretty(e.country), delta: rolls };
+  }
+  if (e.kind === "space_race_roll") {
+    const box = e.space_race && e.space_race[actor] !== undefined ? `box ${e.space_race[actor]}` : "";
+    return { ...base, glyph: "space", title: "Space Race", delta: p.value !== undefined ? `rolled ${p.value}` : box };
+  }
+  if (WAR_KINDS.has(e.kind)) {
+    return {
+      ...base, glyph: "war", title: e.country ? pretty(e.country) : pretty(e.kind),
+      delta: p.value !== undefined ? `rolled ${p.value}` : "",
+    };
+  }
+  if (card) {
+    return {
+      ...base,
+      glyph: e.kind === "headline_play" ? "headline" : "card",
+      title: cardName(card),
+    };
+  }
+  if (CARD_STEP_KINDS.has(e.kind)) {
+    // Only reachable when a step has no card row to fold into (a window that
+    // starts mid-action); name the card so the row still makes sense.
+    const ctx = (e.context && e.context.card) || null;
+    return {
+      ...base, glyph: "card", title: pretty(e.kind),
+      delta: ctx ? cardName(ctx) : "",
+    };
+  }
+  if (SYSTEM_KINDS.has(e.kind)) {
+    return { ...base, glyph: "system", title: pretty(e.kind) };
+  }
+  return { ...base, glyph: "card", title: pretty(e.kind) };
+}
+
+/* Chronological pass: each event with the influence its country held before
+ * it, so a row can show +1 rather than a running total. The server sends only
+ * a window, so a country first seen inside it has no "before" — null, and the
+ * row falls back to the totals. */
+function annotateHistory(hist) {
+  const seen = new Map();
+  let lastSide = null;
+  return hist.map((e, i) => {
+    const before = e.country ? seen.get(e.country) || null : null;
+    if (e.country && e.country_influence) seen.set(e.country, { ...e.country_influence });
+    // Dice rolls are recorded against CHANCE; the row still belongs to whoever
+    // caused the roll, so the side carries forward from the last real actor.
+    let side = actorOf(e);
+    if (side === "CHANCE") side = lastSide;
+    else lastSide = side;
+    return { e, before, side, older: i > 0 ? hist[i - 1] : null };
+  });
+}
+
+/* One card play is four decisions — the card, the mode, the Ops type, then the
+ * placement — and one coup is a target plus a roll. Rendered raw, that reads as
+ * the same card twice and an "ops type" row nobody asked for, so the
+ * bookkeeping steps fold into the card row as its "how", and a target that is
+ * immediately answered by its own roll is dropped (the roll carries the
+ * country anyway). */
+const CARD_STEP_KINDS = new Set(["play_mode", "ops_type", "event_ops_order", "event_resume"]);
+const TARGET_KINDS = new Set(["coup_target", "realignment_target"]);
+
+function cardStepText(e) {
+  const p = e.payload || {};
+  if (p.mode) return pretty(p.mode);
+  if (p.type) return pretty(p.type).split(" ")[0];   // "influence", "coup", "realignment"
+  if (p.order) return pretty(p.order);
+  return pretty(e.kind);
+}
+
+function foldBookkeeping(entries) {
+  const out = [];
+  entries.forEach((entry, i) => {
+    const { e, parts } = entry;
+    const prev = out[out.length - 1];
+    if (CARD_STEP_KINDS.has(e.kind) && prev && prev.e.actor === e.actor && prev.parts.card) {
+      prev.steps.push(cardStepText(e));
+      return;
+    }
+    if (TARGET_KINDS.has(e.kind) && e.country) {
+      const next = entries[i + 1];
+      const rollKind = e.kind === "coup_target" ? "coup_roll" : "realignment_actor_roll";
+      // The roll is recorded against CHANCE, so compare the country and let
+      // the actor differ.
+      if (next && next.e.kind === rollKind && next.e.country === e.country) {
+        return;   // the roll row names the same country
+      }
+    }
+    out.push({ ...entry, steps: [] });
+  });
+  for (const entry of out) {
+    // Two steps at most: a row is a glance, and the whole chain is in the
+    // expansion.
+    if (entry.steps.length && !entry.parts.delta) {
+      entry.parts.delta = entry.steps.slice(0, 2).join(" · ");
+      entry.parts.deltaTitle = entry.steps.join(" · ");
+    }
+  }
+  return out;
+}
+
+const FEED_FILTERS = [
+  ["all", "All"],
+  ["US", "US"],
+  ["USSR", "USSR"],
+  ["scoring", "Scoring"],
+  ["cards", "Cards"],
+];
+
+function feedMatches(entry, filter) {
+  if (filter === "all") return true;
+  // `parts.actor` is the side carried forward past CHANCE; the raw event's
+  // actor is CHANCE on every dice row, which is not what a player means by
+  // "show me the USSR's moves".
+  const card = entry.parts.card;
+  if (filter === "US" || filter === "USSR") return entry.parts.actor === filter;
+  if (filter === "scoring") return !!(card && /Scoring$/.test(card));
+  return !!card;
+}
+
+/* The chips live outside #feed because the feed is rebuilt on every poll: a
+ * chip inside it can be replaced between mousedown and mouseup, which swallows
+ * the click entirely. */
+function updateFilterChips() {
+  for (const b of document.querySelectorAll("#feedbar .chip")) {
+    b.setAttribute("aria-pressed", String(b.dataset.key === feedFilter));
+  }
+}
+
+function buildFeedFilters() {
+  const host = $("#feedbar");
+  if (host.dataset.built) return;
+  const row = document.createElement("div");
+  row.className = "feedfilters";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", "Filter history");
+  for (const [key, label] of FEED_FILTERS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.dataset.key = key;
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      feedFilter = feedFilter === key && key !== "all" ? "all" : key;
+      localStorage.setItem("struggler.histfilter", feedFilter);
+      updateFilterChips();
+      renderPanel();
+    });
+    row.append(b);
+  }
+  host.append(row);
+  host.dataset.built = "1";
+  updateFilterChips();
+}
+
+/* The game's arc: VP across the window, filled by whoever is ahead, with a
+ * tick where a scoring card landed. Reading the trend is the one thing rows
+ * cannot do. */
+function vpStrip(hist) {
+  const wrap = document.createElement("div");
+  wrap.className = "vpstrip";
+  const head = document.createElement("div");
+  head.className = "vphead";
+  const vp = state.vp || 0;
+  const label = document.createElement("span");
+  label.textContent = "VP";
+  const now = document.createElement("b");
+  now.className = vp >= 0 ? "us" : "ussr";
+  now.textContent = vp === 0 ? "even" : `${vp > 0 ? "+" : ""}${vp} ${vp > 0 ? "US" : "USSR"}`;
+  head.append(label, now);
+  wrap.append(head);
+  if (hist.length < 2) return wrap;
+
+  const W = 100, H = 30, MID = H / 2, SPAN = 20;   // VP scale: ±20 fills the strip
+  const y = (v) => MID - (Math.max(-SPAN, Math.min(SPAN, v)) / SPAN) * (MID - 2);
+  const x = (i) => (i / (hist.length - 1)) * W;
+  const pts = hist.map((e, i) => `${x(i).toFixed(2)},${y(e.vp || 0).toFixed(2)}`).join(" ");
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label",
+    `VP over the last ${hist.length} events, now ${vp === 0 ? "even" : `${vp} ${vp > 0 ? "US" : "USSR"}`}`);
+  const area = `M 0,${MID} L ${pts.replace(/ /g, " L ")} L ${W},${MID} Z`;
+  const areaPath = () => {
+    const p = document.createElementNS(ns, "path");
+    p.setAttribute("d", area);
+    return p;
+  };
+  const line = document.createElementNS(ns, "path");
+  line.setAttribute("d", `M ${pts.replace(/ /g, " L ")}`);
+  line.setAttribute("class", "vpline");
+  const mid = document.createElementNS(ns, "line");
+  mid.setAttribute("x1", "0"); mid.setAttribute("x2", String(W));
+  mid.setAttribute("y1", String(MID)); mid.setAttribute("y2", String(MID));
+  mid.setAttribute("class", "vpmid");
+  svg.append(mid);
+  for (const [cls, clip] of [["us", "pos"], ["ussr", "neg"]]) {
+    const a = areaPath();
+    a.setAttribute("class", `vparea ${cls}`);
+    a.setAttribute("clip-path", `url(#vp${clip})`);
+    const cp = document.createElementNS(ns, "clipPath");
+    cp.setAttribute("id", `vp${clip}`);
+    const r = document.createElementNS(ns, "rect");
+    r.setAttribute("x", "0"); r.setAttribute("width", String(W));
+    r.setAttribute("y", clip === "pos" ? "0" : String(MID));
+    r.setAttribute("height", String(MID));
+    cp.append(r);
+    svg.append(cp, a);
+  }
+  hist.forEach((e, i) => {
+    if (!(e.payload && e.payload.card && /Scoring$/.test(e.payload.card))) return;
+    const t = document.createElementNS(ns, "line");
+    t.setAttribute("x1", x(i).toFixed(2)); t.setAttribute("x2", x(i).toFixed(2));
+    t.setAttribute("y1", "0"); t.setAttribute("y2", String(H));
+    t.setAttribute("class", "vptick");
+    const ttl = document.createElementNS(ns, "title");
+    ttl.textContent = `T${e.turn}: ${cardName(e.payload.card)} (${vpSwing(e, hist[i - 1])})`;
+    t.append(ttl);
+    svg.append(t);
+  });
+  svg.append(line);
+  wrap.append(svg);
+  return wrap;
 }
 
 function feedSummary(e, older) {
