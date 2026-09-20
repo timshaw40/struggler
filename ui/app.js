@@ -31,7 +31,17 @@ const REGIONS = {
   "South America": [390, 1710, 2060, 3090],
 };
 let view = "World";
-let zoom = 1;  // 1..1.8, extra on top of the region fit
+/* The board's scale is stated one way everywhere: 1 means the whole board is
+ * fitted to the map area's width, whatever view is showing. Region fits are
+ * therefore about 3.07 (every region rect is roughly a third of the board
+ * across), and the slider carries that same number — jumping to Europe moves
+ * the slider to ~307 instead of leaving it at 100 while the map is visibly
+ * three times bigger. */
+const fitScale = (name) => BOARD_W / (REGIONS[name][2] - REGIONS[name][0]);
+// `(name) =>` rather than a bare `fitScale`: map() would pass the index as the
+// second argument, which fitScale would treat as a region name.
+const MAX_SCALE = 1.8 * Math.max(...Object.keys(REGIONS).map((n) => fitScale(n)));
+let scale = 1;
 
 /* VASSAL SetupStack centers (native board px). Engine already tracks
  * every one of these; we just put the matching counter on the map. */
@@ -186,24 +196,11 @@ function installKeyboard() {
       setView(views[(views.indexOf(view) + 1) % views.length]);
       return;
     }
-    if (e.key === "+" || e.key === "=") {
-      setZoom(Math.min(1.8, zoom + 0.2));
-      const slider = $("#zoom");
-      if (slider) slider.value = String(Math.round(zoom * 100));
-      return;
-    }
-    if (e.key === "-" || e.key === "_") {
-      setZoom(Math.max(1, zoom - 0.2));
-      const slider = $("#zoom");
-      if (slider) slider.value = String(Math.round(zoom * 100));
-      return;
-    }
-    if (e.key === "0") {
-      setZoom(1);
-      const slider = $("#zoom");
-      if (slider) slider.value = "100";
-      return;
-    }
+    // Zoom in steps proportional to the current scale, so a keypress feels the
+    // same at a region fit (~3x) as it does on the whole board.
+    if (e.key === "+" || e.key === "=") { setScale(scale * 1.2); return; }
+    if (e.key === "-" || e.key === "_") { setScale(scale / 1.2); return; }
+    if (e.key === "0") { setScale(fitScale(view)); return; }   // this view's fit
     if (e.key === "?" || e.key === "/") { toggleHelp(); return; }
     if (e.key === "m") { toggleMapFocus(); return; }
     if (e.key === "u" && state && state.can_undo && !busy && !state.is_terminal) {
@@ -372,9 +369,19 @@ async function bootInner() {
 function layoutBoard() {
   const wrap = $("#boardwrap");
   if (wrap.classList.contains("noboard")) return;
-  const reg = REGIONS[view];
-  const w = Math.round($("#boardarea").clientWidth * BOARD_W / (reg[2] - reg[0]) * zoom);
+  // The scale is the single source of truth: the rendered width follows from
+  // it, and `--boardw` is written from that width so the marker chips (whose
+  // size is a calc over `--boardw`) can never disagree with the map.
+  const w = Math.round($("#boardarea").clientWidth * scale);
   wrap.style.setProperty("--boardw", w + "px");
+}
+
+/* Point the slider at the live scale. Shared by every path that moves the
+ * zoom, so the control always reads the truth rather than only the paths that
+ * remembered to update it. */
+function syncZoomSlider() {
+  const slider = $("#zoom");
+  if (slider) slider.value = String(Math.round(scale * 100));
 }
 
 /* View switcher: buttons over the map's top-right corner. */
@@ -391,21 +398,25 @@ function buildViewBar() {
   const slider = document.createElement("input");
   slider.id = "zoom";
   slider.type = "range";
-  slider.min = "100";
-  slider.max = "180";
-  slider.value = "100";
-  slider.title = "Zoom";
+  slider.min = "100";                       // whole board fitted to the width
+  slider.max = String(Math.round(MAX_SCALE * 100));
+  slider.value = String(Math.round(scale * 100));
+  slider.title = "Zoom (100 = the whole board fits the width)";
   slider.setAttribute("aria-label", "Zoom");
-  slider.addEventListener("input", () => setZoom(+slider.value / 100));
+  slider.addEventListener("input", () => setScale(+slider.value / 100));
   $("#boardarea").append(slider);
 }
 
-function setZoom(z) {
+/* Keep the point at the middle of the viewport in the middle while the scale
+ * changes: without this, zooming drags the map out from under the cursor. */
+function setScale(next) {
+  const z = Math.max(1, Math.min(MAX_SCALE, next));
   const wrap = $("#boardwrap");
   const old = $("#boardbox").offsetWidth || 1;
   const cx = wrap.scrollLeft + wrap.clientWidth / 2;
   const cy = wrap.scrollTop + wrap.clientHeight / 2;
-  zoom = z;
+  scale = z;
+  syncZoomSlider();
   layoutBoard();
   const k = $("#boardbox").offsetWidth / old;
   wrap.scrollLeft = Math.max(0, cx * k - wrap.clientWidth / 2);
@@ -414,9 +425,11 @@ function setZoom(z) {
 
 function setView(name) {
   view = name;
-  zoom = 1;  // region/world fit is the country-level default
-  const slider = $("#zoom");
-  if (slider) slider.value = "100";
+  // Every view lands at its own fit — World is the whole board, Europe is
+  // Europe — and the bar reads that same number, because there is only one
+  // scale in the client now.
+  scale = fitScale(name);
+  syncZoomSlider();
   if (countryTip) countryTip.hidden = true;
   for (const b of document.querySelectorAll("#viewbar button"))
     b.classList.toggle("active", b.textContent === name);
