@@ -1087,34 +1087,21 @@ class Engine:
                 self._push(side, DecisionKind.ACTION_ROUND_PLAY, tuple(options), {})
             return
         hand = self.hands[side.value]
-        scoring_in_hand = [cid for cid in hand if self.cards[cid].scoring]
-        # A scoring card may not be held past the end of the turn. Once a side
-        # has as many scoring cards as it has action rounds left, every
-        # remaining round must spend one (the China Card is not offered then).
-        must_play_scoring = bool(scoring_in_hand) and len(
-            scoring_in_hand
-        ) >= self._remaining_action_rounds(side)
-
-        # Missile Envy: "next round your opponent must use this card for
-        # Operations" -- the scoring deadline still takes priority if both
-        # apply at once, since carrying a scoring card past end of turn isn't
-        # legal at all.
-        forced_missile_envy = (
-            not must_play_scoring
-            and self.game_effects.get("missile_envy_forced") == side.value
-            and "Missile_Envy" in hand
-        )
-
-        if forced_missile_envy:
+        # The two ways a hand narrows itself this round (see
+        # `play_restriction`, which the web UI reads too so a card that is not
+        # on offer can tell the player why).
+        restriction = self.play_restriction(side)
+        if restriction == "missile_envy":
             playable = ["Missile_Envy"]
+        elif restriction == "scoring_deadline":
+            playable = [cid for cid in hand if self.cards[cid].scoring]
         else:
-            playable = scoring_in_hand if must_play_scoring else list(hand)
+            playable = list(hand)
         options = [
             Action(DecisionKind.ACTION_ROUND_PLAY, {"card": cid}) for cid in playable
         ]
         if (
-            not must_play_scoring
-            and not forced_missile_envy
+            restriction is None
             and side.value == self.china_card_owner
             and self.china_card_available
         ):
@@ -1136,6 +1123,36 @@ class Engine:
         self.game_effects.pop("missile_envy_forced", None)
         self._file_card(side, cid, fired=False)
         self._push_ops_type(side, self._effective_ops(side, self.cards[cid]))
+
+    def play_restriction(self, side: Side) -> str | None:
+        """Why `side` may play only part of its hand this action round.
+
+        `"scoring_deadline"` — a scoring card may not be carried past the end
+        of the turn, so once a side holds as many scoring cards as it has
+        action rounds left, every remaining round must spend one, and the
+        China Card is not offered. `"missile_envy"` — Missile Envy forces the
+        named card; the scoring deadline still wins if both apply, since
+        carrying a scoring card past end of turn isn't legal at all. `None`
+        means the whole hand is open.
+
+        `_push_action_round_play` offers exactly the cards this permits, so
+        the two can't drift; the web UI reads it too, so a card that is not on
+        offer can say *why* instead of looking like a legal one. A physical or
+        replay hand is invisible to the engine, so there is nothing to report
+        there — the player honours the deadline themselves.
+        """
+        if self._declares(side):
+            return None
+        hand = self.hands[side.value]
+        scoring_in_hand = [cid for cid in hand if self.cards[cid].scoring]
+        if scoring_in_hand and len(scoring_in_hand) >= self._remaining_action_rounds(side):
+            return "scoring_deadline"
+        if (
+            self.game_effects.get("missile_envy_forced") == side.value
+            and "Missile_Envy" in hand
+        ):
+            return "missile_envy"
+        return None
 
     def _remaining_action_rounds(self, side: Side) -> int:
         """Action rounds `side` still has this turn, including the one now
@@ -1511,6 +1528,74 @@ class Engine:
         if ev is not None and ev.eligible(self, side):
             ev.resolve(self, side)
             self._park_permanent_card(cid)
+
+    def war_forecast(self, decision: Decision, country: str) -> dict:
+        """What each die would do to `country`, for a pending War target.
+
+        Mirrors `_handle_war_roll`: the penalty is the number of
+        defender-controlled neighbours of the target (plus the target itself
+        for the wars that count it — Arab-Israeli War passes
+        `count_target_control`), the attacker needs `win_from` after that
+        subtraction, and a win seizes every defender Influence marker in the
+        country. Reads the live board, so the table is what a roll would
+        actually do rather than an estimate of it.
+        """
+        if decision.kind is not DecisionKind.WAR_TARGET:
+            raise ValueError("war_forecast needs the war target decision")
+        ctx = decision.context
+        attacker = Side(ctx["attacker"])
+        defender = attacker.opponent
+        penalty = sum(
+            1 for n in self.board.neighbors(country) if self.board.control(n) is defender
+        )
+        if ctx["count_target_control"] and self.board.control(country) is defender:
+            penalty += 1
+        seized = self.board.influence[country][defender.value]
+        needed = ctx["win_from"] + penalty
+        rows = [
+            {
+                "roll": roll,
+                "win": roll >= needed,
+                "vp": ctx["vp"] if roll >= needed else 0,
+                "seized": seized if roll >= needed else 0,
+            }
+            for roll in range(1, 7)
+        ]
+        return {
+            "kind": "war",
+            "side": attacker.value,
+            "card": ctx["card"],
+            "country": country,
+            "win_from": ctx["win_from"],
+            "needed": needed,
+            "penalty": penalty,
+            "vp": ctx["vp"],
+            "defender_influence": seized,
+            "wins": sum(1 for r in rows if r["win"]),
+            "rows": rows,
+        }
+
+    def country_facts(self) -> dict[str, dict]:
+        """Static per-country geography for player-facing projections.
+
+        The board image carries stability and the Battleground badge, but not
+        the region (Scoring and 8.1.5's DEFCON geography both key off it) nor
+        the DEFCON floor below which no Coup/Realignment may be attempted
+        there. Derived from the same rule `_usable_coup_realign_target`
+        enforces, so a tooltip can never disagree with the options the engine
+        offers. Geography is fixed for a game, so callers may cache it.
+        """
+        return {
+            cid: {
+                "region": info.region.name,
+                "battleground": info.battleground,
+                "stability": info.stability,
+                "min_defcon": RULES["coup_min_defcon"].get(
+                    info.region.name, _DEFAULT_MIN_DEFCON
+                ),
+            }
+            for cid, info in self.board.countries.items()
+        }
 
     def _usable_coup_realign_target(
         self, attacker: Side, cid: str, for_coup: bool = True,

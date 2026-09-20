@@ -12,8 +12,13 @@
     <div id="boardarea">
       <div id="boardwrap">
         <div id="boardbox">
-          <img id="board" src="/assets/board.png" alt="Twilight Struggle board" draggable="false">
-          <div id="boardload">Loading board…</div>
+          <img id="board" alt="Twilight Struggle board" draggable="false">
+          <div id="boardload">
+            <div class="loadinner">
+              <p id="loadtext">Loading the board…</p>
+              <div class="loadbar"><i></i></div>
+            </div>
+          </div>
           <div id="markers"></div>
         </div>
       </div>
@@ -28,7 +33,11 @@
     <div id="hand"></div>
   </div>
   <aside id="panel">
-    <h1>Struggler<button id="cog" type="button" title="Settings" aria-label="Settings" onclick="toggleSettings()">⚙</button></h1>
+    <h1>Struggler<span class="hbtns">
+      <button id="helpbtn" type="button" title="How to play (?)" aria-label="How to play">?</button>
+      <button id="focusbtn" type="button" title="Map only (M)" aria-label="Map only">⛶</button>
+      <button id="cog" type="button" title="Settings" aria-label="Settings" onclick="toggleSettings()">⚙</button>
+    </span></h1>
     <div id="gamestatus"></div>
     <div id="settings" hidden></div>
     <div id="panelscroll">
@@ -40,7 +49,11 @@
     <div id="decision" hidden></div>
   </aside>
 </main>
+<aside id="help" hidden aria-label="How to play"></aside>
 <div id="winner" hidden role="dialog" aria-modal="true" aria-label="Game over"></div>
+<div id="winnerchip" hidden>
+  <button type="button" id="wchip">Game over — show summary</button>
+</div>
 <div id="toast" hidden></div>
 <div id="live" class="sr-only" aria-live="polite"></div>
 <script src="/app.js"></script>

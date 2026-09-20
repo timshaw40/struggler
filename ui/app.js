@@ -7,6 +7,11 @@
 const META = {};    // card id -> {number, name, ops, side, scoring, event_summary, ...}
 const IMAGES = {};  // card id -> card-face filename under /assets/cards/ (optional)
 const POS = {};     // country id -> {x, y} box top-left fractions, w/h px, s stability
+/* Country geography from /countryfacts: region, Battleground flag, and the
+ * DEFCON floor below which no Coup/Realignment may be attempted there. Empty
+ * if that endpoint is unavailable, in which case the hover tip falls back to
+ * influence and stability alone. */
+const FACTS = {};
 
 const BOARD_W = 5100, BOARD_H = 3300;
 /* Region views: rectangles of the board image (box layout, as measured by
@@ -43,6 +48,7 @@ let previewEl = null;
 let actionBar = null;
 let playing = true;   // watch mode playback
 let winnerFocused = false;
+let winnerDismissed = false;   // "review the board" hides the summary, not the game
 let inFlight = false; // one poll chain at a time
 let lastRenderSig = null;          // skip redundant full re-renders
 const expandedRows = new Set();    // history rows the user opened, by absolute index
@@ -55,6 +61,10 @@ let firstFeedBuild = true;
  * and the settings toggle is the rollback. */
 let decisionPlace = localStorage.getItem("struggler.decisionPlace") || "center";
 let decisionDragged = false;   // once moved by hand, stop auto-positioning it
+/* Map-only mode: the panel (log, piles, status) folds away and the map takes
+ * the whole width. Remembered, because a player who wants the map big wants
+ * it big every time. */
+let panelHidden = localStorage.getItem("struggler.mapfocus") === "1";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -120,14 +130,33 @@ function showError(msg) {
  * arrows pan the map. Ignored while typing in a control or a modifier is held. */
 function installKeyboard() {
   document.addEventListener("keydown", (e) => {
+    // Undo is the one chord worth claiming: it is the shortcut players reach
+    // for first, and nothing else in the page uses it.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "z") {
+      if (state && state.can_undo && !busy && !state.is_terminal) {
+        e.preventDefault();
+        goBack();
+      }
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || "";
     // Let a focused button/control handle its own Enter/Space/arrows.
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
 
     if (e.key === "Escape") {
+      const h = $("#help");
+      if (h && !h.hidden) { h.hidden = true; return; }
       const s = $("#settings");
       if (s && !s.hidden) { s.hidden = true; return; }
+      // A finished game's summary is dismissible like any other overlay: the
+      // log behind it is the point.
+      if (state && state.is_terminal && !winnerDismissed) {
+        winnerDismissed = true;
+        renderWinner();
+        return;
+      }
+      if (countryTip) countryTip.hidden = true;
       if (previewEl) previewEl.hidden = true;
       return;
     }
@@ -140,6 +169,37 @@ function installKeyboard() {
       else if (e.key === "ArrowDown") wrap.scrollTop += step;
       else return;
       e.preventDefault();
+      return;
+    }
+    // Views and zoom: the map is the board, and these are the two things a
+    // player does to it constantly.
+    const views = Object.keys(REGIONS);
+    if (e.key === "v") {
+      setView(views[(views.indexOf(view) + 1) % views.length]);
+      return;
+    }
+    if (e.key === "+" || e.key === "=") {
+      setZoom(Math.min(1.8, zoom + 0.2));
+      const slider = $("#zoom");
+      if (slider) slider.value = String(Math.round(zoom * 100));
+      return;
+    }
+    if (e.key === "-" || e.key === "_") {
+      setZoom(Math.max(1, zoom - 0.2));
+      const slider = $("#zoom");
+      if (slider) slider.value = String(Math.round(zoom * 100));
+      return;
+    }
+    if (e.key === "0") {
+      setZoom(1);
+      const slider = $("#zoom");
+      if (slider) slider.value = "100";
+      return;
+    }
+    if (e.key === "?" || e.key === "/") { toggleHelp(); return; }
+    if (e.key === "m") { toggleMapFocus(); return; }
+    if (e.key === "u" && state && state.can_undo && !busy && !state.is_terminal) {
+      goBack();
       return;
     }
     if (busy) return;
@@ -162,29 +222,96 @@ async function boot() {
   }
 }
 
+/* The board is a 13 MB PNG, so on a cold load the placeholder is up for a
+ * while and has to say something. Prefer a streamed fetch, which can count
+ * bytes; if that is unavailable or fails, the plain <img> loads the file
+ * exactly as before and the placeholder stays a plain "loading". */
+async function loadBoard() {
+  const img = $("#board");
+  if (!img) return;
+  const url = "/assets/board.png";
+  const text = $("#loadtext");
+  const bar = document.querySelector("#boardload .loadbar");
+  const mb = (bytes) => (bytes / 1048576).toFixed(1);
+  if (!window.fetch || !window.ReadableStream) {
+    img.src = url;
+    return;
+  }
+  try {
+    const res = await fetch(url);
+    if (!res.ok || !res.body) {
+      img.src = url;
+      return;
+    }
+    const total = Number(res.headers.get("Content-Length") || 0);
+    const reader = res.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      if (text) {
+        text.textContent = total
+          ? `Loading the board… ${mb(got)} of ${mb(total)} MB`
+          : `Loading the board… ${mb(got)} MB`;
+      }
+      if (bar && total) bar.style.setProperty("--p", `${Math.round((got / total) * 100)}%`);
+    }
+    const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "image/png" });
+    const objUrl = URL.createObjectURL(blob);
+    img.addEventListener("load", () => URL.revokeObjectURL(objUrl), { once: true });
+    img.src = objUrl;
+    if (text) text.textContent = "Decoding the board…";
+    if (bar) bar.style.setProperty("--p", "100%");
+  } catch (err) {
+    // Any failure is survivable: the img loads the URL directly instead.
+    console.warn("board progress unavailable:", err);
+    img.src = url;
+  }
+}
+
 async function bootInner() {
   // The board is ~13 MB: keep a placeholder up until it has decoded.
   const boardImg = $("#board");
   const hideBoardLoad = () => { const l = $("#boardload"); if (l) l.hidden = true; };
-  if (boardImg && boardImg.complete) hideBoardLoad();
-  else if (boardImg) {
+  if (boardImg) {
+    // Listeners first: loadBoard() only assigns `src` afterwards, so a cached
+    // board can never fire `load` before anything is watching for it.
     boardImg.addEventListener("load", hideBoardLoad);
     boardImg.addEventListener("error", hideBoardLoad);  // don't cover the fallback
+    loadBoard();
   }
   const toast = $("#toast");
   if (toast) toast.addEventListener("click", () => { toast.hidden = true; });
+  // Bring the game-over summary back after "review the board" dismissed it.
+  const chip = $("#wchip");
+  if (chip) chip.addEventListener("click", () => {
+    winnerDismissed = false;
+    winnerFocused = false;
+    renderWinner();
+  });
+  const helpBtn = $("#helpbtn");
+  if (helpBtn) helpBtn.addEventListener("click", toggleHelp);
+  const focusBtn = $("#focusbtn");
+  if (focusBtn) focusBtn.addEventListener("click", toggleMapFocus);
   installKeyboard();
 
-  const [cards, manifest, countries] = await Promise.all([
+  const [cards, manifest, countries, facts] = await Promise.all([
     fetchJson("/cards"),
     fetchJson("/assets/cards.json").catch(() => ({})),
     // VASSAL install ships box centers measured off the board; fall back
     // to the schematic calibration for non-VASSAL art.
     fetchJson("/assets/countries.json").catch(() => fetchJson("/countries.json")),
+    // Region/Battleground/DEFCON geography for the hover tip. Not fatal if it
+    // is missing: the tip still reads out influence and stability.
+    fetchJson("/countryfacts").catch(() => ({})),
   ]);
   Object.assign(META, cards);
   Object.assign(IMAGES, manifest);
   Object.assign(POS, countries);
+  Object.assign(FACTS, facts);
   if (!Object.keys(IMAGES).length) $("#boardwrap").classList.add("noboard");
   const preview = document.createElement("div");
   preview.id = "cardpreview";
@@ -194,6 +321,16 @@ async function bootInner() {
   actionBar = $("#actionbar");
   enableDragPan();
   enableDecisionDrag();
+  // Restore a remembered map-only session before anything measures the map.
+  document.body.classList.toggle("mapfocus", panelHidden);
+  const focusBack = document.createElement("button");
+  focusBack.type = "button";
+  focusBack.id = "focusback";
+  focusBack.textContent = "⛶ Show panel";
+  focusBack.title = "Show the panel again (M)";
+  focusBack.hidden = !panelHidden;
+  focusBack.addEventListener("click", toggleMapFocus);
+  $("#boardarea").append(focusBack);
   applyDecisionPlacement();
   buildViewBar();
   window.addEventListener("resize", layoutBoard);
@@ -374,6 +511,39 @@ async function act(index) {
  * not the moment the chit leaves the edge of the screen. */
 const FLY_MS = 400;
 
+/* One shared Web Audio context for every cue on the page: browsers cap how
+ * many a document may open, and the placement clack and the "your move" chime
+ * have no reason to own one each. Null where Web Audio is unavailable. */
+function audioCtx() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  const ctx = audioCtx.ctx || (audioCtx.ctx = new AC());
+  if (ctx.state === "suspended") ctx.resume();  // first click may not have unlocked it yet
+  return ctx;
+}
+
+/* "The game is waiting on you": two soft rising notes. Deliberately shorter
+ * and quieter than the placement clack — it has to carry across a room to a
+ * player who has looked away, without sounding like an alarm. */
+function cueSound() {
+  if (localStorage.getItem("struggler.sound") === "0") return;
+  const ctx = audioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + 0.02;
+  for (const [freq, at, level] of [[784, 0, 0.05], [1046.5, 0.12, 0.04]]) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq, t0 + at);
+    g.gain.setValueAtTime(0.0001, t0 + at);
+    g.gain.exponentialRampToValueAtTime(level, t0 + at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.3);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0 + at);
+    o.stop(t0 + at + 0.34);
+  }
+}
+
 /* Short white noise, made once and reused: the contact tick of a cardboard
  * counter meeting a paper map. */
 function noiseBuffer(ctx) {
@@ -391,10 +561,8 @@ function noiseBuffer(ctx) {
  * of three influence sounds like tok, tok, tok instead of a machine. */
 function placeSound() {
   if (localStorage.getItem("struggler.sound") === "0") return;
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return;
-  const ctx = placeSound.ctx || (placeSound.ctx = new AC());
-  if (ctx.state === "suspended") ctx.resume();  // first click may not have unlocked it yet
+  const ctx = audioCtx();
+  if (!ctx) return;
 
   const now = ctx.currentTime;
   const since = placeSound.last === undefined ? Infinity : now - placeSound.last;
@@ -959,10 +1127,63 @@ function optionLabel(o) {
 
 let countryTip = null;
 
+/* "MIDDLE_EAST" -> "Middle East": the region names are engine enum values. */
+const regionLabel = (name) => String(name).toLowerCase().split("_")
+  .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
+/* What the printed board already says, said again in words: who controls the
+ * country, whether it is a Battleground (so Scoring and the Coup DEFCON rule
+ * both treat it differently), its stability, and the region it scores in. */
+function countryFactsLine(cid, inf) {
+  const f = FACTS[cid] || {};
+  const bits = [];
+  const ctrl = controlOf(cid, inf);
+  if (ctrl) bits.push(`<b class="${ctrl === "US" ? "us" : "ussr"}">${ctrl} controls</b>`);
+  if (f.battleground) bits.push('<b class="fbg">Battleground</b>');
+  const stab = (POS[cid] && POS[cid].s) || f.stability;
+  if (stab) bits.push(`Stability ${stab}`);
+  if (f.region) bits.push(esc(regionLabel(f.region)));
+  return bits.join(" · ");
+}
+
+/* The line that answers "may I do that here?": what an Ops placement costs,
+ * or — during a Coup/Realignment target pick — why this country is not on the
+ * list. The two reasons come from the same rules the engine used to build the
+ * options, so the tip can only ever confirm what a click would do. */
+function countryChoiceLine(cid) {
+  const d = state && state.decision;
+  if (!d) return "";
+  const legal = (d.options || []).some((o) => o.payload && o.payload.country === cid);
+  if (d.kind === "place_influence" && !d.context.setup && legal) {
+    const cost = placementCost(cid, state.influence);
+    return cost === 2
+      ? '<div class="cnote warn">Costs 2 Ops — opponent-controlled</div>'
+      : '<div class="cnote">Costs 1 Op</div>';
+  }
+  if ((d.kind === "coup_target" || d.kind === "realignment_target") && !legal) {
+    const f = FACTS[cid] || {};
+    const opp = state.human_side === "US" ? "USSR" : "US";
+    const row = (state.influence || {})[cid] || {};
+    const why = (row[opp] || 0) <= 0
+      ? "No enemy influence — nothing to attack"
+      : f.min_defcon && state.defcon < f.min_defcon
+        ? `DEFCON ${state.defcon} bars ${d.kind === "coup_target" ? "Coups" : "Realignments"} in ${esc(regionLabel(f.region))}`
+        : "Not a legal target";
+    return `<div class="cnote">${why}</div>`;
+  }
+  // A war's targets are the countries its card names, so a hover outside that
+  // list explains itself instead of showing an empty table.
+  if (d.kind === "war_target" && !legal) {
+    return '<div class="cnote">Not a country this war can be fought in</div>';
+  }
+  return "";
+}
+
 /* Hover readout for a map marker: an amplification of the country's printed
  * header strip (flag | name | stability badge — red badge = battleground),
- * plus live influence. Falls back to plain text when a header asset is
- * missing. Positioned above the marker, viewport-clamped. */
+ * plus live influence, then the facts the art does not carry. Falls back to
+ * plain text when a header asset is missing. Positioned above the marker,
+ * viewport-clamped. */
 function showCountryTip(el, cid, inf) {
   // Works in every view: markers are positioned in board coordinates and the
   // tip is placed from the element's viewport rect, so region views are fine.
@@ -976,6 +1197,8 @@ function showCountryTip(el, cid, inf) {
     `<img class="chead" src="/assets/headers/${cid}.png" alt="${pretty(cid)}">`
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
     + `<span class="ussr">USSR ${inf.USSR}</span></div>`
+    + `<div class="cfacts">${countryFactsLine(cid, inf)}</div>`
+    + countryChoiceLine(cid)
     + `<div class="odds"></div>`;
   countryTip.hidden = false;
   tipCid = cid;
@@ -1020,6 +1243,10 @@ let tipCid = null;
 let countryTipPlace = null;
 const oddsCache = new Map();   // `${decision id}:${country}` -> payload | Promise
 
+/* Every target pick that ends in a die roll, so the hover table and its
+ * prefetch can never be wired up for one and forgotten for the others. */
+const TARGET_ROLL_KINDS = new Set(["coup_target", "realignment_target", "war_target"]);
+
 function oddsKey(d, cid) {
   return `${d.id}:${cid}`;
 }
@@ -1039,7 +1266,7 @@ function requestOdds(d, cid) {
  * tooltip is that it is there the moment the cursor lands, and a fetch on
  * hover both lags and races the click that follows it. */
 function prefetchOdds(d) {
-  if (!d || (d.kind !== "coup_target" && d.kind !== "realignment_target")) return;
+  if (!d || !TARGET_ROLL_KINDS.has(d.kind)) return;
   for (const o of d.options || []) {
     const cid = o.payload && o.payload.country;
     if (cid) requestOdds(d, cid);
@@ -1055,7 +1282,7 @@ function prefetchOdds(d) {
 
 function legalTargetDecision(cid) {
   const d = state && state.decision;
-  if (!d || (d.kind !== "coup_target" && d.kind !== "realignment_target")) return null;
+  if (!d || !TARGET_ROLL_KINDS.has(d.kind)) return null;
   const hit = (d.options || []).some((o) => o.payload && o.payload.country === cid);
   return hit ? d : null;
 }
@@ -1130,6 +1357,28 @@ function oddsHtml(p) {
       + `<div class="odline">Best ${deltas[deltas.length - 1] > 0 ? "+" : ""}${deltas[deltas.length - 1]} · `
       + `worst ${deltas[0]} · average ${p.expected_delta > 0 ? "+" : ""}${p.expected_delta}</div>`
       + (detail ? `<div class="odline odsmall">${esc(detail)}</div>` : "");
+  }
+  if (p.kind === "war") {
+    // A war is one die with a fixed penalty, so the whole table is six lines:
+    // what each face would do to this country.
+    const opp = p.side === "US" ? "USSR" : "US";
+    const head = `War odds · needs ${p.needed}+ on the die`
+      + (p.penalty ? ` (−${p.penalty} for ${esc(opp)}-controlled neighbours)` : "");
+    const rows = p.rows.map((r) => {
+      const win = r.win
+        ? `<b>win</b> · +${r.vp} VP`
+          + (r.seized ? ` · take ${r.seized} influence` : "")
+        : "nothing happens";
+      return `<tr><td class="d6">${r.roll}</td><td>${win}</td></tr>`;
+    }).join("");
+    const summary = p.wins === 6
+      ? "Wins on any roll."
+      : p.wins === 0
+        ? "Cannot win as the board stands."
+        : `Wins on ${p.wins} of 6 rolls.`;
+    return `<div class="odhead">${esc(head)}</div>`
+      + `<table class="odtable">${rows}</table>`
+      + `<div class="odsum">${esc(summary)}</div>`;
   }
   return "";
 }
@@ -1400,6 +1649,7 @@ function render() {
   const d = state.decision;
   const sig = [
     state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
+    state.play_restriction || "-",
     d ? `${d.kind}:${d.options.length}` : "-",
     Object.keys(state.turn_effects || {}).length,
     Object.keys(state.game_effects || {}).length,
@@ -1426,6 +1676,59 @@ function render() {
   renderHand();
   renderDecision();
   renderWinner();
+  renderCue();
+}
+
+/* The tab is the player's HUD whenever the game is not the front window: a
+ * bot can think for a minute at a time, so whose move it is has to be legible
+ * from the tab strip alone, without coming back to the table. */
+let cueWasMine = null;     // null until the first render, so a reload is quiet
+let faviconAlert = null;
+
+function renderCue() {
+  if (!state) return;
+  const over = !!state.is_terminal;
+  // `state.decision` only ever carries the human's own decision (the server
+  // resolves bot and CHANCE steps before it answers), so a decision here
+  // really does mean "the game is waiting on you".
+  const mine = !over && !state.watch && !busy && !!state.decision;
+  let title;
+  if (over) {
+    const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
+    title = `Struggler — ${name} wins`;
+  } else if (state.watch) {
+    title = playing ? "Struggler — bot vs bot" : "Struggler — paused";
+  } else if (mine) {
+    title = "● Your move — Struggler";
+  } else if (busy) {
+    title = "Struggler — resolving…";
+  } else {
+    title = `Struggler — Turn ${state.turn}, Round ${state.action_round}`;
+  }
+  if (document.title !== title) document.title = title;
+  setFavicon(mine);
+  // One chime, only on the beat where the turn comes back to the player, and
+  // only when they are looking at something else. A reload is silent.
+  if (mine && cueWasMine === false && document.hidden) cueSound();
+  cueWasMine = mine;
+}
+
+/* A drawn favicon rather than a file: one less thing to install, and the dot
+ * is the only information the tab strip can carry at 16px. */
+function setFavicon(alert) {
+  if (faviconAlert === alert) return;
+  faviconAlert = alert;
+  const dot = alert ? "#f4c04f" : "#4a5262";
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    + '<rect width="32" height="32" rx="7" fill="#1b2029"/>'
+    + `<circle cx="16" cy="16" r="8.5" fill="${dot}"/></svg>`;
+  let link = document.querySelector("link[rel='icon']");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.append(link);
+  }
+  link.href = "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
 function renderBoard() {
@@ -1603,18 +1906,47 @@ function renderPanel() {
 
   const piles = $("#piles");
   piles.textContent = "";
+  // A pile is a stack of cards, so it opens as cards: the same art the hand
+  // uses, with the same hover preview. The collapsed row keeps the last few
+  // names, which is what the player glances at ("is that in the discard
+  // yet?"), and the count is the point of the row.
   const pileRow = (label, cards) => {
     if (!cards.length) return;
     const row = document.createElement("div");
     row.className = "kv pile";
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-expanded", "false");
     const names = cards.slice(-4).map(cardName).join(", ");
-    row.title = "Show the whole pile";
+    row.title = "Show every card in this pile";
     row.innerHTML = `<span>${esc(label)} (${cards.length})</span><b>${esc(names)}</b>`;
     const list = document.createElement("div");
-    list.className = "pilelist";
+    list.className = "pilecards";
     list.hidden = true;
-    list.textContent = cards.map(cardName).join(", ");
-    row.addEventListener("click", () => { list.hidden = !list.hidden; });
+    // The discard can reach ~110 cards by the late war: draw the first screen
+    // worth and let the player ask for the rest, so opening a pile is never a
+    // hundred-image stall.
+    for (const cid of cards.slice(0, PILE_FACE_CAP)) list.append(pileCard(cid));
+    if (cards.length > PILE_FACE_CAP) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "pilemore";
+      more.textContent = `…and ${cards.length - PILE_FACE_CAP} more`;
+      more.addEventListener("click", (e) => {
+        e.stopPropagation();  // clicking the cards must not close the pile
+        more.remove();
+        for (const cid of cards.slice(PILE_FACE_CAP)) list.append(pileCard(cid));
+      });
+      list.append(more);
+    }
+    const toggle = () => {
+      list.hidden = !list.hidden;
+      row.setAttribute("aria-expanded", String(!list.hidden));
+    };
+    row.addEventListener("click", toggle);
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
     piles.append(row, list);
   };
   pileRow("In play", state.in_play_cards || []);
@@ -2119,11 +2451,12 @@ function eventDetail(e, older) {
   return lines;
 }
 
-function cardEl(cid, actionIndex) {
+function cardEl(cid, actionIndex, locked = null) {
   const m = META[cid] || {};
   const el = document.createElement("div");
   el.className = "card" + (m.side ? ` side-${m.side.toLowerCase()}` : "")
-    + (actionIndex !== null ? " playable" : "");
+    + (actionIndex !== null ? " playable" : "")
+    + (locked ? " locked" : "");
   if (IMAGES[cid]) {
     const img = document.createElement("img");
     img.src = `/assets/cards/${IMAGES[cid]}`;
@@ -2137,7 +2470,12 @@ function cardEl(cid, actionIndex) {
   } else {
     fillCardText(el, m, cid);
   }
-  if (m.event_summary) el.title = m.event_summary;
+  // A locked card's reason outranks the card text: the player is asking why
+  // nothing happens, not what the card does.
+  if (locked) {
+    el.title = `${m.name || cid} — ${locked}` + (m.event_summary ? `\n\n${m.event_summary}` : "");
+    el.setAttribute("aria-disabled", "true");
+  } else if (m.event_summary) el.title = m.event_summary;
   el.addEventListener("mouseenter", () => showPreview(cid, el));
   el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
   if (actionIndex !== null) {
@@ -2203,10 +2541,56 @@ function fillCardText(el, m, cid) {
   el.append(name, ops);
 }
 
+/* Why a card in hand cannot be played right now, in the player's words, or
+ * null when it can. Only two of these are about the card itself (the scoring
+ * deadline and a forced Missile Envy, both reported by the engine); the rest
+ * are about the decision the game is actually waiting on. A dead click with
+ * no explanation is the thing being fixed here. */
+function cardBlockReason(cid) {
+  if (!state) return "Loading…";
+  if (state.is_terminal) return "The game is over";
+  if (busy) return "Resolving your last move…";
+  const d = state.decision;
+  if (!d) return state.watch ? "This seat is a bot" : "Waiting for the opponent";
+  if (d.kind === "headline_play" || d.kind === "action_round_play") {
+    const r = state.play_restriction;
+    if (r === "scoring_deadline") return "A Scoring card must be played this round";
+    if (r === "missile_envy") return "Missile Envy must be played this round";
+    return "Not offered this round";
+  }
+  return `Not now — ${(PROMPTS[d.kind] || pretty(d.kind)).toLowerCase()}`;
+}
+
 function renderHand() {
   const host = $("#hand");
   host.textContent = "";
-  for (const cid of state.hand) host.append(cardEl(cid, cardOption(cid)));
+  // Undo lives here, not only inside the decision box: the mistake a player
+  // most wants back (Ops spent in the wrong country) happens mid-chain, while
+  // the box is already asking for the next one.
+  if (state.can_undo && !busy && !state.is_terminal) {
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.id = "undo";
+    undo.textContent = "← Undo";
+    undo.title = "Take back the last move (⌘Z or Ctrl+Z)";
+    undo.addEventListener("click", goBack);
+    host.append(undo);
+  }
+  const locked = [];
+  for (const cid of state.hand) {
+    const opt = cardOption(cid);
+    const why = opt === null ? cardBlockReason(cid) : null;
+    if (why) locked.push(why);
+    host.append(cardEl(cid, opt, why));
+  }
+  // Whole hand inert: say it once in the bar instead of leaving the player to
+  // hover every card to find out why.
+  if (state.hand.length && locked.length === state.hand.length) {
+    const note = document.createElement("div");
+    note.id = "handstate";
+    note.textContent = locked[0];
+    host.prepend(note);
+  }
 }
 
 /* Human-readable decision context: curated keys only. Engine internals
@@ -2384,6 +2768,31 @@ function renderDecision() {
   }
 }
 
+/* How many card faces a pile draws before it asks. A screenful also fits the
+ * 320px column, so the pile opens without scrolling sideways. */
+const PILE_FACE_CAP = 48;
+
+/* One card inside a pile: the face itself, at hand-card fidelity, with the
+ * same hover preview every other card surface has. */
+function pileCard(cid) {
+  const el = document.createElement("div");
+  el.className = "pilecard";
+  el.title = cardName(cid);
+  if (IMAGES[cid]) {
+    const img = document.createElement("img");
+    img.src = `/assets/cards/${IMAGES[cid]}`;
+    img.alt = cardName(cid);
+    img.loading = "lazy";
+    img.addEventListener("error", () => { img.remove(); el.textContent = cardName(cid); });
+    el.append(img);
+  } else {
+    el.textContent = cardName(cid);
+  }
+  el.addEventListener("mouseenter", () => showPreview(cid, el));
+  el.addEventListener("mouseleave", () => { previewEl.hidden = true; });
+  return el;
+}
+
 function recordOf(side) {
   try {
     const r = JSON.parse(localStorage.getItem("struggler.record") || "{}");
@@ -2543,10 +2952,13 @@ async function goBack() {
 
 function renderWinner() {
   const overlay = $("#winner");
+  const chip = $("#winnerchip");
   if (!state.is_terminal) {
     overlay.hidden = true;
     overlay.dataset.forSeed = "";
     winnerFocused = false;
+    winnerDismissed = false;
+    if (chip) chip.hidden = true;
     return;
   }
   clearAction();  // nothing should linger behind the game-over overlay
@@ -2559,24 +2971,180 @@ function renderWinner() {
       localStorage.setItem(key, "1");
     }
   }
-  overlay.hidden = false;
   // Build the dialog once per game; rebuilding every render would destroy the
-  // focused "new game" link and drop keyboard focus.
+  // focused buttons and drop keyboard focus.
   if (overlay.dataset.forSeed !== String(state.seed)) {
     overlay.dataset.forSeed = String(state.seed);
     winnerFocused = false;
-    const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
-    overlay.innerHTML = `<div class="cardbig">${esc(name)} wins<br><small>${esc(state.game_over_reason || "")}
-      <br><a href="#" id="again">new game</a></small></div>`;
-    $("#again").addEventListener("click", (e) => { e.preventDefault(); newGame(); });
-    // One control in the dialog: keep Tab from escaping into the page behind it.
+    winnerDismissed = false;
+    overlay.innerHTML = winnerSummaryHtml();
+    // Watch mode has no seat to restart, so it gets the review button only.
+    const again = $("#again");
+    if (again) again.addEventListener("click", () => newGame());
+    $("#wreview").addEventListener("click", () => {
+      winnerDismissed = true;
+      renderWinner();
+      $("#wchip").focus();
+    });
+    const focusable = () => [...overlay.querySelectorAll("button")];
+    // Keep Tab inside the dialog: the page behind it is a finished game, not
+    // something to wander into.
     overlay.addEventListener("keydown", (e) => {
-      if (e.key === "Tab") { e.preventDefault(); $("#again").focus(); }
+      if (e.key !== "Tab") return;
+      const items = focusable();
+      const at = items.indexOf(document.activeElement);
+      const next = (at + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+      e.preventDefault();
+      items[next].focus();
     });
   }
-  if (!winnerFocused) {  // move focus into the dialog once, not every render
+  overlay.hidden = winnerDismissed;
+  if (chip) chip.hidden = !winnerDismissed;
+  if (!winnerFocused && !winnerDismissed) {  // focus the dialog once, not every render
     winnerFocused = true;
-    $("#again").focus();
+    const first = overlay.querySelector("button");
+    if (first) first.focus();
+  }
+}
+
+/* The end of a game is the one moment the player wants the numbers: what the
+ * final score was, how far the game got, and how the record now stands. The
+ * summary is also the only way to reach the log of the game they just played
+ * (see the "review" button), which the overlay used to cover for good. */
+function winnerSummaryHtml() {
+  const name = state.winner === "US" ? "USA" : state.winner === "USSR" ? "CCCP" : "Nobody";
+  const you = state.human_side;
+  const youName = you === "US" ? "USA" : "CCCP";
+  const vp = state.vp || 0;
+  const vpText = vp === 0 ? "level" : vp > 0 ? `US +${vp}` : `USSR +${-vp}`;
+  const rec = recordOf(you);
+  const won = state.winner === you;
+  const stat = (label, value) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`;
+  return `<div class="wcard">`
+    + `<h2>${esc(name)} wins</h2>`
+    + `<p class="wsub">${esc(state.game_over_reason || "")}</p>`
+    + (state.watch ? ""
+      : `<p class="wyou ${won ? "win" : "loss"}">You played ${esc(youName)} — `
+        + `${won ? "win" : "loss"}</p>`)
+    + `<dl class="wsum">`
+    + stat("Final VP", vpText)
+    + stat("Turn", String(state.turn))
+    + stat("DEFCON", String(state.defcon))
+    + stat("Your record", `${rec.w}–${rec.l}`)
+    + `</dl>`
+    + `<div class="wbtns">`
+    + (state.watch ? "" : `<button type="button" id="again">New game</button>`)
+    + `<button type="button" id="wreview">Review the board</button>`
+    + `</div></div>`;
+}
+
+/* -- help -----------------------------------------------------------------
+ *
+ * One sentence per decision, worded to match what the engine actually does
+ * (see coup_forecast / realignment_forecast, which the hover tables come
+ * from), plus the two things the board art cannot tell a new player: how a
+ * turn is shaped, and how to read a marker. The engine remains the authority;
+ * this is the map, not the rulebook.
+ */
+const HELP_KINDS = {
+  place_influence: "Place Influence: each Op puts one Influence in a country. "
+    + "A country the opponent controls costs 2 Ops.",
+  coup_target: "Coup: one die + your Ops − twice the country's Stability. "
+    + "That much enemy Influence is removed, and anything left over becomes "
+    + "yours. A coup in a Battleground country drops DEFCON by 1.",
+  realignment_target: "Realignment: both sides roll one die and add their "
+    + "modifiers (adjacency, who controls the neighbours, influence already "
+    + "there). The higher roll removes the loser's Influence by the margin; "
+    + "a tie does nothing. Your Ops are not added to the roll.",
+  war_target: "War: the card names a region, and you pick the country it is "
+    + "fought in. The card's own die decides the result.",
+  headline_play: "Headline: both sides play one card face down and reveal "
+    + "together, before the first action round.",
+  action_round_play: "Action round: play one card — for its event, for "
+    + "Operations, for the Space Race, or as the event it cancels.",
+  play_mode: "How is this card being used: its event, or its Operations?",
+  ops_type: "Spend the Ops on Influence, on a Coup, or on Realignment rolls.",
+  event_ops_order: "The card was played for Operations, so its event still "
+    + "fires for the opponent — choose whether that happens before or after.",
+  event_choice: "The card asks you to choose.",
+  event_influence: "Place or remove Influence as the card directs.",
+  event_resume: "Continue when you are ready for the card to resolve.",
+  quagmire_discard: "Quagmire: discard an Ops card to clear the trap.",
+  held_card_discard: "Decide whether to discard the card being held.",
+};
+
+const HELP_KEYS = [
+  ["1–9, Enter", "pick an option"],
+  ["←↑→↓", "pan the map"],
+  ["+ − 0", "zoom in, out, reset"],
+  ["V", "next map view"],
+  ["U or ⌘Z", "undo the last move"],
+  ["M", "map only (hide the panel)"],
+  ["?", "this panel"],
+  ["Esc", "close panels"],
+];
+
+function helpHtml() {
+  const d = state && state.decision;
+  const now = d
+    ? `<p class="hnow">${esc(PROMPTS[d.kind] || pretty(d.kind))}</p>`
+      + `<p>${esc(HELP_KINDS[d.kind] || "Follow the prompt in the action box.")}</p>`
+    : `<p class="hnow">Nothing is waiting on you</p>`
+      + `<p>${state && state.watch ? "This is a bot-vs-bot game." : "Waiting for the opponent."}</p>`;
+  const played = d && ((d.context || {}).card || (d.context || {}).event);
+  const card = played && played !== "none" && played !== "HIDDEN_CARD"
+    ? `<h3>Card in play</h3><p class="hcard">${esc(cardName(played))}</p>`
+      + `<p>${esc((META[played] || {}).event_summary || "No text for this card.")}</p>`
+    : "";
+  const keys = HELP_KEYS
+    .map(([k, what]) => `<div class="hkey"><kbd>${esc(k)}</kbd><span>${esc(what)}</span></div>`)
+    .join("");
+  return `<h2>How to play</h2>`
+    + `<h3>Right now</h3>${now}`
+    + card
+    + `<h3>A turn</h3>`
+    + `<p>Each turn opens with a headline, then the action rounds alternate. `
+    + `Playing a scoring card scores its region. Influence never disappears `
+    + `on its own — it is removed by coups, realignments, wars and events.</p>`
+    + `<h3>Reading the map</h3>`
+    + `<p>A marker is one country's Influence: the white pip is a country `
+    + `someone is merely present in, the coloured pip is one they control `
+    + `(control is ahead by at least the country's Stability). A gold `
+    + `<b>2</b> badge means a placement there costs 2 Ops. Battlegrounds are `
+    + `worth double in Scoring and cost DEFCON when couped.</p>`
+    + `<h3>Defeat</h3>`
+    + `<p>DEFCON 1 loses the game for whoever caused it, and a side at 20 VP `
+    + `wins outright. Europe control ends it too.</p>`
+    + `<h3>Keys</h3><div class="hkeys">${keys}</div>`;
+}
+
+function renderHelp() {
+  const box = $("#help");
+  if (!box) return;
+  box.innerHTML = helpHtml();
+  box.hidden = false;
+}
+
+/* The help panel follows the game: whatever is being asked right now is the
+ * first thing in it, so "?" answers the question actually on screen. */
+function toggleHelp() {
+  const box = $("#help");
+  if (!box) return;
+  if (box.hidden) renderHelp();
+  else box.hidden = true;
+}
+
+function toggleMapFocus() {
+  panelHidden = !panelHidden;
+  localStorage.setItem("struggler.mapfocus", panelHidden ? "1" : "0");
+  document.body.classList.toggle("mapfocus", panelHidden);
+  // The action box can be living in the panel that just disappeared.
+  applyDecisionPlacement();
+  layoutBoard();
+  const back = $("#focusback");
+  if (back) {
+    back.hidden = !panelHidden;
+    back.setAttribute("aria-pressed", String(panelHidden));
   }
 }
 
@@ -2591,10 +3159,13 @@ function toggleSettings() {
 function applyDecisionPlacement() {
   const box = $("#decision");
   if (!box) return;
-  const host = decisionPlace === "center" ? $("#boardarea") : $("#panel");
+  // Map-only mode has no column to hold it, so the box floats regardless of
+  // the stored preference; turning the panel back on restores it.
+  const centered = decisionPlace === "center" || panelHidden;
+  const host = centered ? $("#boardarea") : $("#panel");
   if (host && box.parentElement !== host) host.append(box);
-  document.body.classList.toggle("decision-center", decisionPlace === "center");
-  if (decisionPlace !== "center") {
+  document.body.classList.toggle("decision-center", centered);
+  if (!centered) {
     box.style.left = "";
     box.style.top = "";
     box.style.transform = "";
