@@ -1529,6 +1529,52 @@ class Engine:
             ev.resolve(self, side)
             self._park_permanent_card(cid)
 
+    def war_forecast(self, decision: Decision, country: str) -> dict:
+        """What each die would do to `country`, for a pending War target.
+
+        Mirrors `_handle_war_roll`: the penalty is the number of
+        defender-controlled neighbours of the target (plus the target itself
+        for the wars that count it — Arab-Israeli War passes
+        `count_target_control`), the attacker needs `win_from` after that
+        subtraction, and a win seizes every defender Influence marker in the
+        country. Reads the live board, so the table is what a roll would
+        actually do rather than an estimate of it.
+        """
+        if decision.kind is not DecisionKind.WAR_TARGET:
+            raise ValueError("war_forecast needs the war target decision")
+        ctx = decision.context
+        attacker = Side(ctx["attacker"])
+        defender = attacker.opponent
+        penalty = sum(
+            1 for n in self.board.neighbors(country) if self.board.control(n) is defender
+        )
+        if ctx["count_target_control"] and self.board.control(country) is defender:
+            penalty += 1
+        seized = self.board.influence[country][defender.value]
+        needed = ctx["win_from"] + penalty
+        rows = [
+            {
+                "roll": roll,
+                "win": roll >= needed,
+                "vp": ctx["vp"] if roll >= needed else 0,
+                "seized": seized if roll >= needed else 0,
+            }
+            for roll in range(1, 7)
+        ]
+        return {
+            "kind": "war",
+            "side": attacker.value,
+            "card": ctx["card"],
+            "country": country,
+            "win_from": ctx["win_from"],
+            "needed": needed,
+            "penalty": penalty,
+            "vp": ctx["vp"],
+            "defender_influence": seized,
+            "wins": sum(1 for r in rows if r["win"]),
+            "rows": rows,
+        }
+
     def country_facts(self) -> dict[str, dict]:
         """Static per-country geography for player-facing projections.
 

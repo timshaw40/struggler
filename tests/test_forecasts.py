@@ -127,6 +127,82 @@ def test_realignment_forecast_does_not_promise_influence_to_lose():
     assert all(o["delta"] >= 0 for o in forecast["outcomes"])
 
 
+def war_engine(seed: int = 1, country: str = "India", defender_influence: int = 3):
+    """A war waiting on its target, with the defender dug in at `country`."""
+    engine = Engine(seed=seed)
+    engine.board.influence[country]["USSR"] = defender_influence
+    engine.push_war_target_choice(
+        "Indo_Pakistani_War", Side.US, ["India", "Pakistan"], win_from=4, vp=2,
+        military_ops=1,
+    )
+    return engine
+
+
+def test_war_forecast_predicts_the_real_war():
+    """Every predicted row must be what the roll actually does: the VP swing,
+    and the Influence that changes hands when the war is won.
+
+    A roll is drawn from the engine's own RNG (only physical mode exposes all
+    six faces), so the war is fought once per seed and the faces that come up
+    are accumulated: the assertion only means something if all six were
+    compared, which is checked at the end.
+    """
+    seen: set[int] = set()
+    for seed in range(1, 40):
+        for defender_influence in (0, 3):
+            engine = war_engine(seed=seed, country="India",
+                                defender_influence=defender_influence)
+            decision = engine.pending_decision
+            assert decision.kind is DecisionKind.WAR_TARGET
+            forecast = engine.war_forecast(decision, "India")
+
+            vp_before = engine.vp
+            target = next(a for a in decision.options if a.payload["country"] == "India")
+            engine.step(target)
+            roll_decision = engine.pending_decision
+            assert roll_decision.kind is DecisionKind.WAR_ROLL
+            roll = roll_decision.options[0].payload["value"]
+            row = next(r for r in forecast["rows"] if r["roll"] == roll)
+            engine.step(roll_decision.options[0])
+            seen.add(roll)
+
+            # VP is signed for the US, so a USSR award moves it down.
+            expected = -row["vp"] if forecast["side"] == "USSR" else row["vp"]
+            assert engine.vp - vp_before == expected, f"roll {roll}: {forecast}"
+            influence = engine.board.influence["India"]
+            if row["win"]:
+                assert influence["USSR"] == 0, f"roll {roll}: {forecast}"
+                assert influence["US"] == row["seized"], f"roll {roll}: {forecast}"
+            else:
+                assert influence["USSR"] == defender_influence, f"roll {roll}: {forecast}"
+    assert seen == {1, 2, 3, 4, 5, 6}, f"only rolls {sorted(seen)} were exercised"
+
+
+def test_war_forecast_counts_the_defenders_controlled_neighbours():
+    """The penalty is the defender's controlled neighbours of the target, so
+    digging in next door must move the number the table reports."""
+    engine = war_engine(country="India")
+    decision = engine.pending_decision
+    base = engine.war_forecast(decision, "India")
+    assert base["penalty"] == 0 and base["needed"] == 4
+
+    # India's neighbour is Pakistan; give the USSR control of it.
+    engine.board.influence["Pakistan"]["USSR"] = 4
+    assert engine.board.control("Pakistan") is Side.USSR
+    dug_in = engine.war_forecast(decision, "India")
+    assert dug_in["penalty"] == 1
+    assert dug_in["needed"] == base["needed"] + 1
+    assert dug_in["wins"] == base["wins"] - 1
+
+
+def test_war_forecast_refuses_the_wrong_decision():
+    engine = Engine(seed=1)
+    engine.board.influence["Guatemala"]["USSR"] = 2   # a coup needs a target
+    engine.begin_coup(Side.US, ops=2)
+    with pytest.raises(ValueError):
+        engine.war_forecast(engine.pending_decision, "Guatemala")
+
+
 def test_forecasts_refuse_the_wrong_decision():
     engine = Engine(seed=1)
     engine.board.influence["Guatemala"]["USSR"] = 2   # a coup needs a target

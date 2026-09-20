@@ -72,7 +72,12 @@ CONTENT_TYPES = {
 def forecast_for(engine: Engine, decision, country: str) -> dict:
     """Hover odds for `country`, or {"kind": "none"} when this decision rolls
     no dice. Only legal targets of the pending decision get a forecast, so the
-    UI can ask about whatever the cursor is over."""
+    UI can ask about whatever the cursor is over.
+
+    All three target picks that end in a die roll are covered: a Coup and a
+    Realignment roll immediately, and a War rolls once its country is chosen —
+    so a War target gets a table too, rather than the guess the other two were
+    fixed to remove."""
     if decision is None or not country:
         return {"kind": "none"}
     legal = {
@@ -86,6 +91,8 @@ def forecast_for(engine: Engine, decision, country: str) -> dict:
         return engine.coup_forecast(decision, country)
     if decision.kind is DecisionKind.REALIGNMENT_TARGET:
         return engine.realignment_forecast(decision, country)
+    if decision.kind is DecisionKind.WAR_TARGET:
+        return engine.war_forecast(decision, country)
     return {"kind": "none"}
 
 

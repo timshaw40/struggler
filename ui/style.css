@@ -248,7 +248,9 @@ main {
   font-size: 18px;
   margin: 0 0 10px;
 }
-#cog {
+.hbtns { display: flex; align-items: center; gap: 2px; }
+
+#cog, #helpbtn, #focusbtn {
   background: none;
   border: 0;
   color: var(--muted);
@@ -259,7 +261,7 @@ main {
   z-index: 6;
   position: relative;
 }
-#cog:hover { color: var(--text); }
+#cog:hover, #helpbtn:hover, #focusbtn:hover { color: var(--text); }
 #settings {
   display: block;
   background: var(--panel2);
@@ -345,13 +347,44 @@ main {
 /* Click a pile row to reveal the whole list. */
 .kv.pile { cursor: pointer; }
 .kv.pile:hover { color: var(--text); }
-.pilelist {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 2px 0 6px;
+.kv.pile:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+/* The pile, opened: real card faces, laid out like a stack on the table. */
+.pilecards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 5px 0 8px;
   border-bottom: 1px solid #2a303c;
 }
-.pilelist[hidden] { display: none; }
+.pilecards[hidden] { display: none; }
+
+.pilecard {
+  width: 66px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.pilecard img {
+  width: 100%;
+  display: block;
+  background: #fff;   /* the VASSAL faces are transparent PNGs/SVGs */
+  border-radius: 4px;
+}
+
+.pilemore {
+  align-self: center;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 9px;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.pilemore:hover { color: var(--text); border-color: var(--gold); }
 
 .feedrow {
   display: flex;
@@ -558,6 +591,89 @@ main {
   background: var(--panel2);
   border: 1px solid #3a4252;
   border-radius: 999px;
+}
+
+/* Undo sits with the hand rather than only inside the action box: the Ops
+ * placement a player wants back happens while the box is asking for the next
+ * one. */
+#undo {
+  align-self: center;
+  flex: none;
+  margin-right: 8px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#undo:hover { border-color: var(--gold); }
+
+/* Map-only mode: the panel folds away and the map takes the width back. The
+ * action box follows (see applyDecisionPlacement), and #focusback is the way
+ * home, since the header that holds the button goes with the panel. */
+body.mapfocus #panel { display: none; }
+
+#focusback {
+  position: absolute;
+  z-index: 6;
+  right: 10px;
+  bottom: 10px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(20, 22, 26, 0.92);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#focusback[hidden] { display: none; }
+#focusback:hover { border-color: var(--gold); }
+
+/* How to play: a slide-over that answers what is on screen right now. */
+#help {
+  position: fixed;
+  z-index: 42;   /* over the panel and the map, under the game-over dialog */
+  top: 0;
+  right: 0;
+  width: min(420px, 92vw);
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 18px 20px 26px;
+  background: var(--panel);
+  border-left: 1px solid #3a4252;
+  box-shadow: -14px 0 40px rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+}
+#help[hidden] { display: none; }
+#help h2 { margin: 0 0 12px; font-size: 18px; }
+#help h3 {
+  margin: 16px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#help p { margin: 4px 0; line-height: 1.45; }
+#help .hnow { font-size: 15px; font-weight: 700; color: var(--gold); }
+#help .hcard { font-weight: 600; }
+#help .hkeys { display: flex; flex-direction: column; gap: 4px; }
+#help .hkey { display: flex; gap: 10px; align-items: baseline; }
+#help .hkey kbd {
+  flex: none;
+  min-width: 78px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 5px;
+  padding: 2px 6px;
+  text-align: center;
 }
 
 .card.textcard { padding: 6px; min-height: 60px; }
@@ -966,16 +1082,79 @@ body:has(#dicebox:not([hidden])) #decision {
 #cardpreview .scorepreview b.us { color: #3b9eff; }
 #cardpreview .scorepreview b.ussr { color: #ff2d2d; }
 
-#winner .cardbig {
+/* Game-over summary: what the player wants at the moment the game ends —
+ * the score, how far it got, and the record — with the board readable again
+ * behind it rather than covered for good. */
+#winner .wcard {
   background: var(--panel);
   border: 1px solid #3a4252;
   border-radius: 12px;
-  padding: 24px 36px;
-  font-size: 20px;
+  padding: 26px 38px;
+  min-width: min(520px, 88vw);
   text-align: center;
 }
 
-/* Board loading placeholder (the board art is ~13 MB). */
+#winner h2 { margin: 0; font-size: 30px; }
+
+#winner .wsub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+#winner .wyou { margin: 12px 0 0; font-size: 15px; font-weight: 600; }
+#winner .wyou.win { color: var(--gold); }
+#winner .wyou.loss { color: var(--muted); }
+
+#winner .wsum {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin: 18px 0 4px;
+  padding: 14px 0;
+  border-top: 1px solid #2a303c;
+  border-bottom: 1px solid #2a303c;
+}
+#winner .wsum div { min-width: 76px; }
+#winner .wsum dt {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#winner .wsum dd { margin: 3px 0 0; font-size: 18px; font-weight: 600; }
+
+#winner .wbtns { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+#winner button {
+  font: inherit;
+  padding: 8px 18px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#winner button:hover { border-color: var(--gold); }
+#winner button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+/* Once the summary is dismissed the game is still over: one small way back. */
+#winnerchip {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+#winnerchip[hidden] { display: none; }
+#winnerchip button {
+  font: inherit;
+  padding: 7px 14px;
+  color: var(--text);
+  background: var(--panel2);
+  border: 1px solid #3a4252;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Board loading placeholder (the board art is ~13 MB, so this is on screen
+ * for a real wait on a cold load). */
 #boardload {
   position: absolute;
   inset: 0;
@@ -985,6 +1164,24 @@ body:has(#dicebox:not([hidden])) #decision {
   color: #8b94a3;
   font-size: 15px;
   background: #12161d;
+}
+
+#boardload .loadinner { text-align: center; }
+#boardload p { margin: 0; }
+#boardload .loadbar {
+  width: min(300px, 55vw);
+  height: 6px;
+  margin: 12px auto 0;
+  background: #262c37;
+  border-radius: 3px;
+  overflow: hidden;
+}
+#boardload .loadbar i {
+  display: block;
+  height: 100%;
+  width: var(--p, 0%);
+  background: var(--gold);
+  transition: width 140ms linear;
 }
 #boardload[hidden] { display: none; }
 
@@ -996,7 +1193,11 @@ body:has(#dicebox:not([hidden])) #decision {
 .card.playable:focus-visible,
 #viewbar button:focus-visible,
 #decision button:focus-visible,
-#cog:focus-visible {
+#cog:focus-visible,
+#helpbtn:focus-visible,
+#focusbtn:focus-visible,
+#undo:focus-visible,
+#winnerchip button:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
