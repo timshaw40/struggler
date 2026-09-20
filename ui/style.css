@@ -1082,6 +1082,80 @@ body:has(#dicebox:not([hidden])) #decision {
 #cardpreview .scorepreview b.us { color: #3b9eff; }
 #cardpreview .scorepreview b.ussr { color: #ff2d2d; }
 
+/* The start screen: the two per-game choices that used to live in Settings
+ * under "(next game)". Above every other overlay, because nothing behind it
+ * is the game the player asked for yet. */
+#start {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 13, 0.86);
+  z-index: 60;
+}
+#start[hidden] { display: none; }
+
+#start .scard {
+  width: min(520px, 92vw);
+  padding: 26px 30px 28px;
+  background: var(--panel);
+  border: 1px solid #3a4252;
+  border-radius: 12px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+#start h2 { margin: 0; font-size: 26px; }
+#start .ssub { margin: 6px 0 18px; color: var(--muted); font-size: 14px; }
+#start h3 {
+  margin: 22px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#start .shint { margin: 0 0 10px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+#start .ssides { display: flex; gap: 12px; }
+#start .sside {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--panel2);
+  border: 2px solid #3a4252;
+  border-radius: 10px;
+  cursor: pointer;
+}
+/* The radio is the real control (keyboard, focus ring, form value); the card
+ * around it shows the choice, toggled by syncSideCards rather than by :has(),
+ * which is newer than the rest of this stylesheet assumes. */
+#start .sside input { margin: 3px 0 0; accent-color: var(--gold); }
+#start .sside .stext { display: flex; flex-direction: column; gap: 2px; }
+#start .sside b { font-size: 19px; }
+#start .sside .stext span { font-size: 12.5px; color: var(--muted); }
+#start .sside.sel { border-color: var(--gold); background: #262d3a; }
+
+#start .sextra { display: flex; align-items: center; gap: 12px; }
+#start .sextra input { flex: 1; }
+#start #start-extra-n { min-width: 32px; font-size: 17px; text-align: right; }
+
+#start #startgo {
+  display: block;
+  width: 100%;
+  margin-top: 24px;
+  padding: 11px 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #14161a;
+  background: var(--gold);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+#start #startgo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 /* Game-over summary: what the player wants at the moment the game ends —
  * the score, how far it got, and the record — with the board readable again
  * behind it rather than covered for good. */

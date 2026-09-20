@@ -49,7 +49,13 @@ let actionBar = null;
 let playing = true;   // watch mode playback
 let winnerFocused = false;
 let winnerDismissed = false;   // "review the board" hides the summary, not the game
+/* The start screen: which side you play and how much extra setup influence the
+ * USA gets, chosen per game instead of buried in Settings under "(next game)". */
+let startConfirmed = false;    // the player has been through it this page load
+let startPending = false;      // a new game was asked for and is waiting on it
+let startFocused = false;
 let inFlight = false; // one poll chain at a time
+let catchUpGen = 0;   // bumped whenever the game is replaced under catchUp
 let lastRenderSig = null;          // skip redundant full re-renders
 const expandedRows = new Set();    // history rows the user opened, by absolute index
 let feedFilter = localStorage.getItem("struggler.histfilter") || "all";
@@ -145,6 +151,8 @@ function installKeyboard() {
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
 
     if (e.key === "Escape") {
+      const st = $("#start");
+      if (st && !st.hidden) { dismissStart(); return; }
       const h = $("#help");
       if (h && !h.hidden) { h.hidden = true; return; }
       const s = $("#settings");
@@ -296,6 +304,16 @@ async function bootInner() {
   if (helpBtn) helpBtn.addEventListener("click", toggleHelp);
   const focusBtn = $("#focusbtn");
   if (focusBtn) focusBtn.addEventListener("click", toggleMapFocus);
+  const startGo = $("#startgo");
+  if (startGo) startGo.addEventListener("click", startGame);
+  const startRange = $("#start-extra");
+  if (startRange) startRange.addEventListener("input", () => {
+    $("#start-extra-n").textContent = `+${startRange.value}`;
+  });
+  const startSides = $("#start");
+  if (startSides) startSides.addEventListener("change", (e) => {
+    if (e.target && e.target.name === "start-side") syncSideCards();
+  });
   installKeyboard();
 
   const [cards, manifest, countries, facts] = await Promise.all([
@@ -1676,6 +1694,7 @@ function render() {
   renderHand();
   renderDecision();
   renderWinner();
+  renderStart();
   renderCue();
 }
 
@@ -2827,10 +2846,12 @@ function fillSettings() {
     `<p>Action box</p>` +
     `<label><input type="radio" name="set-place" value="center"${decisionPlace === "center" ? " checked" : ""}> Middle of the map <em>(drag it by its header)</em></label>` +
     `<label><input type="radio" name="set-place" value="panel"${decisionPlace === "panel" ? " checked" : ""}> Right column</label>` +
-    `<p>Play as <em>(next game)</em></p>` +
-    `<label><input type="radio" name="set-side" value="US"${play !== "USSR" ? " checked" : ""}> US</label>` +
-    `<label><input type="radio" name="set-side" value="USSR"${play === "USSR" ? " checked" : ""}> USSR</label>` +
-    `<label>US extra setup <em>(next game)</em> +<b id="set-extra-n">${extra}</b>` +
+    // These are the defaults the start screen opens on, not a second way to
+    // start a game (see openStart).
+    `<p>New game defaults <em>(the start screen)</em></p>` +
+    `<label><input type="radio" name="set-side" value="US"${play !== "USSR" ? " checked" : ""}> play as US</label>` +
+    `<label><input type="radio" name="set-side" value="USSR"${play === "USSR" ? " checked" : ""}> play as USSR</label>` +
+    `<label>USA extra influence +<b id="set-extra-n">${extra}</b>` +
     `<input type="range" id="set-extra" min="0" max="6" value="${extra}"></label>` +
     `<div>` +
     (state && !state.watch ? `<button type="button" id="set-forfeit">Forfeit</button>` : "") +
@@ -2868,6 +2889,7 @@ function fillSettings() {
 async function postGame(path) {
   if (busy) return;  // a second click must not forfeit/restart twice
   busy = true;
+  catchUpGen += 1;   // any boot poll still in flight is now stale
   render();
   try {
     const res = await fetch(path, {
@@ -2905,22 +2927,35 @@ async function postGame(path) {
 }
 
 async function catchUp() {
+  // Boot polls the server while the bot sets up, which can take a while. The
+  // start screen invites the player to deal a new game during that window, so
+  // a poll that was already in flight must not land on top of the new game.
+  const gen = catchUpGen;
   let prev = -1, stall = 0;
-  while (state && !state.is_terminal && !state.decision) {
+  while (state && !state.is_terminal && !state.decision && gen === catchUpGen) {
     const n = state.history_len ?? (state.history || []).length;
     if (n === prev) {
       if (++stall > 3) break;
     } else stall = 0;
     prev = n;
     render();
-    await refresh();
+    let next;
+    try {
+      next = await fetchJson("/state");
+    } catch (err) {
+      showError("Lost connection to the game server.");
+      return;
+    }
+    if (gen !== catchUpGen) return;   // a new game started while this was out
+    state = next;
+    render();
   }
 }
 
 function newGame() {
-  // No prompt once the game is already over (the winner screen's own link).
-  if (state && !state.is_terminal && !confirm("Start a new game? The current game is abandoned.")) return;
-  return postGame("/new");
+  // The start screen is the confirmation now — it is where the side and the
+  // extra influence are chosen, and its own button is the "yes".
+  openStart();
 }
 
 function forfeitGame() {
@@ -2948,6 +2983,101 @@ async function goBack() {
     busy = false;
     render();
   }
+}
+
+/* -- the start screen -----------------------------------------------------
+ *
+ * A game nobody has touched yet: still setting up, nothing to take back. The
+ * seed deliberately plays no part in this, because the server restarts its
+ * counting at `--seed` on every launch, so a seed-keyed marker would silently
+ * suppress the screen after a server restart.
+ */
+function freshGame() {
+  // Deliberately not gated on `busy`: boot is busy while the bot sets up, and
+  // that is exactly the window in which the player should be choosing a side.
+  return !!state && !state.watch && !state.is_terminal
+    && !state.can_undo && state.turn === 1 && state.phase === "setup";
+}
+
+/* Both controls are per-game choices with a remembered default, so the screen
+ * opens on whatever was used last. */
+function seedStartControls() {
+  const overlay = $("#start");
+  if (!overlay) return;
+  const side = localStorage.getItem("struggler.side") || "US";
+  const extra = +(localStorage.getItem("struggler.usExtra") ?? 2);
+  for (const r of overlay.querySelectorAll("input[name=start-side]")) {
+    r.checked = r.value === side;
+  }
+  syncSideCards();
+  const range = $("#start-extra");
+  if (range) range.value = String(extra);
+  const shown = $("#start-extra-n");
+  if (shown) shown.textContent = `+${extra}`;
+}
+
+/* The card is the visible state; the radio inside it stays the control. */
+function syncSideCards() {
+  const overlay = $("#start");
+  if (!overlay) return;
+  for (const label of overlay.querySelectorAll(".sside")) {
+    const input = label.querySelector("input");
+    label.classList.toggle("sel", !!(input && input.checked));
+  }
+}
+
+function renderStart() {
+  const overlay = $("#start");
+  if (!overlay) return;
+  const want = !!state && !state.watch
+    && (startPending || (!startConfirmed && freshGame()));
+  overlay.hidden = !want;
+  if (!want) {
+    startFocused = false;
+    return;
+  }
+  if (!overlay.dataset.seeded) {
+    overlay.dataset.seeded = "1";
+    seedStartControls();
+  }
+  if (!startFocused) {
+    startFocused = true;
+    const pick = overlay.querySelector("input:checked") || overlay.querySelector("input");
+    if (pick) pick.focus();
+  }
+}
+
+function openStart() {
+  startPending = true;
+  startFocused = false;
+  const overlay = $("#start");
+  if (overlay) overlay.dataset.seeded = "";  // re-read the stored defaults
+  renderStart();
+}
+
+/* Escape leaves the game that is already on the table rather than dealing a
+ * new one: the screen is a question, not a commitment. */
+function dismissStart() {
+  startPending = false;
+  startConfirmed = true;
+  startFocused = false;
+  const overlay = $("#start");
+  if (overlay) overlay.hidden = true;
+  render();
+}
+
+async function startGame() {
+  const overlay = $("#start");
+  const picked = overlay && overlay.querySelector("input[name=start-side]:checked");
+  const extra = +$("#start-extra").value;
+  localStorage.setItem("struggler.side", picked ? picked.value : "US");
+  localStorage.setItem("struggler.usExtra", String(extra));
+  startPending = false;
+  startConfirmed = true;   // the fresh game about to arrive must not re-ask
+  startFocused = false;
+  $("#start").hidden = true;
+  await postGame("/new");
+  fillSettings();          // the settings defaults follow the choice
 }
 
 function renderWinner() {
