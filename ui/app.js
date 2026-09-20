@@ -56,6 +56,7 @@ let state = null;
 let busy = false;
 let previewEl = null;
 let actionBar = null;
+let actionBarLastAction = "";   // the resolved-action caption to fall back on
 let playing = true;   // watch mode playback
 let winnerFocused = false;
 let winnerDismissed = false;   // "review the board" hides the summary, not the game
@@ -216,7 +217,14 @@ function installKeyboard() {
     }
     if (busy) return;
     const btns = [...document.querySelectorAll("#decision .dcol-main > button:not(.backbtn)")];
-    if (!btns.length) return;
+    if (!btns.length) {
+      // Placement has no box: its finish button lives in the status bar, so
+      // Enter still means "I'm done" there — but only when the engine offers
+      // a stop, never as a silent click on some country.
+      const done = document.querySelector("#actionbar .donebtn:not(:disabled)");
+      if (done && e.key === "Enter") { e.preventDefault(); done.click(); }
+      return;
+    }
     if (e.key === "Enter") { btns[0].click(); e.preventDefault(); return; }
     const n = parseInt(e.key, 10);
     if (n >= 1 && n <= btns.length) { btns[n - 1].click(); e.preventDefault(); }
@@ -1759,22 +1767,66 @@ function actionText(e, prev) {
 
 function showAction(e, prev) {
   if (!actionBar) return;
-  const text = actionText(e, prev);
-  if (!text) return;  // internal step: leave the current caption up
-  actionBar.textContent = text;
-  actionBar.title = text;  // full text on hover (the pill may ellipsize)
-  actionBar.hidden = false;
-  actionBar.classList.remove("bump");
-  void actionBar.offsetWidth;  // restart the pop
-  actionBar.classList.add("bump");
+  actionBarLastAction = actionText(e, prev);
+  if (!actionBarLastAction) return;  // internal step: leave the caption up
+  renderActionBar({ bump: true });
   const live = $("#live");
-  if (live) live.textContent = text;  // announced to screen readers
+  if (live) live.textContent = actionBarLastAction;  // announced to screen readers
 }
 
 function clearAction() {
-  if (actionBar) { actionBar.hidden = true; actionBar.textContent = ""; actionBar.title = ""; }
+  actionBarLastAction = "";
+  if (actionBar) {
+    actionBar.hidden = true;
+    actionBar.textContent = "";
+    actionBar.title = "";
+    actionBar.classList.remove("hasdone");
+  }
   const live = $("#live");
   if (live) live.textContent = "";
+}
+
+/* The status bar is the map's own line of text, and placement now depends on
+ * it: "who is placing, how much is left, and how to finish" lives here, and
+ * the Done button it grows is the only way to end the spend early. Its own
+ * element (#actionbar) is separate from the decision box, so the map keeps its
+ * full height. */
+function renderActionBar({ bump = false } = {}) {
+  if (!actionBar) return;
+  const d = isMapOnlyPick(state && state.decision) ? state.decision : null;
+  const doneOpt = d && d.options.find((o) => o.payload && o.payload.stop);
+  // The button belongs to the decision, so it goes before anything can return
+  // early — otherwise a Done from the last spend sits live over the next one.
+  const stale = actionBar.querySelector("button.donebtn");
+  if (stale) stale.remove();
+  actionBar.classList.toggle("hasdone", !!doneOpt);
+  let text = actionBarLastAction;
+  if (d) text = placementDirective(d);
+  else if (!text) {
+    actionBar.hidden = true;
+    return;
+  }
+  actionBar.textContent = text;
+  actionBar.title = text;  // full text on hover (the pill may ellipsize)
+  actionBar.hidden = false;
+  if (bump) {
+    actionBar.classList.remove("bump");
+    void actionBar.offsetWidth;  // restart the pop
+    actionBar.classList.add("bump");
+  }
+  // The spend's own "stop" option, as a button in the bar, rebuilt from this
+  // decision every time so a stale index cannot be clicked after the decision
+  // has moved on.
+  if (doneOpt) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "donebtn";
+    b.textContent = optionLabel(doneOpt) || "Done";
+    b.disabled = busy;
+    b.title = "Finish placing (Enter)";
+    b.addEventListener("click", () => act(doneOpt.index));
+    actionBar.append(b);
+  }
 }
 
 function render() {
@@ -1787,6 +1839,10 @@ function render() {
     state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
     state.play_restriction || "-",
     d ? `${d.kind}:${d.options.length}` : "-",
+    // Placement's directive carries a budget that changes without the option
+    // list changing, so the bar must not be skipped by the render dedupe.
+    d && (d.context || {}).remaining != null ? `rem:${d.context.remaining}` : "-",
+    d ? `left:${placementOpsLeft(d)}` : "-",
     Object.keys(state.turn_effects || {}).length,
     Object.keys(state.game_effects || {}).length,
   ].join("|");
@@ -1811,6 +1867,7 @@ function render() {
   renderEffectsHud();
   renderHand();
   renderDecision();
+  renderActionBar();
   renderWinner();
   renderStart();
   renderCue();
@@ -2759,14 +2816,62 @@ function ctxLine(d) {
   return parts.join(" · ");
 }
 
+/* Influence placement is the one decision driven entirely from the map, so it
+ * gets the map's full height and a directive in the status bar instead of a
+ * box listing every legal country. */
+function isMapOnlyPick(d) {
+  return !!d && d.kind === "place_influence"
+    && d.options.some((o) => o.payload && o.payload.country);
+}
+
+/* The placement directive the box used to carry ("US: place 1 influence in
+ * Western Europe · 7 remaining"), now the status bar's job. Setup reads from
+ * the engine's `remaining`; an Ops spend from the pending decision's own
+ * budget, with "last Op" landings spelled out because the next click ends the
+ * spend. */
+function placementDirective(d) {
+  const c = d.context || {};
+  const who = state.human_side === "US" ? "USA" : "CCCP";
+  let line = `${who}: click a country to add 1 influence`;
+  const where = [];
+  // Region names arrive as enum values ("WESTERN_EUROPE"); read them out the
+  // way every other surface does.
+  if (c.subregion) where.push(regionLabel(c.subregion));
+  if (c.restriction) where.push(pretty(c.restriction));
+  if (where.length) line += ` in ${where.join(" ")}`;
+  // Setup spends a count of *influence*; an Ops spend spends *Ops*, and one Op
+  // can buy two influence in an opponent-controlled country. Two different
+  // budgets, so they get two different sentences rather than one that counts
+  // the wrong thing. (And a placement reached from an event carries neither.)
+  if (c.setup && typeof c.remaining === "number") {
+    line += ` — ${c.remaining} influence remaining`;
+  } else {
+    const ops = placementOperationsLine(d);
+    if (ops) line += ` — ${ops}`;
+  }
+  return line;
+}
+
+/* "3 Ops remaining · last Op" for an Ops spend, "" when the decision does not
+ * carry a budget the player can count. */
+function placementOperationsLine(d) {
+  const left = placementOpsLeft(d);
+  if (left == null) return "";
+  if (left > 1) return `${left} Ops remaining`;
+  if (left === 1) return "1 Op remaining — last one";
+  return "Last Op — this click ends the spend";
+}
+
 function renderDecision() {
   const box = $("#decision");
   box.textContent = "";
   const d = state.decision;
-  // A country pick needs the map: the box drops to the bottom band so the
-  // countries stay clickable, and steps back to the middle for everything
-  // else. Once the player drags it, their spot wins for the session.
-  box.classList.toggle("pick", !!d && COUNTRY_PICK_KINDS.has(d.kind));
+  // Placement has no box at all (see isMapOnlyPick). Every other country pick
+  // needs the map, so its box drops to the bottom band to leave the map's
+  // height alone; the rest sit in the middle. Once the player drags a box,
+  // their spot wins for the session.
+  const pick = !isMapOnlyPick(d) && !!d && COUNTRY_PICK_KINDS.has(d.kind);
+  box.classList.toggle("pick", pick);
   if (decisionDragged) box.classList.remove("pick");
   if (!d && !busy) {
     if (state.watch && !state.is_terminal) {
@@ -2841,25 +2946,23 @@ function renderDecision() {
     main.append(line);
   }
 
-  // Country-picking happens on the map: the glowing markers are the options
-  // (every one of this decision's options names a country). The view never
-  // moves on its own — it stays where the player put it. An "up to" Ops spend
-  // (6.1.3 / 6.2.2) also offers a stop option, which is not a country: keep
-  // the map picker for the countries and render stop as its own button.
+  // Placement (and only placement) is map-only: the glowing countries are the
+  // whole interface for it, the map keeps its full height, and the directive
+  // lives in the status bar. Its "stop" option (the end of the spend) comes
+  // from #actionbar's Done button, so there is nothing left to render here.
+  if (isMapOnlyPick(d)) {
+    box.hidden = true;   // the map is the whole interface for this one
+    return;
+  }
+  // Every other country-picking decision keeps the box: the glowing markers are
+  // the options (each one names a country), and the box carries both the
+  // directive and a keyboard-reachable list. The view never moves on its own —
+  // it stays where the player put it. An "up to" Ops spend (6.1.3 / 6.2.2) on
+  // a *target* decision offers a country-less stop option, which is rendered
+  // as its own button below.
   const countryOpts = d.options.filter((o) => o.payload && o.payload.country);
   const stopOpts = d.options.filter((o) => o.payload && o.payload.stop);
   if (countryOpts.length && countryOpts.length + stopOpts.length === d.options.length) {
-    if (d.kind === "place_influence" && !d.context.setup) {
-      const left = placementOpsLeft(d);
-      if (left != null) {
-        const opsLine = document.createElement("div");
-        opsLine.className = "opsleft";
-        opsLine.textContent = left > 0
-          ? `${left} Op${left === 1 ? "" : "s"} left to place`
-          : "Last Op — choose a country";
-        main.append(opsLine);
-      }
-    }
     const anyDouble = d.kind === "place_influence" && !d.context.setup
       && countryOpts.some((o) => placementCost(o.payload.country, state.influence) === 2);
     const hint = document.createElement("em");
@@ -2867,9 +2970,7 @@ function renderDecision() {
     hint.textContent = "Click a glowing country on the map, or pick one here."
       + (anyDouble ? " An orange 2 badge is opponent-controlled and costs 2 Ops." : "");
     main.append(hint);
-    // A persistent, keyboard-accessible list of the legal countries: map clicks
-    // remain the primary affordance, but off-screen countries, missing art, or
-    // keyboard use must not strand a legal choice.
+    // A persistent, keyboard-accessible list of the legal countries.
     const list = document.createElement("div");
     list.className = "countrybtns";
     for (const o of countryOpts) {
