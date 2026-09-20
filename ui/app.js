@@ -975,8 +975,11 @@ function showCountryTip(el, cid, inf) {
   countryTip.innerHTML =
     `<img class="chead" src="/assets/headers/${cid}.png" alt="${pretty(cid)}">`
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
-    + `<span class="ussr">USSR ${inf.USSR}</span></div>`;
+    + `<span class="ussr">USSR ${inf.USSR}</span></div>`
+    + `<div class="odds"></div>`;
   countryTip.hidden = false;
+  tipCid = cid;
+  fillOdds(cid);
   // Positioning must happen after the strip image decodes: until then the
   // tip's height is just the stats line, and the loading image would grow
   // the tip downward onto the very country being hovered.
@@ -1002,6 +1005,153 @@ function showCountryTip(el, cid, inf) {
     countryTip.prepend(name);
     place();
   });
+  countryTipPlace = place;   // the odds block lands later and needs re-placing
+}
+
+/* ---- hover odds ---------------------------------------------------------
+ *
+ * Before committing to a Coup or a Realignment the player is guessing at the
+ * dice. The engine owns those rules, so the numbers come from it
+ * (Engine.coup_forecast / realignment_forecast via GET /odds) rather than
+ * being re-derived here, and the tooltip just lays them out: a per-die table
+ * for a Coup, the 36-outcome split for a Realignment.
+ */
+let tipCid = null;
+let countryTipPlace = null;
+const oddsCache = new Map();   // `${decision id}:${country}` -> payload | Promise
+
+function oddsKey(d, cid) {
+  return `${d.id}:${cid}`;
+}
+
+function requestOdds(d, cid) {
+  const key = oddsKey(d, cid);
+  let entry = oddsCache.get(key);
+  if (entry !== undefined) return entry;
+  entry = fetchJson(`/odds?country=${encodeURIComponent(cid)}`)
+    .then((payload) => { oddsCache.set(key, payload); return payload; })
+    .catch(() => { oddsCache.delete(key); return null; });
+  oddsCache.set(key, entry);
+  return entry;
+}
+
+/* Warm the cache as soon as a target decision appears: the whole point of the
+ * tooltip is that it is there the moment the cursor lands, and a fetch on
+ * hover both lags and races the click that follows it. */
+function prefetchOdds(d) {
+  if (!d || (d.kind !== "coup_target" && d.kind !== "realignment_target")) return;
+  for (const o of d.options || []) {
+    const cid = o.payload && o.payload.country;
+    if (cid) requestOdds(d, cid);
+  }
+  // The cache is keyed by decision, so an old decision's entries are dead
+  // weight; keep the map small.
+  if (oddsCache.size > 60) {
+    for (const key of oddsCache.keys()) {
+      if (!key.startsWith(`${d.id}:`)) oddsCache.delete(key);
+    }
+  }
+}
+
+function legalTargetDecision(cid) {
+  const d = state && state.decision;
+  if (!d || (d.kind !== "coup_target" && d.kind !== "realignment_target")) return null;
+  const hit = (d.options || []).some((o) => o.payload && o.payload.country === cid);
+  return hit ? d : null;
+}
+
+function oddsRow(p, r) {
+  const bits = [];
+  const opp = p.side === "US" ? "USSR" : "US";
+  if (r.removed) bits.push(`<span class="ussr">−${r.removed} ${opp}</span>`);
+  if (r.added) bits.push(`<span class="us">+${r.added} ${p.side}</span>`);
+  if (!bits.length) bits.push(`<span class="odnone">no effect</span>`);
+  if (r.defcon) bits.push(`<span class="oddefcon">DEFCON −1</span>`);
+  return `<tr><td class="d6">${r.roll}</td><td>${bits.join(" ")}</td></tr>`;
+}
+
+function oddsHtml(p) {
+  if (!p || p.kind === "none") return "";
+  if (p.kind === "coup") {
+    const mod = p.modifier ? ` · modifier ${p.modifier > 0 ? "+" : ""}${p.modifier}` : "";
+    const head = `Coup odds · ${p.ops} Ops − ${2 * p.stability} stability${mod}`;
+    const best = p.rows[p.rows.length - 1];
+    const take = p.rows.filter((r) => r.added > 0).length;
+    const note = p.loses_game
+      ? `<div class="odwarn">Cuban Missile Crisis: this coup loses the game.</div>`
+      : p.defcon_drop
+        ? `<div class="odwarn">Battleground: DEFCON drops whatever you roll.</div>`
+        : "";
+    const summary = best.added
+      ? `Takes the country on ${take} of 6 rolls.`
+      : best.removed
+        ? `Removes influence on ${p.rows.filter((r) => r.removed > 0).length} of 6.`
+        : `Removes nothing: needs ${Math.max(1, 2 * p.stability - p.ops - p.modifier + 1)}+ on the die.`;
+    return `<div class="odhead">${esc(head)}</div>`
+      + `<table class="odtable">${p.rows.map((r) => oddsRow(p, r)).join("")}</table>`
+      + `<div class="odsum">${esc(summary)}</div>` + note;
+  }
+  if (p.kind === "realignment") {
+    const pct = (n) => Math.round((n / 36) * 100);
+    const mod = p.modifier ? ` · Iran-Contra ${p.modifier}` : "";
+    const deltas = p.outcomes.map((o) => o.delta);
+    const head = `Realignment odds · ${p.side} +${p.own_bonus} vs ${p.side === "US" ? "USSR" : "US"} +${p.opponent_bonus}${mod}`;
+    const opp = p.side === "US" ? "USSR" : "US";
+    // Count what actually happens to the board, not the raw win/loss split:
+    // winning rolls are worthless when the opponent has nothing there to
+    // remove, and losing rolls cost nothing when you have nothing to lose.
+    const count = (pred) => p.outcomes.filter(pred).reduce((n, o) => n + o.count, 0);
+    const removes = count((o) => o.delta > 0);
+    const costs = count((o) => o.delta < 0);
+    const flat = 36 - removes - costs;
+    // The bar matches the counts underneath it, not the raw margin split.
+    const bar = `<div class="odbar">`
+      + `<span class="w" style="width:${pct(removes)}%"></span>`
+      + `<span class="t" style="width:${pct(flat)}%"></span>`
+      + `<span class="l" style="width:${pct(costs)}%"></span></div>`;
+    const bits = [`<b>${removes}/36</b> remove ${esc(opp)} influence`];
+    if (costs) bits.push(`<b>${costs}/36</b> you lose influence`);
+    bits.push(`<b>${flat}/36</b> nothing changes`);
+
+    const partsLine = (name, parts) => {
+      const items = [];
+      if (parts.adjacency) items.push("+1 adjacent");
+      if (parts.neighbours) {
+        items.push(`+${parts.neighbours} controlled neighbour${parts.neighbours > 1 ? "s" : ""}`);
+      }
+      if (parts.influence) items.push("+1 more influence there");
+      return items.length ? `${name} ${items.join(", ")}` : null;
+    };
+    // `|| {}`: a payload from an older server simply has no breakdown.
+    const detail = [partsLine(p.side, p.own_parts || {}), partsLine(opp, p.opponent_parts || {})]
+      .filter(Boolean).join(" · ");
+    return `<div class="odhead">${esc(head)}</div>` + bar
+      + `<div class="odline">${bits.join(" · ")}</div>`
+      + `<div class="odline">Best ${deltas[deltas.length - 1] > 0 ? "+" : ""}${deltas[deltas.length - 1]} · `
+      + `worst ${deltas[0]} · average ${p.expected_delta > 0 ? "+" : ""}${p.expected_delta}</div>`
+      + (detail ? `<div class="odline odsmall">${esc(detail)}</div>` : "");
+  }
+  return "";
+}
+
+async function fillOdds(cid) {
+  const d = legalTargetDecision(cid);
+  const slot = countryTip && countryTip.querySelector(".odds");
+  if (!slot) return;
+  if (!d) { slot.innerHTML = ""; return; }
+  let payload = oddsCache.get(oddsKey(d, cid));
+  if (payload && typeof payload.then === "function") {
+    // Still in flight (a hover that beat the prefetch): say so rather than
+    // showing nothing.
+    slot.innerHTML = `<div class="odhead odwait">Reading the odds…</div>`;
+    payload = await payload;
+  }
+  if (!payload) return;
+  // The pointer may have moved on, or the tip been rebuilt, while that was in
+  // flight; only fill the slot if it still belongs to this country.
+  if (!countryTip || countryTip.hidden || tipCid !== cid || !slot.isConnected) return;
+  slot.innerHTML = oddsHtml(payload);
+  if (countryTipPlace) countryTipPlace();
 }
 
 /* The side actually acting: CHANCE decisions carry the real side in their
@@ -1259,6 +1409,7 @@ function render() {
 
   // Order the FX so one side's turn reads as one beat: the player's placements
   // land first, then a short pause, then the opponent's reveals/rolls/placements.
+  prefetchOdds(state.decision);
   const fly = flyDiff();
   // The player's own chits are priority: if their click lands while the queue
   // is still busy, it must not sit behind it.

@@ -34,6 +34,7 @@ import argparse
 import json
 import sys
 import threading
+import urllib.parse
 import webbrowser
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,7 +45,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from main import build_player  # noqa: E402  (repo CLI module, needs src/ on sys.path)
-from struggler.engine import Engine, Side  # noqa: E402
+from struggler.engine import DecisionKind, Engine, Side  # noqa: E402
 from struggler.engine.player import Event  # noqa: E402
 from struggler.engine.replay import (  # noqa: E402
     GameLogWriter,
@@ -66,6 +67,26 @@ CONTENT_TYPES = {
     ".jpg": "image/jpeg",
     ".svg": "image/svg+xml",
 }
+
+
+def forecast_for(engine: Engine, decision, country: str) -> dict:
+    """Hover odds for `country`, or {"kind": "none"} when this decision rolls
+    no dice. Only legal targets of the pending decision get a forecast, so the
+    UI can ask about whatever the cursor is over."""
+    if decision is None or not country:
+        return {"kind": "none"}
+    legal = {
+        a.payload.get("country")
+        for a in decision.options
+        if a.payload and a.payload.get("country")
+    }
+    if country not in legal:
+        return {"kind": "none"}
+    if decision.kind is DecisionKind.COUP_TARGET:
+        return engine.coup_forecast(decision, country)
+    if decision.kind is DecisionKind.REALIGNMENT_TARGET:
+        return engine.realignment_forecast(decision, country)
+    return {"kind": "none"}
 
 
 class Session:
@@ -417,6 +438,19 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 self._send_json(200, payload)
             elif route == "/cards":
                 self._send_json(200, cards_meta)
+            elif route.startswith("/odds"):
+                # Hover odds: the engine computes them, so the table matches
+                # what a roll will actually do (see Engine.coup_forecast).
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                country = (query.get("country") or [""])[0]
+                try:
+                    with session.lock:
+                        decision = session.engine.pending_decision
+                        payload = forecast_for(session.engine, decision, country)
+                except Exception as exc:
+                    self._send_json(400, {"error": str(exc)})
+                    return
+                self._send_json(200, payload)
             elif route in ("/", "/index.html"):
                 self._static("index.html")
             elif route in ("/app.js", "/style.css", "/countries.json"):

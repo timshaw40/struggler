@@ -26,6 +26,37 @@ def test_two_human_seats_refused() -> None:
         serve_ui.Session(seed=1, us="human", ussr="human", events=True)
 
 
+def test_odds_endpoint_serves_the_pending_rolls_forecast() -> None:
+    """The hover odds come from the engine, so the endpoint has to hand back
+    the two shapes the tooltip draws, and nothing for other decisions."""
+    session = serve_ui.Session(seed=5, us="human", ussr="greedy", events=True)
+    engine = session.engine
+    engine.board.influence["Guatemala"]["USSR"] = 3
+    engine.begin_coup(serve_ui.Side.US, ops=3)
+    decision = engine.pending_decision
+    assert decision.kind is serve_ui.DecisionKind.COUP_TARGET
+
+    coup = serve_ui.forecast_for(engine, decision, "Guatemala")
+    assert coup["kind"] == "coup"
+    assert [r["roll"] for r in coup["rows"]] == [1, 2, 3, 4, 5, 6]
+    # A country that is not one of this decision's options gets no forecast.
+    assert serve_ui.forecast_for(engine, decision, "Poland") == {"kind": "none"}
+    assert serve_ui.forecast_for(engine, None, "Guatemala") == {"kind": "none"}
+
+    server = serve_ui.ThreadingHTTPServer(
+        ("127.0.0.1", 0), serve_ui.make_handler(session, {})
+    )
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        payload = json.load(urllib.request.urlopen(base + "/odds?country=Guatemala"))
+        assert payload["kind"] == "coup" and payload["rows"]
+        other = json.load(urllib.request.urlopen(base + "/odds?country=Poland"))
+        assert other == {"kind": "none"}
+    finally:
+        server.shutdown()
+
+
 def test_watch_mode_steps_one_move_per_poll() -> None:
     session = serve_ui.Session(seed=1, us="greedy", ussr="greedy", events=True)
     assert session.watch and session.human_side.value == "US"
