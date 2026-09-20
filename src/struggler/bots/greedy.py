@@ -118,6 +118,17 @@ class GreedyWeights:
     t1_headline_bonus: float = 40.0
     t1_iran_coup_bonus: float = 20.0
 
+    # -- turn 1 per-country plan, from Twilight Strategy's Turn 1 article --
+    # Sized to sit below the headline bonus (40) and above the ordinary
+    # board-value swing a single Influence point buys (battleground control is
+    # 5.0), so these order *which country* without overriding "never lose to
+    # DEFCON" or "never headline the opponent's card".
+    t1_plan_bonus: float = 12.0
+    # The US pass on answering the Iran coup (see the module comment): a US
+    # coup at the same Iran the USSR just took is a DEFCON-3 gamble the article
+    # rejects, so it is priced under the influence alternatives.
+    t1_us_retaliatory_coup_penalty: float = 25.0
+
 
 # Standard openings (Twilight Strategy). Targets are influence AFTER setup,
 # including printed at-start (E. Germany already has 3).
@@ -132,6 +143,60 @@ _USSR_T1_HEADLINES = frozenset({
     "Socialist_Governments",
     "Vietnam_Revolts",
 })
+
+# -- turn 1, taken from Twilight Strategy's "General Strategy: Turn 1" --------
+#
+# The article is ~600 words of prose. What follows is that prose as the ordered
+# priorities this heuristic prices; each group quotes the sentence it encodes,
+# so a later reader can check a rule against its source instead of trusting the
+# number.
+#
+# USSR — "On AR1, you realistically only have two options: coup Iran, or coup /
+# play for Italy ... modern Twilight Struggle thinking is that access to
+# Pakistan and India is simply too important":
+#   * the five headline cards (above);
+#   * AR1 is the Iran coup, not the Italy play;
+#   * then Greece/Turkey in Europe, Egypt+Libya and Jordan/Lebanon in the
+#     Middle East, and eastward expansion out of western Asia.
+#
+# US — "your goal should be to survive rather than triumph ... your main
+# objective is simply not to fall behind too much in board position and VPs",
+# with the article's own list, in its order:
+#   1. "Protect Israel via Lebanon and/or Jordan."
+#   2. "Make your way through Egypt into Libya before Nasser wipes you out."
+#   3. "Gun for Thailand via Malaysia."
+#   4. "Shore up South Korea while guarding against the Korean War."
+#   5. "When you have a chance, take Greece and Turkey before the USSR does."
+# plus "if the USSR opening coup of Iran is too good, then I wouldn't bother
+# dropping DEFCON to 3 by couping Iran back" — the US never answers the Iran
+# coup in kind.
+
+# -- turn 1: USSR -----------------------------------------------------------
+# ME/Asia countries the article names as the USSR's expansion, and the
+# specifically-invited targets (Nasser's Egypt/Libya pair, Jordan/Lebanon to
+# squeeze Israel, Greece/Turkey in Europe).
+_USSR_T1_MIDDLE_EAST = ("Egypt", "Libya", "Jordan", "Lebanon", "Iran", "Syria", "Iraq")
+_USSR_T1_ASIA = (
+    "Afghanistan", "Pakistan", "India", "Thailand", "South_Korea", "Malaysia",
+    "Indonesia", "Burma", "Laos_Cambodia", "Vietnam", "Taiwan", "Japan",
+)
+_USSR_T1_EUROPE = ("Greece", "Turkey")
+# "if the US is still in Israel, taking Jordan and/or Lebanon puts some real
+# pressure on the US position."
+_ISRAEL_PRESSURE = ("Jordan", "Lebanon")
+
+# -- turn 1: US -------------------------------------------------------------
+# The article's list, in its order. "Protect Israel via Lebanon and/or Jordan."
+_US_T1_ISRAEL_SHIELD = ("Lebanon", "Jordan")
+# "Make your way through Egypt into Libya before Nasser wipes you out."
+_US_T1_MIDDLE_EAST = ("Egypt", "Libya", "Israel")
+# "Gun for Thailand via Malaysia."
+_US_T1_ASIA = ("Malaysia", "Thailand", "South_Korea", "Japan", "Taiwan", "Philippines")
+# "Shore up South Korea while guarding against the Korean War."
+_US_T1_SOUTH_KOREA = ("South_Korea", "Japan")
+# "When you have a chance, take Greece and Turkey before the USSR does."
+_US_T1_EUROPE = ("Greece", "Turkey")
+
 
 
 # -- board evaluation ---------------------------------------------------------
@@ -345,7 +410,57 @@ def _score_place_influence(weights: GreedyWeights, board: Board, observation: Ob
         return _score_setup_place(board, side, country)
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
-    return weights.influence_base + gain - (cost - 1) * weights.doubled_cost_penalty
+    return (
+        weights.influence_base
+        + gain
+        + _t1_placement_bonus(weights, board, observation, side, country)
+        - (cost - 1) * weights.doubled_cost_penalty
+    )
+
+
+def _t1_placement_bonus(
+    weights: GreedyWeights, board: Board, observation: Observation, side: Side, country: str
+) -> float:
+    """Turn-1 placement priority from the article, or 0 outside turn 1.
+
+    Only the tiers matter: the ordinary board_value swing decides between two
+    countries in the same tier, and a country the article does not name gets
+    nothing at all (so later-turn instincts still apply when the plan is
+    exhausted).
+    """
+    if observation.turn != 1:
+        return 0.0
+    if side is Side.USSR:
+        # Middle East first (Iran, and the Nasser/Jordan/Lebanon plays the
+        # article calls out), then Asia eastward, then the European grab.
+        tier = 3 if country in _USSR_T1_MIDDLE_EAST else 0
+        if country in _USSR_T1_ASIA:
+            tier = max(tier, 2)
+        if country in _USSR_T1_EUROPE:
+            tier = max(tier, 1)
+        # "taking Jordan and/or Lebanon puts some real pressure on the US
+        # position" — only while Israel is actually US-held, and then it is the
+        # sharpest play on the board, so it outranks the general Middle East
+        # tier rather than tying with it.
+        if country in _ISRAEL_PRESSURE and board.influence["Israel"]["US"] > 0:
+            tier = 4
+        return weights.t1_plan_bonus * tier / 4.0
+    # US: the article's five priorities, in its order, as descending tiers.
+    # "Protect Israel via Lebanon and/or Jordan." (and Israel itself)
+    tier = 5 if country in _US_T1_ISRAEL_SHIELD or country == "Israel" else 0
+    # "Make your way through Egypt into Libya before Nasser wipes you out."
+    if country in _US_T1_MIDDLE_EAST:
+        tier = max(tier, 4)
+    # "Gun for Thailand via Malaysia."
+    if country in _US_T1_ASIA:
+        tier = max(tier, 3)
+    # "Shore up South Korea while guarding against the Korean War."
+    if country in _US_T1_SOUTH_KOREA:
+        tier = max(tier, 2)
+    # "When you have a chance, take Greece and Turkey before the USSR does."
+    if country in _US_T1_EUROPE:
+        tier = max(tier, 1)
+    return weights.t1_plan_bonus * tier / 5.0
 
 
 def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
@@ -375,6 +490,16 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
         and observation.defcon >= 4
     ):
         score += weights.t1_iran_coup_bonus
+    # "If the USSR opening coup of Iran is too good, then I wouldn't bother
+    # dropping DEFCON to 3 by couping Iran back" — the US declines to answer
+    # in kind. Only turn 1, and only on Iran: this is that specific judgement,
+    # not a general reluctance to coup.
+    if (
+        observation.turn == 1
+        and side is Side.US
+        and country == "Iran"
+    ):
+        score -= weights.t1_us_retaliatory_coup_penalty
     return score
 
 
