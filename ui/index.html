@@ -50,6 +50,31 @@
   </aside>
 </main>
 <aside id="help" hidden aria-label="How to play"></aside>
+<div id="start" hidden role="dialog" aria-modal="true" aria-label="Start a new game">
+  <div class="scard">
+    <h2>New game</h2>
+    <p class="ssub">Pick your side — the other seat is played by the bot.</p>
+    <div class="ssides" role="radiogroup" aria-label="Your side">
+      <label class="sside">
+        <input type="radio" name="start-side" value="US">
+        <span class="stext"><b>USA</b><span>you play second each turn</span></span>
+      </label>
+      <label class="sside">
+        <input type="radio" name="start-side" value="USSR">
+        <span class="stext"><b>CCCP</b><span>you play first each turn</span></span>
+      </label>
+    </div>
+    <h3>Extra influence for the USA</h3>
+    <p class="shint">The printed setup runs the USSR first, so the USA starts with a
+      little extra. It applies whichever side you pick.</p>
+    <div class="sextra">
+      <input type="range" id="start-extra" min="0" max="6" step="1" value="2"
+             aria-label="Extra USA setup influence">
+      <b id="start-extra-n">+2</b>
+    </div>
+    <button type="button" id="startgo">Start game</button>
+  </div>
+</div>
 <div id="winner" hidden role="dialog" aria-modal="true" aria-label="Game over"></div>
 <div id="winnerchip" hidden>
   <button type="button" id="wchip">Game over — show summary</button>
