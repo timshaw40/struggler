@@ -285,3 +285,89 @@ def test_coup_scoring_aggregates_every_live_region_bonus():
         return _score_coup_target(weights, board, observation, action)
 
     assert score([]) < score(["se_asia"]) < score(["asia", "se_asia"])
+
+
+# -- turn 1, from Twilight Strategy's "General Strategy: Turn 1" -------------
+#
+# The article is prose; these pin the prose as behaviour. Each test names the
+# sentence it encodes, so a future change that breaks the plan has to argue with
+# the article rather than with a number.
+
+
+def _t1_obs(engine, side, kind, options, context=None, **over):
+    """A turn-1 observation with a hand-built decision."""
+    obs = engine.observe(side)
+    decision = Decision(
+        id=900, actor=side, kind=kind,
+        options=tuple(Action(kind, p) for p in options),
+        context=context or {},
+    )
+    obs = dataclasses.replace(obs, pending_decision=decision, turn=1, side=side, **over)
+    return obs
+
+
+def test_ussr_t1_places_into_the_middle_east_before_europe():
+    """"modern Twilight Struggle thinking is that access to Pakistan and India
+    is simply too important" — Iran and the Middle East ahead of the European
+    grab."""
+    engine = Engine.new_game(seed=1)
+    obs = _t1_obs(engine, Side.USSR, DecisionKind.PLACE_INFLUENCE,
+                  [{"country": "Greece"}, {"country": "Iran"}])
+    action = GreedyPlayer().choose_action(obs, [])
+    assert action.payload["country"] == "Iran"
+
+
+def test_ussr_t1_prefers_jordan_when_israel_is_us_held():
+    """"if the US is still in Israel, taking Jordan and/or Lebanon puts some
+    real pressure on the US position\""""
+    engine = Engine.new_game(seed=1)
+    board = engine.board
+    board.influence["Israel"]["US"] = 1     # the article's premise
+    obs = _t1_obs(engine, Side.USSR, DecisionKind.PLACE_INFLUENCE,
+                  [{"country": "Egypt"}, {"country": "Jordan"}])
+    action = GreedyPlayer().choose_action(obs, [])
+    assert action.payload["country"] == "Jordan"
+
+
+def test_us_t1_protects_israel_before_chasing_thailand():
+    """"Protect Israel via Lebanon and/or Jordan" is first in the article's
+    list; "Gun for Thailand via Malaysia" is third."""
+    engine = Engine.new_game(seed=1)
+    obs = _t1_obs(engine, Side.US, DecisionKind.PLACE_INFLUENCE,
+                  [{"country": "Malaysia"}, {"country": "Lebanon"}])
+    action = GreedyPlayer().choose_action(obs, [])
+    assert action.payload["country"] == "Lebanon"
+
+
+def test_us_t1_works_through_egypt_into_libya():
+    """"Make your way through Egypt into Libya before Nasser wipes you out.\""""
+    engine = Engine.new_game(seed=1)
+    obs = _t1_obs(engine, Side.US, DecisionKind.PLACE_INFLUENCE,
+                  [{"country": "Greece"}, {"country": "Egypt"}])
+    action = GreedyPlayer().choose_action(obs, [])
+    assert action.payload["country"] == "Egypt"
+
+
+def test_us_t1_does_not_retaliate_into_iran():
+    """"if the USSR opening coup of Iran is too good, then I wouldn't bother
+    dropping DEFCON to 3 by couping Iran back\""""
+    engine = Engine.new_game(seed=1)
+    board = engine.board
+    board.influence["Iran"]["USSR"] = 3     # the USSR took it
+    board.influence["Iran"]["US"] = 0
+    obs = _t1_obs(engine, Side.US, DecisionKind.COUP_TARGET,
+                  [{"country": "Iran"}, {"country": "Syria"}],
+                  context={"ops": 3}, defcon=5)
+    action = GreedyPlayer().choose_action(obs, [])
+    assert action.payload["country"] != "Iran", "the article rejects this coup"
+
+
+def test_the_t1_plan_does_not_leak_into_later_turns():
+    """The whole plan is turn 1 only: turn 2 gets the ordinary heuristic."""
+    engine = Engine.new_game(seed=1)
+    obs = _t1_obs(engine, Side.US, DecisionKind.PLACE_INFLUENCE,
+                  [{"country": "Malaysia"}, {"country": "Lebanon"}])
+    obs = dataclasses.replace(obs, turn=2)
+    scores = GreedyPlayer().option_scores(obs)
+    # Neither country carries the plan's ordering once the turn has passed.
+    assert abs(scores[0] - scores[1]) < 12.0
