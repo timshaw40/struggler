@@ -223,7 +223,10 @@ main {
  * bottom edge — a popup floating over the History section. */
 #panel {
   flex: none;
-  width: var(--sidebar-w);
+  /* A dragged width wins over the stylesheet's default: the media queries
+   * below are only the starting point for a window that has not been
+   * arranged by hand. */
+  width: var(--sidebar-w-user, var(--sidebar-w));
   background: var(--panel);
   padding: 12px 14px;
   border-left: 1px solid #000;
@@ -232,6 +235,37 @@ main {
   position: relative;
   overflow: hidden;
 }
+
+/* The divider between the map and the log column. It is invisible until the
+ * pointer is near it, so the map keeps its edge. */
+#colsplit {
+  flex: none;
+  width: 6px;
+  margin-left: -3px;   /* straddle the boundary rather than push it */
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 4;
+  touch-action: none;  /* pointermove must not become a scroll on touch */
+}
+#colsplit::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  background: #4a5262;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+#colsplit:hover::after,
+#colsplit:focus-visible::after,
+#colsplit.dragging::after { opacity: 1; }
+#colsplit:focus-visible { outline: none; }
+#colsplit.dragging::after { background: var(--gold); }
+
+/* While dragging, nothing in the page may eat the pointer or show a text
+ * cursor over the map. */
+body.colresize { cursor: col-resize; user-select: none; }
+body.colresize #boardwrap { pointer-events: none; }
 
 /* The log fills what the decision box doesn't need; it shrinks as the
  * decision grows, so the two always share this one column's width. */
@@ -615,7 +649,8 @@ main {
 /* Map-only mode: the panel folds away and the map takes the width back. The
  * action box follows (see applyDecisionPlacement), and #focusback is the way
  * home, since the header that holds the button goes with the panel. */
-body.mapfocus #panel { display: none; }
+body.mapfocus #panel,
+body.mapfocus #colsplit { display: none; }
 
 #focusback {
   position: absolute;
