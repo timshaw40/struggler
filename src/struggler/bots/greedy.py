@@ -486,6 +486,8 @@ def _score_ops_type(weights: GreedyWeights, board: Board, observation: Observati
 def _score_headline(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     cid = action.payload["card"]
+    if cid not in _CARDS:  # a non-card option (see _score_action_round_play)
+        return 0.0
     card = _CARDS[cid]
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
@@ -510,6 +512,13 @@ def _score_action_round_play(
 ) -> float:
     side = observation.side
     cid = action.payload["card"]
+    # `sit_out` is the engine's own pseudo-card for conceding the remaining
+    # Action Rounds (4.5-D, offered only with an empty hand). It is a legal
+    # option but not a card, so it has no entry in the card table — looking it
+    # up raised KeyError, which killed every rollout of this decision and left
+    # the bot unable to answer at all.
+    if cid not in _CARDS:
+        return 0.0
     card = _CARDS[cid]
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
@@ -523,6 +532,8 @@ def _score_action_round_play(
 def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     cid = observation.pending_decision.context["card"]
+    if cid not in _CARDS:  # a non-card option (see _score_action_round_play)
+        return 0.0
     card = _CARDS[cid]
     mode = action.payload["mode"]
     ops = _effective_ops_estimate(card, observation, side)

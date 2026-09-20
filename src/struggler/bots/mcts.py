@@ -210,11 +210,22 @@ class MCTSPlayer:
             else:
                 # sim counts the searches already finished, i.e. this node's
                 # visit total: exactly what UCB1's parent term wants.
-                idx = max(
-                    range(len(options)),
-                    key=lambda i: totals[i] / visits[i]
-                    + self.uct_c * math.sqrt(math.log(sim) / visits[i]),
-                )
+                #
+                # Every option may still have zero visits here: a rollout that
+                # raises is excluded rather than scored, so with enough invalid
+                # simulations the untried list empties while visits stay 0. An
+                # unvisited arm has no value to compare, so it is maximally
+                # interesting: exploring it is both the right UCB1 behaviour and
+                # what keeps the division below off a zero denominator.
+                unvisited = [i for i in range(len(options)) if not visits[i]]
+                if unvisited:
+                    idx = unvisited[0]
+                else:
+                    idx = max(
+                        range(len(options)),
+                        key=lambda i: totals[i] / visits[i]
+                        + self.uct_c * math.sqrt(math.log(sim) / visits[i]),
+                    )
             self.stats["sims"] += 1
             value = self._rollout(snapshot, observation.side, options[idx])
             if value is None:
