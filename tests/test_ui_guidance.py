@@ -111,7 +111,8 @@ def test_documented_keys_are_actually_bound():
 
 
 def test_map_only_mode_folds_the_panel_and_rescues_the_action_box():
-    assert "body.mapfocus #panel { display: none; }" in CSS
+    # The divider goes with the panel: nothing to drag once it is folded away.
+    assert "body.mapfocus #panel,\nbody.mapfocus #colsplit { display: none; }" in CSS
     focus = body_of("toggleMapFocus")
     assert "applyDecisionPlacement()" in focus, "the action box may live in the panel"
     assert "localStorage" in focus, "the preference should survive a reload"

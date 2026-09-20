@@ -81,6 +81,13 @@ let decisionDragged = false;   // once moved by hand, stop auto-positioning it
  * the whole width. Remembered, because a player who wants the map big wants
  * it big every time. */
 let panelHidden = localStorage.getItem("struggler.mapfocus") === "1";
+/* Width of the log/status column, in px, when the player has dragged the
+ * divider. Null means "use whatever the stylesheet says", which is what the
+ * narrow-window media queries provide. */
+let sidebarWidth = (() => {
+  const stored = parseInt(localStorage.getItem("struggler.sidebarW") || "", 10);
+  return Number.isFinite(stored) ? stored : null;
+})();
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -336,6 +343,11 @@ async function bootInner() {
   actionBar = $("#actionbar");
   enableDragPan();
   enableDecisionDrag();
+  enableColumnResize();
+  // A remembered width has to be re-clamped for this window: it may have been
+  // dragged on a wider screen.
+  if (sidebarWidth !== null) setSidebarWidth(sidebarWidth, { save: false });
+  else applySidebarWidth();
   // Restore a remembered map-only session before anything measures the map.
   document.body.classList.toggle("mapfocus", panelHidden);
   const focusBack = document.createElement("button");
@@ -348,7 +360,12 @@ async function bootInner() {
   $("#boardarea").append(focusBack);
   applyDecisionPlacement();
   buildViewBar();
-  window.addEventListener("resize", layoutBoard);
+  window.addEventListener("resize", () => {
+    // A window that shrank may now be too narrow for the dragged width, so
+    // re-clamp it against the new limit before measuring the map.
+    if (sidebarWidth !== null) setSidebarWidth(sidebarWidth, { save: false });
+    layoutBoard();
+  });
   setView(view);
   busy = true;
   await refresh();
@@ -382,6 +399,94 @@ function layoutBoard() {
 function syncZoomSlider() {
   const slider = $("#zoom");
   if (slider) slider.value = String(Math.round(scale * 100));
+}
+
+/* -- the log column's width ------------------------------------------------
+ *
+ * The log, the status rows and the decision box all live in the right column,
+ * so its width is "how much room the map gets". Dragged by #colsplit, also
+ * reachable from the keyboard (arrow keys on the divider), remembered per
+ * browser, and clamped to something the map and the log can both live with.
+ */
+const SIDEBAR_MIN = 220;
+const SIDEBAR_MAX = 760;
+const SIDEBAR_LEAVE = 200;   // room the map must keep, whatever the window is
+
+/* The limit for this window: never so wide that the map is squeezed out, and
+ * never wider than the window can hold. */
+function sidebarLimit() {
+  const main = document.querySelector("main");
+  const total = (main && main.clientWidth) || window.innerWidth || 1200;
+  return Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, total - SIDEBAR_LEAVE));
+}
+
+function applySidebarWidth() {
+  const root = document.documentElement;
+  if (sidebarWidth === null) root.style.removeProperty("--sidebar-w");
+  else root.style.setProperty("--sidebar-w", `${Math.round(sidebarWidth)}px`);
+  const split = $("#colsplit");
+  if (split) {
+    split.setAttribute("aria-valuenow", String(Math.round(sidebarWidth ?? 0)));
+    split.setAttribute("aria-valuemin", String(SIDEBAR_MIN));
+    split.setAttribute("aria-valuemax", String(Math.round(sidebarLimit())));
+  }
+}
+
+function setSidebarWidth(px, { save = true } = {}) {
+  // Clamped to this window's limit, so a width dragged on a wide screen
+  // cannot squeeze the map out on a narrow one.
+  sidebarWidth = Math.max(SIDEBAR_MIN, Math.min(sidebarLimit(), Math.round(px)));
+  if (save) localStorage.setItem("struggler.sidebarW", String(sidebarWidth));
+  applySidebarWidth();
+  // The map is measured against the map area's width, so it has to be told
+  // that the area just changed size.
+  layoutBoard();
+}
+
+function resetSidebarWidth() {
+  sidebarWidth = null;
+  localStorage.removeItem("struggler.sidebarW");
+  applySidebarWidth();
+  layoutBoard();
+}
+
+/* Drag the divider. The pointer is captured so the drag survives leaving the
+ * window, and the map keeps the point under the cursor if the layout allows. */
+function enableColumnResize() {
+  const split = $("#colsplit");
+  const panel = $("#panel");
+  if (!split || !panel) return;
+  const drag = (e) => {
+    e.preventDefault();
+    split.classList.add("dragging");
+    document.body.classList.add("colresize");
+    const move = (ev) => setSidebarWidth(window.innerWidth - ev.clientX, { save: false });
+    const done = () => {
+      split.classList.remove("dragging");
+      document.body.classList.remove("colresize");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", done);
+      window.removeEventListener("blur", done);
+      if (sidebarWidth !== null) {
+        localStorage.setItem("struggler.sidebarW", String(sidebarWidth));
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", done);
+    window.addEventListener("blur", done);
+  };
+  split.addEventListener("pointerdown", drag);
+  split.addEventListener("dblclick", resetSidebarWidth);
+  split.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 48 : 16;
+    const here = sidebarWidth ?? panel.offsetWidth;
+    if (e.key === "ArrowLeft") setSidebarWidth(here + step);        // wider log
+    else if (e.key === "ArrowRight") setSidebarWidth(here - step);  // wider map
+    else if (e.key === "Home") setSidebarWidth(SIDEBAR_MIN);
+    else if (e.key === "End") setSidebarWidth(sidebarLimit());
+    else return;
+    e.preventDefault();
+  });
 }
 
 /* View switcher: buttons over the map's top-right corner. */
