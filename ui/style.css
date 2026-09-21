@@ -1108,6 +1108,34 @@ body:has(#dicebox:not([hidden])) #decision {
 
 #cardpreview .cardops { font-size: 15px; padding: 0 12px 12px; }
 
+/* "Remove from play if used as an event." — the printed footer, surfaced
+ * wherever a card is read rather than left to the art. */
+#cardpreview .removeplay {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 7px 12px;
+  color: #14161a;
+  background: var(--gold);
+  border-top: 1px solid #3a4252;
+}
+
+/* The reveal popup: the same footer, but quieter, so it reads as a note under
+ * the card rather than competing with the title. */
+#dicebox .removeplay {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.cardremove {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--gold);
+  margin-top: 2px;
+}
+
 #cardpreview .scorepreview {
   font-size: 14px;
   padding: 8px 12px 12px;
