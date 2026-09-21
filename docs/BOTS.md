@@ -545,6 +545,14 @@ def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
   Space Race." A scoring card's headline/play value is its `score_region()`
   net VP, signed favorably or unfavorably for the acting side.
 
+  Which cards may reach that choice at all is the *engine's* rule, not the
+  bot's: `_can_space_race` refuses the China Card, UN Intervention, scoring
+  cards, and (with events on) the acting side's **own** events. That last one
+  is the substantive half — the Space Race exists to dispose of an opponent's
+  event you must play anyway, not to skip your own upside. The rest of the
+  option set is unchanged, so the Space Race stays a live choice: only the
+  cards it can never be right to send are missing from it.
+
 Only the core board decision kinds get real heuristics; every
 event-specific kind falls back to the first legal option. That scope, and
 why it is deliberate, is in [LIMITATIONS.md](LIMITATIONS.md) — extend

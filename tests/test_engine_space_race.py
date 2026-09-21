@@ -155,3 +155,87 @@ def test_box8_grants_eight_absolute_rounds_even_in_early_war():
     sides = [engine._side_for_play_index(i) for i in range(total)]
     assert sides.count(Side.USSR) == 8
     assert sides.count(Side.US) == 6
+
+
+# -- what may NOT be sent to the Space Race ---------------------------------
+
+
+def test_space_race_never_offers_the_china_card():
+    """Both printed faces of the China Card forbid it, and the bot could not
+    price what spacing it costs: the +1 end-game VP for holding it and its 4
+    Ops are invisible to `board_value`, so a lucky rollout sample won.
+
+    Observed live: USSR spaced the China Card on turn 1, round 5, DEFCON 4, at
+    a decision where the greedy heuristic scored Ops 9.00 to Space Race 2.50.
+    """
+    engine = Engine.new_game(seed=1)
+    engine.events_enabled = True
+    china = engine.cards[RULES["china_card_id"]]
+    assert not engine._can_space_race(Side.USSR, china)
+    assert not engine._can_space_race(Side.US, china)
+    assert "space_race" not in engine._play_modes(Side.USSR, RULES["china_card_id"])
+
+
+def test_space_race_never_offers_un_intervention():
+    """Its own text: "may not be discarded for the Space Race."."""
+    engine = Engine.new_game(seed=1)
+    engine.events_enabled = True
+    un = engine.cards[RULES["un_intervention_id"]]
+    assert not engine._can_space_race(Side.US, un)
+    assert not engine._can_space_race(Side.USSR, un)
+
+
+def test_space_race_never_offers_a_scoring_card():
+    """Spacing a scoring card would dodge scoring a region you control: there
+    is no Ops value to give up and no event to avoid."""
+    engine = Engine.new_game(seed=1)
+    engine.events_enabled = True
+    for cid, card in engine.cards.items():
+        if card.scoring:
+            assert not engine._can_space_race(Side.US, card), cid
+            assert not engine._can_space_race(Side.USSR, card), cid
+            assert "space_race" not in engine._play_modes(Side.US, cid), cid
+
+
+def test_space_race_excludes_your_own_events_but_not_your_opponents():
+    """You Space Race the opponent's events you must play anyway, not your own.
+
+    The restriction is per side and asymmetric: the same card is spaceable by
+    one seat and not the other. Neutral cards have no side's event to protect,
+    so they stay spaceable by both.
+    """
+    engine = Engine.new_game(seed=1)
+    engine.events_enabled = True
+    cards = engine.cards
+
+    for cid, card in cards.items():
+        if card.scoring or card.side.value == "NEUTRAL":
+            continue
+        owner = Side(card.side.value)
+        if engine._effective_ops(owner, card) < RULES["space_race_boxes"]["1"]["ops"]:
+            continue  # fails the pre-existing Ops threshold, not this rule
+        assert not engine._can_space_race(owner, card), f"{cid} is its owner's own event"
+        assert engine._can_space_race(owner.opponent, card), f"{cid} is spaceable by its opponent"
+
+    for cid, card in cards.items():
+        if card.side.value != "NEUTRAL" or card.scoring:
+            continue
+        if cid in (RULES["china_card_id"], RULES["un_intervention_id"]):
+            continue
+        if engine._effective_ops(Side.US, card) < RULES["space_race_boxes"]["1"]["ops"]:
+            continue
+        assert engine._can_space_race(Side.US, card), cid
+        assert engine._can_space_race(Side.USSR, card), cid
+
+
+def test_space_race_exclusion_is_gated_on_events_being_on():
+    """With events off nothing can fire, so there is no "own event" to protect
+    and the exclusion must not silently narrow the option set."""
+    engine = Engine.new_game(seed=1, events=False)
+    assert not engine.events_enabled
+    own = [c for c in engine.cards.values()
+           if c.side.value == "USSR" and not c.scoring
+           and engine._effective_ops(Side.USSR, c) >= RULES["space_race_boxes"]["1"]["ops"]]
+    assert own, "no USSR card clears the Ops threshold to test with"
+    for card in own:
+        assert engine._can_space_race(Side.USSR, card), card.id

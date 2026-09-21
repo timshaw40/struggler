@@ -1428,6 +1428,34 @@ class Engine:
         return 1
 
     def _can_space_race(self, side: Side, card: Card) -> bool:
+        # Rule 6.4.1 / the card texts: the Space Race discards a card you cannot
+        # use well. Two cards are outside it by their own printed rules, and one
+        # more is outside it because there is nothing to dispose of:
+        #
+        #   - The China Card: both printed faces forbid it outright. Sending it
+        #     to space would also hand the opponent the +1 end-game VP and lose
+        #     the 4 Ops, which is exactly the asset `_space_race_card_bonus`
+        #     cannot price.
+        #   - UN Intervention: "This card may not be played as an event, does
+        #     not count as an event card, and may not be discarded for the Space
+        #     Race." Its only other use is the combo mode offered on an
+        #     opponent's card, which is a separate, deliberate choice.
+        #   - A scoring card: it has no Ops to give up and no event to avoid, so
+        #     spacing it would be a way to dodge scoring a region you control.
+        #     `_play_modes` already routes scoring cards to their event alone;
+        #     the guard here keeps that true if a caller reaches this directly.
+        if card.id in (RULES["china_card_id"], RULES["un_intervention_id"]):
+            return False
+        if card.scoring:
+            return False
+        # You may not Space Race your own event (6.4.1: the Space Race discards
+        # "a card you cannot use well" -- an opponent's event you must play
+        # anyway). Sending your own event to space would dodge its *upside*
+        # rather than its downside, which is the opposite of the rule's purpose.
+        # Neutral cards (no event of either side's) stay spaceable: there is no
+        # "own" event to give up.
+        if self.events_enabled and self._is_own_event(side, card):
+            return False
         pos = self.space_race[side.value]
         if pos >= RULES["space_race_max_box"]:
             return False
@@ -1488,6 +1516,14 @@ class Engine:
         if card.side.value not in ("US", "USSR"):
             return False
         return Side(card.side.value) is side.opponent
+
+    def _is_own_event(self, side: Side, card: Card) -> bool:
+        """Whether `card`'s event belongs to `side` itself. The mirror of
+        `_is_opponent_event`, and NEUTRAL cards are excluded the same way: a
+        neutral card has no side's event to protect."""
+        if card.side.value not in ("US", "USSR"):
+            return False
+        return Side(card.side.value) is side
 
     def _ops_modifier(self, side: Side) -> int:
         """Per-turn additive Ops modifiers from persistent events
