@@ -1,12 +1,22 @@
 # struggler
 
-Welcome to struggler! An engine for *Twilight Struggle* (GMT Games, 2005), built so AI agents can be trained and evaluated against it.
+A complete, playable implementation of *Twilight Struggle* (GMT Games, 2005),
+with a browser UI, several bots, and the test suite to keep them honest.
 
-This repo contains the engine of the whole game, that can be used to test different bots against each other, a human player or even an external player.
+You can play it against a bot in the browser, watch two bots play, or drive the
+engine from Python to train and evaluate agents. All 110 cards are implemented,
+including every non-scoring event.
 
-It also contains an LLM bot: it reads the rules and a strategy guideline as its knowledge base, gets the current board state at every decision, and drafts a turn plan it then plays every turn (and decides to follow the plan or diverging from it).
+The bots are the point of the project. There is a **greedy** heuristic, an
+**MCTS** player that searches lookahead on top of it, and an **LLM** player that
+reads the rules and a strategy guide, receives the board at each decision, and
+drafts a turn plan it then plays — or deliberately departs from.
 
-To understand the full story, read the article [Giving AI the atom bomb buttons](https://siestainsolaris.substack.com/p/giving-ai-the-atom-bomb-buttons)
+> **Origins.** This began as a fork of
+> [alekpinel/struggler](https://github.com/alekpinel/struggler) by Alejandro
+> Pinel Martínez, which built the engine and card data. It has since grown well
+> past that foundation. See [Origins and differences](#origins-and-differences)
+> for exactly what is inherited and what was added.
 
 ## Install
 
@@ -164,6 +174,11 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 
 ## Tests
 
+600 tests. They are the reason the rest of this is trustworthy: the engine's
+invariants are checked over random legal play rather than by example, and the
+strategy rules in `GreedyPlayer` each have a test that fails if the rule is
+removed.
+
 ```sh
 pytest
 python scripts/eval_mcts_vs_greedy.py --games 10 --seed 1 --sims 8
@@ -228,6 +243,52 @@ printed card text. No VASSAL Java/`.class` code is committed here.
 Playing this engine is not a substitute for owning the game. If you enjoy
 *Twilight Struggle*, buy a copy from [GMT Games](https://www.gmtgames.com/).
 
-## Author
+## Origins and differences
 
-Built by [Alejandro Pinel Martínez](https://github.com/alekpinel)
+This project descends from
+[alekpinel/struggler](https://github.com/alekpinel/struggler), started by
+[Alejandro Pinel Martínez](https://github.com/alekpinel) in August 2026. That
+work is the foundation; this repository carries it and adds substantially to it.
+If you are looking for the original, start there.
+
+### Inherited from the foundation
+
+The engine's backbone — difficult work, used more or less as designed:
+
+- the decision-stack model in `src/struggler/engine/core.py` (`Decision`,
+  `DecisionKind`, the `_push`/`_advance` loop) and the type/observation layer;
+- the board model: country adjacency, stability, the 8.1.5 DEFCON geography,
+  control and scoring tiers;
+- `src/struggler/data/` as facts-only card and country data (all 110 cards);
+- the `RULES` constants and the M2/M3 card-event registry pattern, including
+  the physical/replay mode that declares hidden hands on play.
+
+### Added since
+
+- **The browser UI** (`ui/`, ~5,100 lines) and `scripts/serve_ui.py`: map
+  rendering from board coordinates, click-to-place with the influence and
+  DEFCON tracks, dice and card reveals, the history feed, a draggable split
+  between map and log, the start screen.
+- **The VASSAL pipeline**: `install_vassal_ui_assets.py` maps the official
+  module's art onto engine card ids, and `calibrate_countries.py` measures
+  country rectangles from the board so markers land on the printed ovals.
+- **MCTS support infrastructure**: the value function, training extractors, and
+  the arena tooling in `scripts/`.
+- **The LLM bot's board reporting and playbook** (`bots/llm/`).
+- **The strategy work**: [`docs/STRATEGY.md`](docs/STRATEGY.md) codes the
+  published *Twilight Strategy* general-strategy articles into the greedy
+  heuristic, quoting each article's sentence beside the rule it produced.
+- **The test suite** — 600 tests, including property-based invariants over
+  random legal play and the strategy-rule tests.
+- **The documentation set** ([`docs/`](docs/), five ADRs, `CONTEXT.md`).
+
+The two projects have diverged far enough that this is better understood as a
+project of its own sharing a lineage, rather than a fork tracking upstream.
+Improvements are offered back where they are cleanly separable.
+
+### Authorship
+
+Original engine and data: [Alejandro Pinel
+Martínez](https://github.com/alekpinel). Current development:
+[Tim Shaw](https://github.com/timshaw40). Both names appear in the copyright
+notice in [`LICENSE`](LICENSE), which must be preserved.

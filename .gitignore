@@ -30,6 +30,9 @@ logs/
 data/
 *.pt
 
+# Server-side replay logs (`serve_ui.py --log-dir`): one per game, local state.
+replays/
+
 # User-supplied art (scans/PDF-derived images). Never commit these.
 ui/assets/
 *.pdf
