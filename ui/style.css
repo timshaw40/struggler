@@ -1140,6 +1140,7 @@ body:has(#dicebox:not([hidden])) #decision {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 7px 12px;
+  text-align: center;   /* the strip spans the card, so the line is centred under it */
   color: #14161a;
   background: var(--gold);
   border-top: 1px solid #3a4252;
@@ -1157,6 +1158,7 @@ body:has(#dicebox:not([hidden])) #decision {
 .cardremove {
   font-size: 9px;
   letter-spacing: 0.02em;
+  text-align: center;   /* matches the strip on the preview, and the card text above it */
   color: var(--gold);
   margin-top: 2px;
 }
