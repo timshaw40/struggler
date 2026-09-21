@@ -1,6 +1,12 @@
 MIT License
 
 Copyright (c) 2026 Alejandro Pinel Martínez
+Copyright (c) 2026 Tim Shaw
+
+This project began as a fork of https://github.com/alekpinel/struggler and
+carries substantial later work. The copyright notice above is preserved as the
+MIT License requires; see "Origins and differences" in README.md for what came
+from which.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
