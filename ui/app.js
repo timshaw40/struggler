@@ -1013,6 +1013,14 @@ function showCardPlay(cid, actor) {
       box.querySelector(".dice").append(img);
     }
     box.querySelector(".doutcome").textContent = m.event_summary || "";
+    // The reveal is where "was that card spent or burned?" is decided, so the
+    // printed footer belongs here too.
+    if (m.remove_after_event) {
+      const gone = document.createElement("div");
+      gone.className = "removeplay";
+      gone.textContent = "Remove from play if used as an event";
+      box.querySelector(".doutcome").append(gone);
+    }
     box.hidden = false;
     let done = false;
     const finish = () => {
@@ -2767,6 +2775,18 @@ function showPreview(cid, card) {
   } else {
     fillCardText(previewEl, m, cid);
   }
+  // "Remove from play if used as an event." — printed on the card itself, and
+  // the difference between spending a card twice and spending it once. Shown
+  // under the face because the VASSAL art cannot be relied on to carry it at
+  // preview size.
+  if (m.remove_after_event) {
+    const gone = document.createElement("div");
+    gone.className = "removeplay";
+    gone.textContent = "Remove from play if used as an event";
+    gone.title = "Playing this for its event sends it out of the game; "
+      + "playing it for Ops discards it as normal.";
+    previewEl.append(gone);
+  }
   const pv = (state.score_preview || {})[cid];
   if (m.scoring && pv) {
     const box = document.createElement("div");
@@ -2802,6 +2822,14 @@ function fillCardText(el, m, cid) {
   ops.className = "cardops";
   ops.textContent = m.scoring ? "scoring card" : `ops ${m.ops}`;
   el.append(name, ops);
+  // The text-card fallback stands in for the printed face, so it carries the
+  // printed footer too.
+  if (m.remove_after_event) {
+    const gone = document.createElement("div");
+    gone.className = "cardremove";
+    gone.textContent = "remove from play if used as an event";
+    el.append(gone);
+  }
 }
 
 /* Why a card in hand cannot be played right now, in the player's words, or
