@@ -102,3 +102,17 @@ def test_the_footer_explains_the_ops_difference():
     """The flag alone is ambiguous about Ops play; the tooltip resolves it."""
     preview = body_of("showPreview")
     assert "playing it for Ops discards it as normal" in preview
+
+
+def test_the_footer_text_is_centred_on_the_card():
+    """The line sits under a full-width card face, so it reads as the card's
+    own printed footer rather than a left-aligned caption.
+
+    The reveal popup inherits `text-align: center` from `#dicebox` and needs no
+    rule of its own; the preview strip and the text-card fallback do, or they
+    default to the left edge.
+    """
+    for selector in ("#cardpreview .removeplay", ".cardremove"):
+        block = re.search(rf"{re.escape(selector)} \{{(.*?)\n\}}", CSS, re.S)
+        assert block, f"{selector} rule not found"
+        assert "text-align: center" in block.group(1), selector
