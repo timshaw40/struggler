@@ -110,3 +110,52 @@ def test_scale_is_clamped_to_the_slider_range():
     the map's actual scale."""
     scale = body_of("setScale")
     assert "Math.max(1, Math.min(MAX_SCALE, next))" in scale
+
+
+# -- filling the band a narrow window leaves under the board ---------------
+
+
+def test_layout_board_grows_the_world_view_to_cover_the_hand_gap():
+    """The board is 5100x3300, so fitting it to the map area's *width* leaves it
+    only 0.647 of that width tall. A short wide area absorbs that (the board
+    overflows and scrolls); a tall narrow one does not, and the leftover showed
+    as a black band between the map and the hand -- 108px at a 900px window."""
+    layout = body_of("layoutBoard")
+    assert "fillFactor(area, scale)" in layout, "the fill correction is gone"
+    factor = body_of("fillFactor")
+    assert "tall / (wide * aspect)" in factor
+    # Filling to *height* needs the area's height; the width fit alone cannot
+    # tell whether there is a band to close.
+    assert "area.clientHeight" in factor
+
+
+def test_the_fill_correction_only_ever_zooms_in():
+    """A hand-set zoom above the fit must never be pulled back by the
+    correction, so its multiplier is floored at 1 rather than centring the
+    overflow."""
+    factor = body_of("fillFactor")
+    assert "if (wide * aspect >= tall) return 1;" in factor
+    # Two early guards return 1 (not the World view; already fills). The only
+    # other return is the band-closing ratio, which is > 1 exactly when it is
+    # reached, because the guard above has already excluded the <= 1 case.
+    returns = re.findall(r"return ([^;]+);", factor)
+    assert returns == ["1", "1", "tall / (wide * aspect)"], returns
+
+
+def test_the_fill_correction_is_world_only():
+    """A region view is a deliberate magnification of one slice, and its rect is
+    not the board's aspect ratio — applying the same correction there would
+    fight the player's own zoom."""
+    factor = body_of("fillFactor")
+    assert 'if (view !== "World") return 1;' in factor
+
+
+def test_layout_runs_again_once_the_hand_has_its_height():
+    """The hand bar's height comes from the cards in it, so #boardarea only has
+    its true height after renderHand(). On a cold load layoutBoard() ran while
+    the bar was still empty, over-estimated the area, and zoomed a wide window
+    in for no reason (the board measured taller than the area it sat in)."""
+    render = body_of("render")
+    hand_at = render.index("renderHand();")
+    layout_at = render.index("layoutBoard();")
+    assert layout_at > hand_at, "layoutBoard must run after renderHand"

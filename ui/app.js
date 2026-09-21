@@ -397,8 +397,39 @@ function layoutBoard() {
   // The scale is the single source of truth: the rendered width follows from
   // it, and `--boardw` is written from that width so the marker chips (whose
   // size is a calc over `--boardw`) can never disagree with the map.
-  const w = Math.round($("#boardarea").clientWidth * scale);
+  const area = $("#boardarea");
+  const w = Math.round(area.clientWidth * scale * fillFactor(area, scale));
   wrap.style.setProperty("--boardw", w + "px");
+}
+
+/* Close the vertical band a narrow window leaves under the board.
+ *
+ * The whole board is 5100x3300, so fitting it to the map area's *width* leaves
+ * it only 0.647 of that width tall. A short, wide area absorbs that (the board
+ * overflows and scrolls); a tall, narrow one does not, and the leftover shows
+ * as a black band between the map and the hand -- ~108px at a 900px window.
+ *
+ * The fix is to fit to whichever axis actually fills the area, at scale 1 and
+ * only when width-fit runs short. Growing the map to cover the band costs
+ * horizontal scrolling the player did not ask for, so this deliberately stops
+ * at "the band is gone" rather than centring the overflow.
+ *
+ * Only for the World view. A region view is already a deliberate
+ * magnification of one slice, and its rect is not the board's aspect ratio, so
+ * applying the same correction there would fight the player's own zoom.
+ *
+ * Returns a multiplier on `scale`, never less than 1: this only ever zooms in,
+ * so a hand-set zoom above the fit is never pulled back.
+ */
+function fillFactor(area, atScale) {
+  if (view !== "World") return 1;
+  const viewH = REGIONS[view][3] - REGIONS[view][1];
+  const viewW = REGIONS[view][2] - REGIONS[view][0];
+  const aspect = viewH / viewW;              // board height per unit of scale
+  const wide = area.clientWidth * atScale;   // the width fit at this scale
+  const tall = area.clientHeight;            // the height we want to cover
+  if (wide * aspect >= tall) return 1;       // already fills: no correction
+  return tall / (wide * aspect);
 }
 
 /* Point the slider at the live scale. Shared by every path that moves the
@@ -1936,6 +1967,14 @@ function render() {
   renderPanel();
   renderEffectsHud();
   renderHand();
+  // The hand bar's height comes from the cards in it, so #boardarea only has
+  // its true height *after* renderHand. layoutBoard() measures that height to
+  // decide whether the board needs to grow to cover the band above the hand
+  // (see fillFactor), and on a cold load it ran while the bar was still empty
+  // -- which over-estimated the area and zoomed a wide window in for no
+  // reason. Re-laying out here costs one measurement and makes the result
+  // independent of what the hand happens to contain.
+  layoutBoard();
   renderDecision();
   renderActionBar();
   renderWinner();
