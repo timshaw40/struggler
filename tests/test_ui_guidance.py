@@ -183,3 +183,54 @@ def test_war_roll_is_a_roll_the_client_already_animates():
         r"([a-z_]+): \d", re.search(r"const ROLL_KIND = \{(.*?)\};", APP, re.S).group(1)))
     assert DecisionKind.WAR_ROLL.value in rolls
     assert DecisionKind.WAR_TARGET.value in {k.value for k in DecisionKind}
+
+
+# -- text boxes are sized to their content ----------------------------------
+
+
+def test_decision_options_do_not_stretch_to_the_panel_width():
+    """The option rows carry a width ceiling instead of `width: 100%`.
+
+    In the floating box the ceiling is inert: the box shrink-wraps around the
+    rows. In the right column it is the whole point — the column is ~320px in
+    a normal window and much wider when the player drags the splitter, and a
+    row of text stretched to the splitter's width is a long empty rectangle.
+    """
+    rule = re.search(r"#decision \{ --opt-w: ([^;]+); \}", CSS)
+    assert rule, "the option-width token is gone"
+    assert "min(" in rule.group(1), "an unbounded width cap would not cap anything"
+    body = re.search(r"\n#decision button \{(.*?)\n\}", CSS, re.S).group(1)
+    assert "width: var(--opt-w)" in body
+    assert "width: 100%" not in body
+
+
+def test_floating_action_box_shrink_wraps_instead_of_fixing_its_width():
+    """A fixed 460px made every box as wide as the widest one.
+
+    A single-line card prompt floated in a 900px slab of empty space. The box
+    now sizes to its content and only *caps* at 460px, and the text column
+    shrink-wraps next to the played card rather than taking the leftover width
+    — without that, `fit-content` on the box would measure a full-width column
+    and land right back on the ceiling.
+    """
+    block = re.search(
+        r"body\.decision-center #decision:not\(\[hidden\]\) \{(.*?)\n\}", CSS, re.S).group(1)
+    assert "width: fit-content" in block
+    assert re.search(r"max-width: min\(460px", block)
+    assert not re.search(r"^\s*width: min\(460px", block, re.M), "a fixed width is back"
+    assert re.search(
+        r"body\.decision-center #decision \.dcol-main \{ flex: 0 1 auto; \}", CSS), \
+        "the text column must shrink-wrap for the box to track its content"
+
+
+def test_the_other_text_boxes_stay_within_a_readable_measure():
+    """The start screen, the help panel and the settings block, likewise.
+
+    Each is prose or a short form: past ~430px the boxes stop gaining content
+    and start gaining margin. These are the widths a 1512px window renders.
+    """
+    start = re.search(r"#start \.scard \{(.*?)\n\}", CSS, re.S).group(1)
+    assert re.search(r"width: min\((\d+)px", start), start
+    assert int(re.search(r"width: min\((\d+)px", start).group(1)) <= 460
+    help_panel = re.search(r"#help \{(.*?)\n\}", CSS, re.S).group(1)
+    assert int(re.search(r"width: min\((\d+)px", help_panel).group(1)) <= 380

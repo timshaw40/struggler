@@ -301,7 +301,7 @@ body.colresize #boardwrap { pointer-events: none; }
   background: var(--panel2);
   border: 1px solid #3a4252;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 10px;
   margin: -4px 0 10px;
   font-size: 13px;
   z-index: 6;
@@ -675,10 +675,12 @@ body.mapfocus #colsplit { display: none; }
   z-index: 42;   /* over the panel and the map, under the game-over dialog */
   top: 0;
   right: 0;
-  width: min(420px, 92vw);
+  /* Narrow enough to read as a column of prose: past ~360px the paragraphs
+   * get a long line length without gaining any content. */
+  width: min(360px, 92vw);
   max-height: 100vh;
   overflow-y: auto;
-  padding: 18px 20px 26px;
+  padding: 18px 18px 24px;
   background: var(--panel);
   border-left: 1px solid #3a4252;
   box-shadow: -14px 0 40px rgba(0, 0, 0, 0.55);
@@ -731,7 +733,7 @@ body.mapfocus #colsplit { display: none; }
   background: var(--panel2);
   border: 1px solid #3a4252;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 10px;
   margin-top: 10px;
 }
 #decision::-webkit-scrollbar { width: 10px; }
@@ -741,6 +743,14 @@ body.mapfocus #colsplit { display: none; }
 #decision .dcols { display: flex; gap: 10px; }
 #decision .dcol-main { flex: 1; min-width: 0; }
 #decision .dcol-card { flex: none; width: 100px; }
+
+/* Every option row is one width. The previous `width: 100%` measured the
+ * column, so a one-line prompt ("Action round: choose a card") stretched its
+ * buttons to the panel's full 700-odd pixels — a long empty rectangle with a
+ * word floating in the middle. A fixed ceiling keeps a row about as wide as
+ * the longest label any decision puts on one line ("with UN Intervention",
+ * or a card title beside its art), and every row in a box matches. */
+#decision { --opt-w: min(420px, 100%); }
 
 #decision[hidden] { display: none; }
 
@@ -758,14 +768,26 @@ body.decision-center #decision:not([hidden]) {
   transform: translate(-50%, -50%);
   transition: top 0.16s ease-out;
   z-index: 30;
-  width: min(460px, calc(100% - 40px));
-  padding: 12px 14px;
+  /* Sized by its content, then capped. A fixed 460px made every box as wide
+   * as the widest one — a single-line card prompt floated in a 900px slab of
+   * empty space. The buttons are 100% wide, so the box has to grow from the
+   * inside out: #decision .dcols fills the available width, and the shrink-to-
+   * fit chain below lets the widest intrinsic row ("with UN Intervention",
+   * "De-Stalinization") set the width instead. */
+  width: fit-content;
+  max-width: min(460px, calc(100% - 40px));
+  padding: 12px;
   max-height: calc(100% - 32px);
   margin: 0;
   background: rgba(32, 37, 48, 0.95);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(3px);
 }
+body.decision-center #decision .dcols { width: auto; }
+/* The text column shrink-wraps to its longest line instead of taking the
+ * leftover width, so the box tracks the content. The card column keeps its
+ * fixed width and is added on top. */
+body.decision-center #decision .dcol-main { flex: 0 1 auto; }
 /* Country pick: sit in the bottom band so the map above stays clickable. */
 body.decision-center #decision.pick:not([hidden]) { top: 78%; }
 body.decision-center #decision .dhead { cursor: grab; }
@@ -816,7 +838,10 @@ body.decision-center #decision .opt { font-size: 15px; }
 
 #decision button {
   display: block;
-  width: 100%;
+  /* The option column is --opt-w wide, not the whole panel: a 320px-wide row
+   * of text is legible, a 700px one is just a long empty rectangle. The rule
+   * is inert in the floating box, which shrink-wraps (see decision-center). */
+  width: var(--opt-w);
   background: var(--panel);
   color: var(--text);
   border: 1px solid #3a4252;
@@ -1160,8 +1185,8 @@ body:has(#dicebox:not([hidden])) #decision {
 #start[hidden] { display: none; }
 
 #start .scard {
-  width: min(520px, 92vw);
-  padding: 26px 30px 28px;
+  width: min(430px, 92vw);
+  padding: 24px 26px 26px;
   background: var(--panel);
   border: 1px solid #3a4252;
   border-radius: 12px;
@@ -1444,9 +1469,12 @@ body:has(#dicebox:not([hidden])) #decision {
   overflow-y: auto;
 }
 #decision .countrybtns button {
-  width: auto;
+  width: auto;   /* the one place a narrow, chip-sized button is right */
   margin-top: 0;
   padding: 3px 8px;
   font-size: 12px;
 }
+/* A country name longer than its chip wraps at the space rather than pushing
+ * the row past the box and turning it into a horizontal scroller. */
+#decision .countrybtns button b { overflow-wrap: anywhere; }
 #decision .cost2txt { color: #f08a4b; font-weight: 700; }
