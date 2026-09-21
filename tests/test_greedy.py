@@ -9,9 +9,14 @@ from types import SimpleNamespace
 import pytest
 
 from struggler.bots.greedy import (
+    _US_SPACE_RACE,
+    _USSR_SPACE_RACE,
     GreedyPlayer,
     GreedyWeights,
+    _defcon_suicide_risk,
     _in_bonus_region,
+    _is_reshuffle_turn,
+    _realignment_severs_access,
     _score_coup_target,
     board_value,
 )
@@ -371,3 +376,304 @@ def test_the_t1_plan_does_not_leak_into_later_turns():
     scores = GreedyPlayer().option_scores(obs)
     # Neither country carries the plan's ordering once the turn has passed.
     assert abs(scores[0] - scores[1]) < 12.0
+
+
+# -- DEFCON safety for events, from Twilight Strategy's "General Strategy: ----
+# DEFCON" --------------------------------------------------------------------
+#
+# "you lose the game if DEFCON drops to 1 on your turn. It doesn't matter who
+# 'caused' it: if it happened on your watch, you're responsible for humanity's
+# destruction." The engine implements that (8.1.3: the *phasing* player loses),
+# so the bot must not resolve an event that can put DEFCON at 1 while phasing.
+
+
+def _clean_obs(phasing, defcon, influence=None):
+    """An observation on an empty board, so a predicate has one thing to find."""
+    engine = Engine.new_game(seed=1)
+    inf = {c: {"US": 0, "USSR": 0} for c in engine.board.influence}
+    for (owner, country, n) in (influence or []):
+        inf[country][owner.value] = n
+    return dataclasses.replace(engine.observe(phasing), defcon=defcon, influence=inf)
+
+
+def test_unconditional_defcon_degraders_are_lethal_only_at_defcon_2():
+    for cid in ("Duck_and_Cover", "We_Will_Bury_You", "Soviets_Shoot_Down_KAL_007"):
+        at2 = _clean_obs(Side.US, 2)
+        assert _defcon_suicide_risk(at2, Side.US, cid, "event"), cid
+        # "Cards that unconditionally degrade DEFCON ... You can never trigger
+        # these events on your turn when DEFCON is at 2" — at 3 the drop lands
+        # on 2, which is bad play rather than a loss.
+        at3 = _clean_obs(Side.US, 3)
+        assert not _defcon_suicide_risk(at3, Side.US, cid, "event"), cid
+
+
+def test_only_the_event_mode_is_lethal():
+    """Ops and the Space Race never resolve the card's text."""
+    obs = _clean_obs(Side.US, 2)
+    for mode in ("ops", "space_race", "un_intervention"):
+        assert not _defcon_suicide_risk(obs, Side.US, "Duck_and_Cover", mode), mode
+    assert _defcon_suicide_risk(obs, Side.US, "Duck_and_Cover", "event")
+
+
+def test_opponent_ops_cards_need_a_coupeable_battleground():
+    """"you can never play your opponent's events from this list on your turn
+    when DEFCON is 2 and your opponent can drop DEFCON by couping a battleground
+    of yours (keeping in mind DEFCON restrictions)\""""
+    # Lone Gunman gives the USSR 1 Op, so it threatens a US phasing player.
+    assert _defcon_suicide_risk(
+        _clean_obs(Side.US, 2, [(Side.US, "Mexico", 3)]), Side.US, "Lone_Gunman", "event")
+    assert _defcon_suicide_risk(
+        _clean_obs(Side.US, 2, [(Side.US, "South_Africa", 1)]), Side.US, "Lone_Gunman", "event")
+    # Nothing to coup: the article's "only possible under Containment / not
+    # much of a problem if you have no influence in a Mid War battleground".
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.US, 2), Side.US, "Lone_Gunman", "event")
+    # Third World only: a European or Asian battleground is not coupeable at
+    # DEFCON 2 ("keeping in mind DEFCON restrictions").
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.US, 2, [(Side.US, "France", 3)]), Side.US, "Lone_Gunman", "event")
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.US, 2, [(Side.US, "North_Korea", 3)]), Side.US, "Lone_Gunman", "event")
+
+
+def test_the_ops_go_to_the_opponent_not_the_phasing_side():
+    """CIA Created gives the *US* the Ops, so it only threatens a USSR turn,
+    and what the US can coup is USSR influence."""
+    assert _defcon_suicide_risk(
+        _clean_obs(Side.USSR, 2, [(Side.USSR, "Angola", 3)]), Side.USSR, "CIA_Created", "event")
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.USSR, 2, [(Side.USSR, "East_Germany", 3)]),
+        Side.USSR, "CIA_Created", "event")
+    # And the US holding influence is irrelevant to a USSR turn.
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.USSR, 2, [(Side.US, "Mexico", 3)]), Side.USSR, "CIA_Created", "event")
+
+
+def test_neutral_events_are_not_special_cased():
+    """"you would have to be daft to play either of these for the event at
+    DEFCON 2. Simply play them for Operations" — which the ordinary
+    event_mode_penalty already prefers, so no special rule is needed."""
+    assert not _defcon_suicide_risk(_clean_obs(Side.US, 2), Side.US, "Olympic_Games", "event")
+    assert not _defcon_suicide_risk(_clean_obs(Side.US, 2), Side.US, "Summit", "event")
+
+
+def test_the_bot_refuses_a_suicide_headline_but_takes_it_at_defcon_3():
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    decision = Decision(
+        id=901, actor=Side.US, kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Duck_and_Cover"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Containment"}),
+        ),
+    )
+    at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
+    assert GreedyPlayer().choose_action(at2, []).payload["card"] == "Containment"
+    # At DEFCON 3 the drop only reaches 2, so the card is playable again.
+    at3 = dataclasses.replace(obs, pending_decision=decision, defcon=3)
+    assert GreedyPlayer().choose_action(at3, []).payload["card"] == "Duck_and_Cover"
+
+
+def test_the_bot_refuses_a_suicide_event_play():
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    decision = Decision(
+        id=902, actor=Side.US, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "event"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+        ),
+        context={"card": "Duck_and_Cover"},
+    )
+    at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
+    assert GreedyPlayer().choose_action(at2, []).payload["mode"] == "ops"
+
+
+# -- Space Race card lists, from "General Strategy: The Space Race" ----------
+
+
+def test_every_named_space_race_card_exists():
+    """The lists are keys into the card table. An id that silently disappeared
+    would turn a "this belongs in space" rule into a no-op, so it fails here."""
+    from struggler.engine.cards import load_cards
+
+    cards = load_cards()
+    missing = sorted(c for c in (_USSR_SPACE_RACE | _US_SPACE_RACE) if c not in cards)
+    assert not missing, f"space-race lists name cards that do not exist: {missing}"
+
+
+def test_space_race_lists_are_the_article_s_cards():
+    """"These are the US events that I tend to Space Race" / "These are the USSR
+    events that I tend to Space Race" — the article's cards, per side."""
+    # One card from each of the article's own sub-groups, sampled not exhaustive.
+    assert {"CIA_Created", "Grain_Sales_to_Soviets", "Tear_Down_This_Wall"} <= _USSR_SPACE_RACE
+    assert {"The_Voice_Of_America", "Ussuri_River_Skirmish", "Puppet_Governments"} <= _USSR_SPACE_RACE
+    assert {"Lone_Gunman", "We_Will_Bury_You", "Ortega_Elected_in_Nicaragua"} <= _US_SPACE_RACE
+    assert {"Decolonization", "De_Stalinization", "OPEC"} <= _US_SPACE_RACE
+    # The lists are per side: the US must not be told to space its own events.
+    from struggler.engine.cards import load_cards
+
+    cards = load_cards()
+    # The USSR spaces *US* cards; the US spaces *USSR* cards. Neutral cards
+    # belong to neither side and are not in these lists.
+    wrong = [c for c in _USSR_SPACE_RACE if cards[c].side.value not in ("US",)]
+    assert not wrong, f"the USSR's list names cards that are not US events: {wrong}"
+    wrong = [c for c in _US_SPACE_RACE if cards[c].side.value not in ("USSR",)]
+    assert not wrong, f"the US's list names cards that are not USSR events: {wrong}"
+
+
+def test_listed_cards_are_preferred_for_the_space_race():
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.USSR)
+
+    def space_score(cid):
+        decision = Decision(
+            id=910, actor=Side.USSR, kind=DecisionKind.PLAY_MODE,
+            options=(Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),),
+            context={"card": cid},
+        )
+        return GreedyPlayer().option_scores(
+            dataclasses.replace(obs, pending_decision=decision, side=Side.USSR)
+        )[0]
+
+    # "The Voice of America" is on the list; "Blockade" is not.
+    assert space_score("The_Voice_Of_America") > space_score("Blockade")
+
+
+def test_the_article_warns_against_over_spacing():
+    """"The number one mistake beginning players make ... is to send too many
+    cards off to space" and "Ops are paramount" — so a big Ops card is still
+    worth more on the board than a listed card is in space."""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    decision = Decision(
+        id=911, actor=Side.US, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+        ),
+        context={"card": "Muslim_Revolution"},   # listed, 2 Ops
+    )
+    scores = GreedyPlayer().option_scores(dataclasses.replace(obs, pending_decision=decision))
+    # It is listed, so space_race should outscore the 2 Ops play.
+    assert scores[0] > scores[1]
+
+
+# -- Reshuffle timing, from "General Strategy: Reshuffles" -------------------
+
+
+def test_the_engine_reshuffles_on_the_article_s_turns():
+    """The article describes the physical deck's Turns 3 and 7. This engine
+    reshuffles when the draw pile empties, so the claim has to be checked
+    against this deck — it is the evidence behind _RESHUFFLE_TURNS."""
+    from collections import Counter
+
+    from struggler.engine import Engine
+
+    seen: Counter[int] = Counter()
+    for seed in range(1, 9):
+        engine = Engine.new_game(seed=seed)
+        steps = 0
+        while not engine.is_terminal and steps < 20000:
+            decision = engine.pending_decision
+            if decision is None:
+                break
+            before = len(engine.discard_pile)
+            engine.step(decision.options[0])
+            if before > 0 and not engine.discard_pile and engine.draw_pile:
+                seen[engine.turn] += 1
+            steps += 1
+    assert seen, "no reshuffle observed in eight games"
+    # Turn 3 is the early reshuffle in every game; Turn 7 shows up once the
+    # deck lasts that long.
+    assert seen[3] == 8, f"expected the early reshuffle on turn 3 every time: {dict(seen)}"
+    assert set(seen) <= {1, 3, 7, 9}, f"unexpected reshuffle turns: {sorted(seen)}"
+
+
+def test_the_timing_bonus_applies_only_on_reshuffle_turns():
+    assert _is_reshuffle_turn(3) and _is_reshuffle_turn(7)
+    assert not _is_reshuffle_turn(2)
+    assert not _is_reshuffle_turn(6)
+
+
+def test_spacing_a_vital_card_is_better_on_a_reshuffle_turn():
+    """"you want to discard them on Turns 3 and 7, rather than on Turns 2 or 6\""""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+
+    def score(turn):
+        decision = Decision(
+            id=912, actor=Side.US, kind=DecisionKind.PLAY_MODE,
+            options=(Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),),
+            context={"card": "De_Stalinization"},     # a vital USSR event
+        )
+        return GreedyPlayer().option_scores(
+            dataclasses.replace(obs, pending_decision=decision, turn=turn)
+        )[0]
+
+    assert score(3) > score(2)
+    assert score(7) > score(6)
+    assert score(3) == score(7)
+
+
+def test_the_timing_bonus_ignores_cards_that_are_not_vital():
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+
+    def score(turn):
+        decision = Decision(
+            id=913, actor=Side.US, kind=DecisionKind.PLAY_MODE,
+            options=(Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),),
+            context={"card": "Blockade"},    # a USSR event, but not on the list
+        )
+        return GreedyPlayer().option_scores(
+            dataclasses.replace(obs, pending_decision=decision, turn=turn)
+        )[0]
+
+    assert score(3) == score(2), "an unlisted card must not gain from the timing"
+
+
+# -- Realignments, from "General Strategy: Realignments" --------------------
+
+
+def test_realignment_access_severing_needs_a_last_foothold():
+    """"The first kind of realignment, and the best kind, is the realignment that
+    eliminates your opponent's access to the region." Only true when it is their
+    last influence there."""
+    engine = Engine.new_game(seed=1)
+    board = engine.board
+    for cid in board.influence:
+        board.influence[cid]["US"] = 0
+        board.influence[cid]["USSR"] = 0
+
+    board.influence["Cuba"]["USSR"] = 3
+    assert _realignment_severs_access(board, Side.USSR, "Cuba")
+
+    board.influence["Nicaragua"]["USSR"] = 1   # another way into the region
+    assert not _realignment_severs_access(board, Side.USSR, "Cuba")
+
+    board.influence["Cuba"]["USSR"] = 0
+    assert not _realignment_severs_access(board, Side.USSR, "Cuba")
+
+
+def test_realignments_are_preferred_at_defcon_2():
+    """"In general, realignments only occur at DEFCON 2. In most cases,
+    battleground coups are a more powerful method ... But once DEFCON drops to 2,
+    you must search for other ways to attack your opponent's battlegrounds.\""""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+
+    def score(defcon):
+        decision = Decision(
+            id=914, actor=Side.US, kind=DecisionKind.REALIGNMENT_TARGET,
+            options=(Action(DecisionKind.REALIGNMENT_TARGET, {"country": "Cuba"}),),
+            context={"card_ops": 3, "spent": 0},
+        )
+        merged = dataclasses.replace(
+            obs, pending_decision=decision, defcon=defcon,
+            influence={**obs.influence, "Cuba": {"US": 0, "USSR": 3}},
+        )
+        return GreedyPlayer().option_scores(merged)[0]
+
+    assert score(2) > score(3), "DEFCON 2 should favour the realignment"
+    assert score(3) == score(5)

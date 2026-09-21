@@ -66,6 +66,15 @@ from struggler.engine.rules import RULES
 
 _CARDS = load_cards()
 
+"""Static country geography, loaded once.
+
+The heuristic is handed an `Observation`, not a `Board`, and a few rules are
+about where countries *are* rather than what influence sits on them (8.1.5's
+DEFCON geography, the article's battleground regions). This is the same
+`data/countries.json` the engine's Board reads, so the two cannot disagree.
+"""
+_COUNTRY_INFO: dict[str, CountryInfo] = Board().countries
+
 _TIER_VALUE = {
     ScoringTier.NONE: 0.0,
     ScoringTier.PRESENCE: 1.0,
@@ -94,6 +103,9 @@ class GreedyWeights:
     # -- DEFCON safety (priority #1: never die to DEFCON 1) --
     defcon_self_kill_penalty: float = 1_000_000.0
     defcon_caution: float = 4.0  # scaled by (5 - defcon): risk-aversion as DEFCON drops, short of the fatal case
+    # Playing a DEFCON sucker (see _defcon_suicide_risk) is the same class of
+    # mistake as couping into DEFCON 1, so it gets the same penalty.
+    defcon_suicide_penalty: float = 1_000_000.0
 
     # -- per-ops-type base preference (before the marginal/expected board_value swing) --
     coup_base: float = 5.0
@@ -105,6 +117,29 @@ class GreedyWeights:
     space_race_base: float = 4.0
     space_race_vp_weight: float = 3.0
     space_race_ops_penalty: float = 1.5  # a high-Ops card is worth more spent on Ops than "wasted" on the Space Race
+    # "the real job of the Space Race is to discard truly awful opponent events
+    # that you cannot mitigate in any meaningful way" — the per-card judgement
+    # lives in _USSR_SPACE_RACE / _US_SPACE_RACE. Sized above space_race_base
+    # (4.0) so a listed card outranks an unlisted one at equal Ops and VP, but
+    # below ops_mode_per_point × a 4-Ops card (12.0), because the article also
+    # warns against over-spacing: "Ops are paramount."
+    space_race_card_bonus: float = 8.0
+    # "when discarding your opponent's vital events, you want to discard them
+    # on Turns 3 and 7, rather than on Turns 2 or 6" — see _is_reshuffle_turn.
+    # A bonus for *waiting* one more turn, sized below the space-race card
+    # bonus so it bends the timing of a disposal without reversing the decision
+    # to dispose.
+    reshuffle_timing_bonus: float = 4.0
+    # "The first kind of realignment, and the best kind, is the realignment that
+    # eliminates your opponent's access to the region." Bigger than a single
+    # battleground control swing (5.0), because the article calls it the best
+    # kind of realignment, and it denies the whole region rather than one
+    # country.
+    realignment_access_bonus: float = 8.0
+    # "In general, realignments only occur at DEFCON 2." Above that they are
+    # competing with the coup the article prefers.
+    realignment_at_defcon_2_bonus: float = 3.0
+    realignment_above_defcon_2_penalty: float = 3.0
     ops_mode_per_point: float = 3.0
     event_mode_penalty: float = 30.0  # events off / unimplemented event: playing "event" is a no-op discard
     scoring_card_weight: float = 2.0  # per net VP the region would score, signed favorably/unfavorably
@@ -277,6 +312,106 @@ def _coup_risks_defcon(observation: Observation, side: Side, info: CountryInfo) 
     if not info.battleground:
         return False
     return not (side is Side.US and bool(observation.turn_effects.get("nuclear_subs")))
+
+
+"""DEFCON safety, from Twilight Strategy's "General Strategy: DEFCON".
+
+The governing rule: "you lose the game if DEFCON drops to 1 on your turn. It
+doesn't matter who 'caused' it: if it happened on your watch, you're
+responsible for humanity's destruction." The engine implements exactly that
+(8.1.3: the *phasing* player loses), so what the bot has to avoid is playing a
+card whose resolution can put DEFCON at 1 while it is the phasing side.
+
+The article sorts the danger into four categories, and the third and fourth are
+not worth modelling: "Neutral events that degrade DEFCON ... you would have to
+be daft to play either of these for the event at DEFCON 2. Simply play them for
+Operations and you won't lose the game." Playing them for Ops is what the
+ordinary event_mode_penalty already prefers, so a special rule would only
+duplicate it.
+
+Category 1 — "Cards that unconditionally degrade DEFCON": playing the event is
+fatal at DEFCON 2.
+
+Category 2 — "Cards that allow your opponent to conduct Operations": the event
+hands the opponent Ops, and they can coup a battleground with them. "...you can
+never play your opponent's events from this list on your turn when DEFCON is 2
+and your opponent can drop DEFCON by couping a battleground of yours (keeping in
+mind DEFCON restrictions)." Note this is a *conditional* danger: the article
+says Lone Gunman is unplayable "if the US has any influence in a battleground in
+South America, Central America, or Africa" — so the test is whether the opponent
+actually has a legal battleground coup somewhere, which is the same predicate
+the engine uses for the 8.1.5 region restrictions.
+"""
+
+# "Cards that unconditionally degrade DEFCON" — event resolution drops the
+# marker by one, so at DEFCON 2 the phasing player loses.
+_DEFCON_UNCONDITIONAL = frozenset({
+    "Duck_and_Cover",
+    "We_Will_Bury_You",
+    "Soviets_Shoot_Down_KAL_007",
+})
+
+# "Cards that allow your opponent to conduct Operations" — the event resolves
+# into free Ops for the other side, who can spend them on a battleground coup.
+_DEFCON_OPPS_FOR_OPPONENT = frozenset({
+    "CIA_Created",          # 1 US Op
+    "Lone_Gunman",          # 1 USSR Op
+    "Grain_Sales_to_Soviets",  # 2 US Ops (or a random discard)
+    "Tear_Down_This_Wall",  # 3 US Ops, and per the article it permits a coup
+                            # in Europe despite 8.1.5
+})
+
+# The regions 8.1.5 leaves coupeable at DEFCON 2 (the article names the same
+# three when it explains when Lone Gunman is safe).
+_DEFCON_2_COUPABLE = frozenset({Region.AFRICA, Region.CENTRAL_AMERICA, Region.SOUTH_AMERICA})
+
+
+def _opponent_can_coup_a_battleground(observation: Observation, side: Side) -> bool:
+    """Whether `side`'s opponent has any battleground they could legally coup
+    right now, dropping DEFCON as a result.
+
+    This is the article's condition for category 2 ("...and your opponent can
+    drop DEFCON by couping a battleground of yours (keeping in mind DEFCON
+    restrictions)"). At DEFCON 2 the only coupeable regions are Africa and the
+    Americas, so influence in a European or Asian battleground is not enough.
+    """
+    opponent = side.opponent
+    min_defcon = RULES["coup_min_defcon"]
+    at_defcon_2 = observation.defcon <= 2
+    for cid, info in _COUNTRY_INFO.items():
+        if not info.battleground:
+            continue
+        if observation.influence[cid].get(side.value, 0) <= 0:
+            continue        # 6.2.1 needs enemy Influence to coup into
+        if at_defcon_2 and info.region not in _DEFCON_2_COUPABLE:
+            continue
+        if observation.defcon < min_defcon.get(info.region.name, 1):
+            continue
+        return True
+    return False
+
+
+def _defcon_suicide_risk(observation: Observation, side: Side, cid: str, mode: str) -> bool:
+    """Whether playing `cid` as `mode` can lose the game to DEFCON 1.
+
+    Only the *event* can: playing a card for Ops or the Space Race never
+    resolves its text, and UN Intervention explicitly cancels it. `mode` is the
+    play mode, so "event" is the only one that matters.
+    """
+    if mode != "event":
+        return False
+    if observation.defcon > 2:
+        # Categories 1 and 2 both need the marker at 2: with DEFCON at 3 a
+        # single drop lands on 2, which is bad play but not a loss.
+        return False
+    if cid in _DEFCON_UNCONDITIONAL:
+        return True
+    if cid in _DEFCON_OPPS_FOR_OPPONENT:
+        # The opponent still has to have somewhere to spend the Ops, and it
+        # must be the *opponent* who gets them: CIA Created gives the US Ops,
+        # so it only threatens a USSR phasing player, and vice versa.
+        return _opponent_can_coup_a_battleground(observation, side)
+    return False
 
 
 def _coup_is_suicide(observation: Observation, side: Side) -> bool:
@@ -503,6 +638,41 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
     return score
 
 
+"""Realignments, from Twilight Strategy's "General Strategy: Realignments".
+
+Two ideas beyond what the margin maths already captures:
+
+"In general, realignments only occur at DEFCON 2." Above that they compete with
+the battleground coup the article calls "a more powerful method to alter a
+region in your favor", so they are discounted; at DEFCON 2 they are one of the
+few ways left to attack a battleground, so they are preferred.
+
+"The first kind of realignment, and the best kind, is the realignment that
+eliminates your opponent's access to the region. ... not only has your opponent
+lost the battleground, he has also lost any opportunity to put the influence
+back in. This means you are free, on your next turn, to play in influence and
+take over the country." That access is worth more than the markers removed,
+and it is only real when the country is the opponent's last foothold there.
+"""
+
+
+def _realignment_severs_access(board: Board, opponent: Side, country: str) -> bool:
+    """Whether the opponent's presence in `country` is their only way into its
+    region — the article's "isolated influence with nothing next to it".
+
+    Removing the last such foothold denies them the whole region until an event
+    or a coup opens it again, which is the payoff the article describes.
+    """
+    if board.influence[country][opponent.value] <= 0:
+        return False
+    for cid, info in _COUNTRY_INFO.items():
+        if cid == country or info.region is not _COUNTRY_INFO[country].region:
+            continue
+        if board.influence[cid][opponent.value] > 0:
+            return False
+    return True
+
+
 def _score_realignment_target(
     weights: GreedyWeights, board: Board, observation: Observation, action: Action
 ) -> float:
@@ -511,6 +681,13 @@ def _score_realignment_target(
     if action.payload.get("stop"):  # end the Ops spend on realignment rolls
         return 0.0
     country = action.payload["country"]
+    # "In general, realignments only occur at DEFCON 2. In most cases,
+    # battleground coups are a more powerful method to alter a region in your
+    # favor. But once DEFCON drops to 2, you must search for other ways to
+    # attack your opponent's battlegrounds." At DEFCON 3+ a realignment is
+    # still legal, but it is competing with the coup the article prefers, so it
+    # is discounted rather than forbidden.
+    low_defcon = observation.defcon <= 2
     own_bonus = _realignment_bonus(board, side, country)
     opp_bonus = _realignment_bonus(board, opponent, country)
     expected_margin = own_bonus - opp_bonus + _realignment_modifier(observation, side)
@@ -528,7 +705,19 @@ def _score_realignment_target(
         board.influence[country][side.value] += removed
     else:
         after = before
-    return weights.realignment_base + (after - before)
+    gain = after - before
+    # "The first kind of realignment, and the best kind, is the realignment that
+    # eliminates your opponent's access to the region. ... not only has your
+    # opponent lost the battleground, he has also lost any opportunity to put
+    # the influence back in." board_value only sees the marker leaving; this
+    # prices the access that goes with it.
+    if expected_margin > 0 and _realignment_severs_access(board, opponent, country):
+        gain += weights.realignment_access_bonus
+    if low_defcon:
+        gain += weights.realignment_at_defcon_2_bonus
+    else:
+        gain -= weights.realignment_above_defcon_2_penalty
+    return weights.realignment_base + gain
 
 
 def _best_influence_value(
@@ -616,6 +805,14 @@ def _score_headline(weights: GreedyWeights, board: Board, observation: Observati
     card = _CARDS[cid]
     if card.scoring:
         return weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
+    # A headline resolves as the card's event (5.1), so a DEFCON sucker here is
+    # the same loss -- and the article notes the headline is the *tempting*
+    # place to play one: "Usually the USSR is unwilling to lower DEFCON during
+    # their headline, so it's generally safe for the US to play a
+    # DEFCON-lowering headline." Safe for whoever headlines second; fatal for
+    # the phasing player here, which is who this prices.
+    if _defcon_suicide_risk(observation, side, cid, "event"):
+        return -weights.defcon_suicide_penalty
     # Headlining an opponent-side event fires it *for them*. Never do that.
     if (card.side is CardSide.US and side is Side.USSR) or (
         card.side is CardSide.USSR and side is Side.US
@@ -654,6 +851,148 @@ def _score_action_round_play(
     return score
 
 
+"""Space Race card selection, from Twilight Strategy's "General Strategy: The
+Space Race".
+
+The article's headline: "The number one mistake beginning players make in
+Twilight Struggle is to send too many cards off to space." Its rule for what
+actually belongs there:
+
+"the real job of the Space Race is to discard truly awful opponent events that
+you cannot mitigate in any meaningful way. In this context, 'truly awful'
+means: cards that will immediately lose you the game (e.g., DEFCON suicide
+cards); cards that provide your opponent access to a region (e.g.,
+De-Stalinization); cards that remove your access to a region (e.g., Voice of
+America); cards whose Ops value is not enough to repair its damage (e.g., Ussuri
+River Skirmish); cards that give your opponent multiple plays in a row (e.g.,
+Quagmire/Bear Trap); cards that give your opponent lots of VPs (e.g., OPEC)."
+
+The two lists below are that judgement, card by card, per the side that must
+dispose of them. They are keys into `_CARDS`, and a test asserts every one
+exists — an id that silently disappeared would otherwise turn a "send this to
+space" rule into a no-op.
+
+What this changes: the pre-existing `space_race_base + VP - ops penalty`
+formula has no idea which cards are awful, so it spaces on Ops value alone.
+These lists add the article's judgement on top of that, and never subtract from
+it (spacing is still allowed for cards the article does not name — it just is
+not *preferred*).
+"""
+
+# "As USSR — These are the US events that I tend to Space Race." The
+# DEFCON-safety ones are already lethal under _defcon_suicide_risk when they
+# apply; listing them here covers the cases where they are merely awful.
+_USSR_SPACE_RACE = frozenset({
+    # DEFCON suicide cards (the article's top priority)
+    "CIA_Created",
+    "Grain_Sales_to_Soviets",
+    "Soviets_Shoot_Down_KAL_007",
+    "Star_Wars",
+    "Tear_Down_This_Wall",
+    # "As for non-DEFCON suicide cards"
+    "East_European_Unrest",
+    "Five_Year_Plan",
+    "NORAD",
+    "Special_Relationship",
+    "Alliance_for_Progress",
+    "Bear_Trap",
+    "Colonial_Rear_Guards",
+    "John_Paul_II_Elected_Pope",
+    "Our_Man_In_Tehran",
+    "Puppet_Governments",
+    "The_Voice_Of_America",
+    "Ussuri_River_Skirmish",
+    "AWACS_Sale_to_Saudis",
+    "Solidarity",
+})
+
+# "As US — These are the USSR events that I tend to Space Race."
+_US_SPACE_RACE = frozenset({
+    # DEFCON suicide cards (the article's top priority)
+    "Lone_Gunman",
+    "We_Will_Bury_You",
+    "Ortega_Elected_in_Nicaragua",
+    # "And the non-DEFCON cards"
+    "Decolonization",
+    "De_Stalinization",
+    "Fidel",
+    "Socialist_Governments",
+    "Liberation_Theology",
+    "Muslim_Revolution",
+    "OPEC",
+    "Quagmire",
+    "South_African_Unrest",
+    "Glasnost",
+    "Iranian_Hostage_Crisis",
+    "The_Reformer",
+})
+
+
+"""Reshuffle timing, from Twilight Strategy's "General Strategy: Reshuffles".
+
+"when discarding your opponent's vital events, you want to discard them on
+Turns 3 and 7, rather than on Turns 2 or 6." The reason: a card discarded on
+Turn 3 waits until the *next* reshuffle (Turn 7) before it can come back, while
+one discarded on Turn 2 returns as soon as Turn 3.
+
+The article's turn numbers are a description of the physical deck. This engine
+reshuffles when the draw pile empties (`_reshuffle_discard_into_draw`), so
+whether those turns are the right ones is a question about *this* deck, not
+about the article. Measured over 40 self-played games: the reshuffle lands on
+Turn 3 in 40/40 and Turn 7 in 11/40, with rare stragglers at 1 and 9 — so the
+article's two turns are the right ones here as well, and the rule below uses
+them directly rather than guessing.
+"""
+
+# The turns the deck reshuffles: disposing of an opponent's vital event *before*
+# one of these guarantees it returns at the next one.
+_RESHUFFLE_TURNS = frozenset({3, 7})
+
+
+def _is_reshuffle_turn(turn: int) -> bool:
+    return turn in _RESHUFFLE_TURNS
+
+
+def _reshuffle_timing_bonus(weights: GreedyWeights, side: Side, observation: Observation, cid: str) -> float:
+    """Prefer to spend a vital opponent event on the *last* turn before a
+    reshuffle, so it cannot come back for as long as possible.
+
+    "So as a US player, if I draw either or both in the Early War, I will do my
+    best to hold onto them until Turn 3 before discarding them with Blockade,
+    the Space Race, or UN Intervention. This guarantees that they cannot be
+    reintroduced to the deck until Turn 7 at the earliest."
+
+    Only applies to a card the article calls vital *and* that this side wants to
+    dispose of (see `_space_race_card_bonus`), and only on the turn before a
+    reshuffle would recycle it — i.e. while waiting still buys something.
+    """
+    card = _CARDS.get(cid)
+    if card is None or card.side.value == side.value:
+        return 0.0          # "your opponent's vital events"
+    wants = _USSR_SPACE_RACE if side is Side.USSR else _US_SPACE_RACE
+    if cid not in wants:
+        return 0.0
+    # Disposing *on* a reshuffle turn is the goal: the card then sits in the
+    # discard until the following reshuffle rather than being recycled into the
+    # next deal.
+    return weights.reshuffle_timing_bonus if _is_reshuffle_turn(observation.turn) else 0.0
+
+
+def _space_race_card_bonus(weights: GreedyWeights, side: Side, cid: str) -> float:
+    """The article's "this card belongs in space" judgement, per side.
+
+    Only for the opponent's cards: "There's no real advantage to playing your
+    opponents' recurring events instead of spacing them. The only relevant
+    question, therefore, is whether it's worth sending to space or using the
+    Ops" — which is exactly the choice this bonus pushes toward spacing.
+    """
+    card = _CARDS.get(cid)
+    if card is None or card.side.value == side.value:
+        return 0.0
+    wants = _USSR_SPACE_RACE if side is Side.USSR else _US_SPACE_RACE
+    return weights.space_race_card_bonus if cid in wants else 0.0
+
+
 def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     cid = observation.pending_decision.context["card"]
@@ -668,6 +1007,8 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
         return (
             weights.space_race_base
             + weights.space_race_vp_weight * expected_vp
+            + _space_race_card_bonus(weights, side, cid)
+            + _reshuffle_timing_bonus(weights, side, observation, cid)
             - weights.space_race_ops_penalty * ops
         )
     if mode == "ops":
@@ -678,7 +1019,12 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
     if mode == "un_intervention":
         # UN Intervention cancels the opponent card's Event, so no penalty.
         return weights.ops_mode_per_point * ops
-    # mode == "event": with the event layer off (or for a card with no
+    # mode == "event": a DEFCON sucker played for its event at DEFCON 2 loses
+    # the game outright, which outranks whatever the card does (see
+    # _defcon_suicide_risk).
+    if _defcon_suicide_risk(observation, side, cid, mode):
+        return -weights.defcon_suicide_penalty
+    # with the event layer off (or for a card with no
     # implemented event yet) this is a no-op discard -- always worse than
     # spending the card. GreedyPlayer does not attempt event-value
     # heuristics (out of scope for v1; see the module docstring).
