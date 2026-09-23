@@ -22,9 +22,10 @@ EVENT_RESUME, RANDOM_DISCARD's non-CHANCE siblings, ...) fall back to the
 first legal option. This is a documented gap, not a bug -- the same
 card-by-card growth pattern the event layer itself used; extend
 `_SCORERS` as each one gets a heuristic worth writing. `EVENT_CHOICE`
-itself now has one card-specific heuristic (Aldrich Ames Remix: discard
-the opponent's highest-Ops card) inside `_score_event_choice`, dispatched
-by `decision.context["event"]`; every other EVENT_CHOICE-driven card still
+itself now has two card-specific heuristics (Aldrich Ames Remix: discard
+the opponent's highest-Ops card; How I Learned to Stop Worrying: never set
+DEFCON to 1) inside `_score_event_choice`, dispatched by
+`decision.context["event"]`; every other EVENT_CHOICE-driven card still
 falls back to the first option via that same function's default 0.0.
 
 Priority ordering falls directly out of the weight magnitudes, not out of
@@ -43,12 +44,18 @@ branch order:
        stacks — 1/3 in Poland beats 1/4 in Austria).
   4. A card not worth spending on Ops gets sent to the Space Race instead
      (low `ops_mode_per_point` score vs `space_race_base`).
+  5. A card whose *event* is worth more than its Ops gets played for the
+     event, and headlined for free if it is worth headlining
+     (`_OWN_EVENT_VALUE`). This is the narrow set the playbook calls a
+     default ("Always event", "Strong event", "Free event") — an unlisted
+     card keeps the Ops-first default, because "Ops are paramount" is the
+     article's own summary of the general case.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from dataclasses import dataclass, replace
+from typing import Callable, Mapping, Sequence
 
 from struggler.engine import (
     Action,
@@ -62,7 +69,7 @@ from struggler.engine import (
     Subregion,
 )
 from struggler.engine.board import Board, CountryInfo
-from struggler.engine.cards import load_cards
+from struggler.engine.cards import action_rounds, load_cards
 from struggler.engine.core import SCORING_CARD_REGION
 from struggler.engine.player import Event
 from struggler.engine.rules import RULES
@@ -115,6 +122,20 @@ class GreedyWeights:
     # decision has no competing option to be outbid against -- the only thing
     # that must dominate is "never 1", which is the self-kill penalty above.
     defcon_setting_weight: float = 0.5
+    # Taking DEFCON from 3 to 2 is free while the hand holds nothing that only
+    # becomes unplayable at 2, and expensive when it does (see
+    # `_unavoidable_strands`): a card whose text resolves to DEFCON 1 cannot be
+    # committed at all once the marker is there, so holding two of them with the
+    # Space Race attempt spent is a lost position entered several turns earlier.
+    # Per stranded card, above a Battleground control (5.0) and below the
+    # sentinels above, so it can outbid a good Coup but never a suicide.
+    defcon_strand_penalty: float = 15.0
+    # The other half of the same rule: dispose of such a card while the marker
+    # is still high. Sized above `space_race_card_bonus` (8.0) -- a card that is
+    # unplayable at DEFCON 2 is a stronger Space Race candidate than one that is
+    # merely an awful event -- and below `ops_mode_per_point` x a 4-Ops card
+    # (12.0), because spacing still costs the Ops.
+    strand_disposal_bonus: float = 10.0
 
     # -- per-ops-type base preference (before the marginal/expected board_value swing) --
     coup_base: float = 5.0
@@ -158,6 +179,16 @@ class GreedyWeights:
     # prefer own/neutral cards at equal Ops.
     opponent_event_ops_penalty: float = 6.0
     action_round_ops_weight: float = 1.0
+    # -- scoreboard, see `scoreboard_value` -----------------------------------
+    # `board_value` prices the board only, so the two things that end games
+    # (the VP track and the Military Operations requirement) were invisible to
+    # every scorer that used it. A VP is deliberately worth less than a
+    # Battleground control (5.0): the score is the point of the game, but not
+    # at the price of a country. `milops_weight` scales the requirement term
+    # relative to VP -- at 1.0 one level of shortfall is worth one VP, which is
+    # the printed penalty.
+    vp_weight: float = 2.0
+    milops_weight: float = 1.0
     # Turn-1 USSR headline bonus for the five canonical openings.
     t1_headline_bonus: float = 40.0
     t1_iran_coup_bonus: float = 20.0
@@ -277,6 +308,92 @@ def _marginal_gain(weights: GreedyWeights, board: Board, side: Side, country: st
     board.influence[country][side.value] += delta
     after = board_value(weights, board, side)
     board.influence[country][side.value] -= delta
+    return after - before
+
+
+def scoreboard_value(
+    weights: GreedyWeights,
+    side: Side,
+    *,
+    vp: int,
+    defcon: int,
+    military_ops: Mapping[str, int],
+    turn: int,
+    action_round: int,
+) -> float:
+    """The score, in the same units as `board_value`.
+
+    `board_value` prices the board and nothing else, which left the bot
+    indifferent to the two things that actually end a game: the VP track and
+    the Military Operations requirement. `bots/value.py`'s learned value takes
+    both (plus the turn) as features, so this is the hand-written version of
+    the same three terms -- deliberately simple, and sized so that a VP is
+    worth less than a Battleground control (`vp_weight` 2.0 against 5.0): the
+    score is the point of the game, but a 2-VP swing is not worth a country.
+
+    The Military Operations term is the one with teeth. It is scored as a
+    *shortfall* (0 while the track is at or above the DEFCON level, `defcon`
+    minus the track above it) times how near the end of the turn we are, since
+    the requirement is only assessed at the end of the turn: a shortfall on the
+    last action round is real VP to the opponent, the same shortfall on the
+    first is cheap to fix. "Coup when you are behind on Military Ops" then
+    falls out of the score instead of needing a rule of its own -- and the
+    fixed 1 VP per level means a Coup that closes a shortfall is worth about
+    what a VP is worth, which is the trade the card text describes.
+
+    `vp` is US-positive (`Engine._change_vp_by`), so it is flipped for the
+    USSR.
+    """
+    value = weights.vp_weight * (vp if side is Side.US else -vp)
+    return value + _milops_term(
+        weights,
+        side,
+        defcon=defcon,
+        military_ops=military_ops,
+        turn=turn,
+        action_round=action_round,
+    )
+
+
+def _milops_term(
+    weights: GreedyWeights,
+    side: Side,
+    *,
+    defcon: int,
+    military_ops: Mapping[str, int],
+    turn: int,
+    action_round: int,
+) -> float:
+    """The Military Operations half of `scoreboard_value`: the *difference* in
+    shortfall between the two sides, times how near the end of the turn we are.
+    """
+    rounds = max(1, action_rounds(turn))
+    imminence = min(1.0, action_round / rounds)
+    own_shortfall = max(0, defcon - military_ops.get(side.value, 0))
+    their_shortfall = max(0, defcon - military_ops.get(side.opponent.value, 0))
+    return weights.vp_weight * weights.milops_weight * imminence * (
+        their_shortfall - own_shortfall
+    )
+
+
+def milops_gain(weights: GreedyWeights, observation: Observation, side: Side, ops: int) -> float:
+    """What adding `ops` to `side`'s Military Operations track is worth.
+
+    A Coup is the only Ops type that pays the requirement (2.3.5: Coups and
+    war Events count toward it, Realignments do not), so this is the term that
+    makes "Coup when you are behind on Military Ops" fall out of the score
+    rather than needing a rule of its own. It is a *difference* of
+    `_milops_term`, so the two cannot drift apart.
+    """
+    kwargs = {
+        "defcon": observation.defcon,
+        "turn": observation.turn,
+        "action_round": observation.action_round,
+    }
+    before = _milops_term(weights, side, military_ops=observation.military_ops, **kwargs)
+    after_ops = dict(observation.military_ops)
+    after_ops[side.value] = after_ops.get(side.value, 0) + ops
+    after = _milops_term(weights, side, military_ops=after_ops, **kwargs)
     return after - before
 
 
@@ -449,6 +566,71 @@ def _defcon_suicide_risk(observation: Observation, side: Side, cid: str, mode: s
         # so it only threatens a USSR phasing player, and vice versa.
         return _opponent_can_coup_a_battleground(observation, side)
     return False
+
+
+def _space_race_attempts_left(observation: Observation, side: Side) -> int:
+    """Space Race attempts this side still has this turn.
+
+    One, or two with Captured Nazi Scientist (`Engine._space_attempts_allowed`,
+    read off the public `game_effects` rather than assumed).
+    """
+    allowed = 2 if observation.game_effects.get("space_race_double_attempt_holder") == side.value else 1
+    return max(0, allowed - observation.space_race_attempts.get(side.value, 0))
+
+
+def _unavoidable_strands(observation: Observation, side: Side) -> int:
+    """Cards in hand that would be *unplayable* at DEFCON 2 and cannot be
+    disposed of first.
+
+    At DEFCON 2 an opponent's card whose text resolves to DEFCON 1 cannot be
+    committed at all: the Ops play fires their event, the `event` mode is never
+    offered for their card, and UN Intervention has to be held for it. The
+    Space Race is the only door left, one attempt a turn (two with Captured
+    Nazi Scientist, which is why the allowance is read rather than assumed).
+
+    So a card like that in hand is a countdown, and the DEFCON marker is the
+    clock: it has to be spaced, or played while the marker is still high. This
+    is the position the fixed bot still walks into -- 42 Ops plays over 40
+    games, every one of them with the card as the only mode on offer, i.e. a
+    decision made turns earlier and then paid for. `_strand_penalty` is what
+    charges for it at the moment the marker is about to drop.
+    """
+    at_two = replace(observation, defcon=2)
+    stranded = sum(
+        1 for cid in observation.hand if _defcon_suicide_risk(at_two, side, cid, "ops")
+    )
+    return max(0, stranded - _space_race_attempts_left(observation, side))
+
+
+def _strand_penalty(weights: GreedyWeights, observation: Observation, side: Side, info: CountryInfo) -> float:
+    """The cost of taking DEFCON from 3 to 2 while the hand is stranded.
+
+    Only a drop *to* 2 matters: at DEFCON 3 the Coup is otherwise legal and
+    cheap, and above 3 there is a turn's worth of slack. `info` is the Coup
+    target, since a non-Battleground Coup never moves the marker.
+    """
+    if observation.defcon != 3 or not _coup_risks_defcon(observation, side, info):
+        return 0.0
+    return weights.defcon_strand_penalty * _unavoidable_strands(observation, side)
+
+
+def _strand_disposal_bonus(
+    weights: GreedyWeights, observation: Observation, side: Side, cid: str
+) -> float:
+    """Extra Space Race preference for a card that would be unplayable at
+    DEFCON 2: get rid of it while the marker is still high, because the Space
+    Race attempt is the only door left once it is not.
+
+    Only at DEFCON 3 or below. Above that the ordinary scoring decides, and
+    playing such a card for Ops is fine -- the marker recovers at the end of
+    every turn (see `Engine._end_of_turn`), so there is no countdown yet.
+    """
+    if observation.defcon > 3:
+        return 0.0
+    at_two = replace(observation, defcon=2)
+    if not _defcon_suicide_risk(at_two, side, cid, "ops"):
+        return 0.0
+    return weights.strand_disposal_bonus
 
 
 def _coup_is_suicide(observation: Observation, side: Side) -> bool:
@@ -654,7 +836,7 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
 
     gain = _expected_coup_gain(weights, board, observation, side, country, info, ops)
     caution = weights.defcon_caution * (5 - observation.defcon)
-    score = weights.coup_base + gain - caution
+    score = weights.coup_base + gain - caution - _strand_penalty(weights, observation, side, info)
     if (
         observation.turn == 1
         and side is Side.USSR
@@ -792,6 +974,11 @@ def _best_coup_value(
             continue
         target_ops = ops + sum(1 for b in (bonus or []) if _in_bonus_region(info, b))
         gain = _expected_coup_gain(weights, board, observation, side, cid, info, target_ops)
+        # A Coup that takes DEFCON to 2 while the hand is stranded is priced
+        # here too, not just at COUP_TARGET: this is what decides *whether* to
+        # Coup at all (`_score_ops_type`), so the cost has to be visible before
+        # a target is ever named.
+        gain -= _strand_penalty(weights, observation, side, info)
         if best is None or gain > best:
             best = gain
     return best
@@ -830,7 +1017,11 @@ def _score_ops_type(weights: GreedyWeights, board: Board, observation: Observati
             # a self-kill (priority #1).
             return -weights.defcon_self_kill_penalty
         caution = weights.defcon_caution * (5 - observation.defcon)
-        return weights.coup_base + best - caution
+        # A Coup is also the one Ops type that pays the Military Operations
+        # requirement, so it carries the shortfall it closes (see
+        # `milops_gain`): that is what makes "Coup when you are behind on
+        # Military Ops" fall out of the score instead of needing its own rule.
+        return weights.coup_base + best - caution + milops_gain(weights, observation, side, ops)
     return weights.realignment_base + _best_realignment_value(weights, board, observation, side)
 
 
@@ -857,6 +1048,11 @@ def _score_headline(weights: GreedyWeights, board: Board, observation: Observati
         return -weights.opponent_headline_penalty
     # Own/neutral: spend a low-Ops card here and keep higher-Ops ones for Ops.
     score = -weights.hold_high_ops_weight * card.ops
+    # A card whose event is worth firing is worth firing for free here: the
+    # headline costs no action round, so the event value adds to the low-Ops
+    # preference instead of competing with it. This is where the playbook puts
+    # several of the priced events ("Headline it", "Great headline").
+    score += _own_event_value(side, observation, cid)
     if (
         observation.turn == 1
         and side is Side.USSR
@@ -885,6 +1081,25 @@ def _score_action_round_play(
     score = weights.action_round_ops_weight * ops
     if card.side.value == side.opponent.value:
         score -= weights.opponent_event_ops_penalty  # its Event fires for them
+    # The mode choice happens *after* this one, so a card that cannot be
+    # committed safely has to be priced here as well -- `_score_play_mode` never
+    # sees a card that was not picked. This is where the fixed bot still lost
+    # games: at DEFCON 2, holding five cards, it picked We Will Bury You for its
+    # 4 Ops (the highest score in the hand), and every mode left for that card
+    # was fatal.
+    #
+    # Every suicide-risk card is the opponent's, so the Space Race is the one
+    # legal way to dispose of it (the engine refuses own events, the China Card,
+    # UN Intervention and scoring cards, and none of those can be a DEFCON
+    # degrader here). With an attempt left, the play is to dispose of it, which
+    # is worth more than any Ops in the hand; without one, the card is a loss
+    # waiting for the moment the hand empties, and only "nothing else to play"
+    # should reach it.
+    if _defcon_suicide_risk(observation, side, cid, "ops"):
+        if _space_race_attempts_left(observation, side) > 0:
+            score += weights.strand_disposal_bonus
+        else:
+            score -= weights.defcon_suicide_penalty
     return score
 
 
@@ -1030,6 +1245,103 @@ def _space_race_card_bonus(weights: GreedyWeights, side: Side, cid: str) -> floa
     return weights.space_race_card_bonus if cid in wants else 0.0
 
 
+# -- own-event valuation ------------------------------------------------------
+#
+# The bot fired *no* own event in 1298 opportunities over 40 self-played games
+# (behavior probe, seeds 1-40): `_score_play_mode`'s event branch was a flat
+# `-event_mode_penalty`, so Operations always won, and the bot played every
+# game as an Ops-only opponent while being forced to hand the other side every
+# event it played against itself. That is a bigger strategic hole than any
+# single card rule in this file.
+#
+# An entry is the event's worth in `board_value` units -- the same scale the
+# alternative is measured on, since `_score_play_mode` compares this number
+# directly against `ops_mode_per_point x card.ops` (a 3-Ops card is 9.0). So
+# the number *is* the judgement "firing this beats spending its Ops", and a
+# card only needs an entry when that is true.
+#
+# Only the extremes are claimed. The playbook's conditional advice ("Event
+# when they've actually invested in the Middle East", "Worthless played late")
+# is deliberately *not* encoded: an unlisted card keeps the Ops-first default,
+# which is right far more often than a guess would be. The two exceptions that
+# do carry their condition are in `_EARLY_TURN_EVENTS`, because "first action
+# round of the turn" is a fact this bot can read off the observation.
+#
+# Every entry is a playbook entry, quoted in docs/STRATEGY.md: the card list
+# below is the playbook's "Always event" / "Strong event" / "Free event" set,
+# not an independent opinion. `test_greedy.py` pins the ids against cards.json
+# and pins the playbook's "never event" cards *out* of the table.
+
+_EVENT_DECISIVE = 14.0  # "Always event": beats spending its Ops almost anywhere
+_EVENT_STRONG = 10.0  # "Strong event" / "Free event" with a large board effect
+_EVENT_FREE = 7.0  # "Free event": a clear gain, but beats only 1-2 Ops
+
+_OWN_EVENT_VALUE: dict[str, dict[str, float]] = {
+    # -- USSR own events --
+    "Fidel": {"USSR": _EVENT_DECISIVE},  # "Always event."
+    "Nasser": {"USSR": _EVENT_DECISIVE},  # "Always event."
+    "Allende": {"USSR": _EVENT_DECISIVE},  # "Always event. Your door into South America."
+    "Portuguese_Empire_Crumbles": {"USSR": _EVENT_DECISIVE},  # "Always event."
+    "Liberation_Theology": {"USSR": _EVENT_DECISIVE},  # "Always event."
+    "De_Stalinization": {"USSR": _EVENT_DECISIVE},  # "Really powerful event."
+    "Decolonization": {"USSR": _EVENT_DECISIVE},  # "Strong event."
+    "Ortega_Elected_in_Nicaragua": {"USSR": _EVENT_STRONG},
+    "Warsaw_Pact_Formed": {"USSR": _EVENT_FREE},
+    "De_Gaulle_Leads_France": {"USSR": _EVENT_FREE},
+    "Romanian_Abdication": {"USSR": _EVENT_FREE},  # "Free event."
+    "Che": {"USSR": _EVENT_FREE},
+    "Cultural_Revolution": {"USSR": _EVENT_FREE},
+    "Marine_Barracks_Bombing": {"USSR": _EVENT_FREE},  # "Free event. Take it."
+    "Pershing_II_Deployed": {"USSR": _EVENT_FREE},
+    "Glasnost": {"USSR": _EVENT_FREE},
+    "Iranian_Hostage_Crisis": {"USSR": _EVENT_FREE},
+    # -- US own events --
+    "Marshall_Plan": {"US": _EVENT_DECISIVE},  # "Always event, early."
+    "North_Sea_Oil": {"US": _EVENT_STRONG},  # "an extra action round this turn"
+    "The_Voice_Of_America": {"US": _EVENT_STRONG},  # "Strong event"
+    "Camp_David_Accords": {"US": _EVENT_FREE},
+    "Panama_Canal_Returned": {"US": _EVENT_FREE},  # "Free event."
+    "OAS_Founded": {"US": _EVENT_FREE},  # "Free event. Take the influence."
+    "Sadat_Expels_Soviets": {"US": _EVENT_FREE},  # "Free event."
+    "Nixon_Plays_The_China_Card": {"US": _EVENT_FREE},
+    "An_Evil_Empire": {"US": _EVENT_FREE},  # "Free 1 VP ... Play it."
+    "The_Iron_Lady": {"US": _EVENT_FREE},
+    "Ussuri_River_Skirmish": {"US": _EVENT_FREE},
+    # -- neutral events, either side --
+    "Junta": {"US": _EVENT_FREE, "USSR": _EVENT_FREE},  # "Event, then coup in the same region."
+    "Brush_War": {"US": _EVENT_FREE, "USSR": _EVENT_FREE},  # "Really good event"
+    "ABM_Treaty": {"US": _EVENT_FREE, "USSR": _EVENT_FREE},  # "Always event, and do a coup..."
+    "Captured_Nazi_Scientist": {"US": _EVENT_FREE, "USSR": _EVENT_FREE},  # "Always event when the next box pays."
+}
+
+# "Event, first AR of the turn. Worthless played late." -- a condition the bot
+# can read, so these carry it rather than being dropped from the table.
+_EARLY_TURN_EVENTS = frozenset({"Containment", "Brezhnev_Doctrine"})
+
+
+def _own_event_value(side: Side, observation: Observation, cid: str) -> float:
+    """What firing `cid`'s event is worth to `side`, or 0.0 for "no judgement".
+
+    0.0 does not mean worthless: it means the card keeps the Ops-first default
+    in `_score_play_mode`, which is where every unlisted card lands. Only an
+    own or a neutral event can be fired by `side` -- the engine never offers
+    the `event` mode for the opponent's card (playing one for Ops fires *their*
+    event, which is `_defcon_suicide_risk`'s problem, not a value to chase).
+    """
+    if not observation.events_enabled:
+        # The mode is still on offer, but nothing resolves: a no-op discard is
+        # never better than spending the card's Ops.
+        return 0.0
+    card = _CARDS.get(cid)
+    if card is None:
+        return 0.0
+    if card.side.value in (Side.US.value, Side.USSR.value) and card.side.value != side.value:
+        return 0.0  # their event, not ours to fire
+    if cid in _EARLY_TURN_EVENTS:
+        return _EVENT_DECISIVE if observation.action_round <= 1 else 0.0
+    return _OWN_EVENT_VALUE.get(cid, {}).get(side.value, 0.0)
+
+
 def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observation, action: Action) -> float:
     side = observation.side
     cid = observation.pending_decision.context["card"]
@@ -1046,6 +1358,7 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
             + weights.space_race_vp_weight * expected_vp
             + _space_race_card_bonus(weights, side, cid)
             + _reshuffle_timing_bonus(weights, side, observation, cid)
+            + _strand_disposal_bonus(weights, observation, side, cid)
             - weights.space_race_ops_penalty * ops
         )
     if mode == "ops":
@@ -1068,10 +1381,14 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
     # _defcon_suicide_risk).
     if _defcon_suicide_risk(observation, side, cid, mode):
         return -weights.defcon_suicide_penalty
-    # with the event layer off (or for a card with no
-    # implemented event yet) this is a no-op discard -- always worse than
-    # spending the card. GreedyPlayer does not attempt event-value
-    # heuristics (out of scope for v1; see the module docstring).
+    value = _own_event_value(side, observation, cid)
+    if value:
+        return value
+    # No judgement for this card, so the Ops-first default stands. That covers
+    # three cases: the event layer is off (a no-op discard), the card's event
+    # is not implemented yet, or it is one the playbook does not call worth
+    # its Ops ("usually better to use for ops"). The table above says which
+    # cards are priced and why the rest deliberately are not.
     return -weights.event_mode_penalty
 
 

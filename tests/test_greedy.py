@@ -18,11 +18,18 @@ from struggler.bots.greedy import (
     _is_reshuffle_turn,
     _realignment_severs_access,
     _score_coup_target,
+    _score_ops_type,
+    _strand_disposal_bonus,
+    _strand_penalty,
+    _unavoidable_strands,
     board_value,
+    milops_gain,
+    scoreboard_value,
 )
 from struggler.bots.naive import FirstLegalPlayer, RandomPlayer
 from struggler.engine import Action, Decision, DecisionKind, Engine, Side
 from struggler.engine.board import Board
+from struggler.engine.cards import action_rounds
 from struggler.runner import play_game
 
 
@@ -516,15 +523,20 @@ def test_neutral_events_are_not_special_cased():
 def test_the_bot_refuses_a_suicide_headline_but_takes_it_at_defcon_3():
     engine = Engine.new_game(seed=1)
     obs = engine.observe(Side.US)
+    # The alternative is an *unpriced* card on purpose: a card whose event the
+    # playbook calls worth firing now outranks Duck and Cover here, and that is
+    # correct -- a headline resolves the event at the start of the turn, which
+    # is exactly the "first AR" these events want (see `_EARLY_TURN_EVENTS`).
+    # This test is about the DEFCON-2 refusal, so it holds that variable still.
     decision = Decision(
         id=901, actor=Side.US, kind=DecisionKind.HEADLINE_PLAY,
         options=(
             Action(DecisionKind.HEADLINE_PLAY, {"card": "Duck_and_Cover"}),
-            Action(DecisionKind.HEADLINE_PLAY, {"card": "Containment"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Nuclear_Test_Ban"}),
         ),
     )
     at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
-    assert GreedyPlayer().choose_action(at2, []).payload["card"] == "Containment"
+    assert GreedyPlayer().choose_action(at2, []).payload["card"] == "Nuclear_Test_Ban"
     # At DEFCON 3 the drop only reaches 2, so the card is playable again.
     at3 = dataclasses.replace(obs, pending_decision=decision, defcon=3)
     assert GreedyPlayer().choose_action(at3, []).payload["card"] == "Duck_and_Cover"
@@ -543,6 +555,334 @@ def test_the_bot_refuses_a_suicide_event_play():
     )
     at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
     assert GreedyPlayer().choose_action(at2, []).payload["mode"] == "ops"
+
+
+# -- own-event valuation, from the card playbook ------------------------------
+#
+# The playbook's per-side advice ("Always event", "Free event", "Usually
+# better to use for ops") is the source for every number below. What is being
+# tested is not the exact value -- that is a judgement, and the comments in
+# greedy.py carry it -- but that the *extremes* are wired through to a
+# decision, and that the cards the playbook rules out stay out.
+
+
+def _play_mode_choice(phasing, defcon, cid, modes=("event", "ops")):
+    obs = _clean_obs(phasing, defcon)
+    decision = Decision(
+        id=903, actor=phasing, kind=DecisionKind.PLAY_MODE,
+        options=tuple(Action(DecisionKind.PLAY_MODE, {"mode": m}) for m in modes),
+        context={"card": cid},
+    )
+    return GreedyPlayer().choose_action(
+        dataclasses.replace(obs, pending_decision=decision), []
+    ).payload["mode"]
+
+
+def test_a_decisive_own_event_outranks_spending_its_ops():
+    """Fidel is 2 Ops (6.0 on the ops scale) and the playbook's entry is
+    "Always event." -- so the event wins. Glasnost is the control: also
+    priced, but 4 Ops (12.0) is worth more than a "Free event" (7.0)."""
+    assert _play_mode_choice(Side.USSR, 3, "Fidel") == "event"
+    assert _play_mode_choice(Side.USSR, 3, "Glasnost") == "ops"
+
+
+def test_an_unpriced_own_event_still_prefers_ops():
+    """Five Year Plan is "Ops when your hand is short on US cards" -- a
+    condition this bot cannot evaluate, so it keeps the Ops-first default
+    rather than guessing."""
+    assert _play_mode_choice(Side.USSR, 3, "Five_Year_Plan") == "ops"
+    # Nuclear Test Ban is the playbook's explicit "usually 4 clean Ops".
+    assert _play_mode_choice(Side.US, 3, "Nuclear_Test_Ban") == "ops"
+
+
+def test_the_playbook_s_never_event_cards_are_not_priced():
+    """The negative half of the table: these have entries saying the event is
+    a mistake, and an unpriced card is how the bot expresses that."""
+    from struggler.bots.greedy import _own_event_value
+
+    obs = _clean_obs(Side.US, 3)
+    for cid in ("NORAD", "NATO", "Olympic_Games", "Cuban_Missile_Crisis"):
+        assert _own_event_value(Side.US, obs, cid) == 0.0, cid
+    assert _own_event_value(Side.USSR, obs, "Flower_Power") == 0.0
+
+
+def test_an_event_is_never_priced_for_the_side_that_cannot_fire_it():
+    """A US card's event fires for the US. The USSR never gets the `event`
+    mode for it, so there is nothing for it to be worth."""
+    from struggler.bots.greedy import _own_event_value
+
+    assert _own_event_value(Side.USSR, _clean_obs(Side.USSR, 3), "Marshall_Plan") == 0.0
+    assert _own_event_value(Side.US, _clean_obs(Side.US, 3), "Fidel") == 0.0
+    # Neutral cards are fireable by both seats.
+    assert _own_event_value(Side.US, _clean_obs(Side.US, 3), "Junta") > 0.0
+    assert _own_event_value(Side.USSR, _clean_obs(Side.USSR, 3), "Junta") > 0.0
+
+
+def test_the_early_turn_events_are_worth_firing_only_on_the_first_action_round():
+    """"Event, first AR of the turn. Worthless played late." -- a condition the
+    bot can read, so it is encoded rather than dropped."""
+    from struggler.bots.greedy import _EVENT_DECISIVE, _own_event_value
+
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    assert _own_event_value(Side.US, dataclasses.replace(obs, action_round=1), "Containment") == _EVENT_DECISIVE
+    assert _own_event_value(Side.US, dataclasses.replace(obs, action_round=3), "Containment") == 0.0
+    # `_clean_obs` starts at action round 1, so pin the round to test the
+    # "worthless played late" half at a decision, not just at the predicate.
+    late = dataclasses.replace(_clean_obs(Side.US, 3), action_round=3)
+    decision = Decision(
+        id=906, actor=Side.US, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "event"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+        ),
+        context={"card": "Containment"},
+    )
+    assert GreedyPlayer().choose_action(
+        dataclasses.replace(late, pending_decision=decision), []
+    ).payload["mode"] == "ops"
+    early = dataclasses.replace(late, action_round=1, pending_decision=decision)
+    assert GreedyPlayer().choose_action(early, []).payload["mode"] == "event"
+
+
+def test_every_priced_event_id_exists_and_belongs_to_that_side():
+    """The table is keyed by card id. An id that silently disappeared, or an
+    entry filed under the seat that cannot fire it, would turn a priced event
+    into a no-op with no error anywhere."""
+    from struggler.bots.greedy import _OWN_EVENT_VALUE, _own_event_value
+    from struggler.engine.cards import load_cards
+
+    cards = load_cards()
+    for cid, by_side in _OWN_EVENT_VALUE.items():
+        assert cid in cards, cid
+        for side_name in by_side:
+            assert side_name in (Side.US.value, Side.USSR.value), (cid, side_name)
+            side = Side(side_name)
+            card = cards[cid]
+            assert card.side.value in (side.value, "NEUTRAL"), (cid, side_name)
+            assert _own_event_value(side, _clean_obs(side, 3), cid) > 0.0, (cid, side_name)
+
+
+def test_events_off_makes_every_event_worthless():
+    """The `event` mode is still offered with the layer off, but nothing
+    resolves, so it is a no-op discard -- and the bot has to be able to tell,
+    which is what `Observation.events_enabled` is for."""
+    from struggler.bots.greedy import _own_event_value
+
+    obs = dataclasses.replace(_clean_obs(Side.USSR, 3), events_enabled=False)
+    assert _own_event_value(Side.USSR, obs, "Fidel") == 0.0
+    assert _play_mode_choice(Side.USSR, 3, "Fidel") == "event"  # events on
+    decision = Decision(
+        id=904, actor=Side.USSR, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "event"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+        ),
+        context={"card": "Fidel"},
+    )
+    off = dataclasses.replace(obs, pending_decision=decision)
+    assert GreedyPlayer().choose_action(off, []).payload["mode"] == "ops"
+
+
+def test_the_headline_prices_an_own_event_over_a_filler():
+    """A headline resolves as the card's event (5.1) and costs no action
+    round, so a card worth firing is worth headlining."""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    decision = Decision(
+        id=905, actor=Side.US, kind=DecisionKind.HEADLINE_PLAY,
+        options=(
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Marshall_Plan"}),
+            Action(DecisionKind.HEADLINE_PLAY, {"card": "Nuclear_Test_Ban"}),
+        ),
+    )
+    assert GreedyPlayer().choose_action(
+        dataclasses.replace(obs, pending_decision=decision), []
+    ).payload["card"] == "Marshall_Plan"
+
+
+# -- the scoreboard, and the DEFCON floor it is read against ------------------
+
+
+def test_scoreboard_value_is_us_positive_and_flips_for_the_ussr():
+    weights = GreedyWeights()
+    common = {"defcon": 5, "military_ops": {"US": 5, "USSR": 5}, "turn": 3, "action_round": 1}
+    assert scoreboard_value(weights, Side.US, vp=4, **common) == pytest.approx(8.0)
+    assert scoreboard_value(weights, Side.USSR, vp=4, **common) == pytest.approx(-8.0)
+
+
+def test_a_military_ops_shortfall_is_worth_more_the_later_it_is():
+    """"If you do not meet the required number, your opponent gets the
+    difference" -- assessed at the end of the turn, so the same shortfall on
+    the last action round is real VP and on the first is cheap to fix."""
+    weights = GreedyWeights()
+    behind = {"US": 0, "USSR": 4}  # the US is short, the USSR is level
+    first = scoreboard_value(weights, Side.US, vp=0, defcon=4, military_ops=behind, turn=3, action_round=1)
+    last = scoreboard_value(
+        weights, Side.US, vp=0, defcon=4, military_ops=behind, turn=3, action_round=action_rounds(3)
+    )
+    assert last < first < 0
+    assert last == pytest.approx(-weights.vp_weight * weights.milops_weight * 4)
+    # Level on both sides is worth nothing either way: it is a *difference*.
+    level = {"US": 4, "USSR": 4}
+    assert scoreboard_value(
+        weights, Side.US, vp=0, defcon=4, military_ops=level, turn=3, action_round=1
+    ) == pytest.approx(0.0)
+
+
+def test_milops_gain_is_zero_once_the_requirement_is_already_met():
+    weights = GreedyWeights()
+    obs = dataclasses.replace(_clean_obs(Side.USSR, 4), action_round=action_rounds(1))
+    met = dataclasses.replace(obs, military_ops={"US": 0, "USSR": 4})
+    assert milops_gain(weights, met, Side.USSR, 3) == pytest.approx(0.0)
+    short = dataclasses.replace(obs, military_ops={"US": 4, "USSR": 0})
+    assert milops_gain(weights, short, Side.USSR, 3) == pytest.approx(6.0)
+
+
+def test_closing_a_military_ops_shortfall_raises_the_coup_score():
+    """The Coup is the only Ops type that pays the requirement, so the same
+    Coup is worth more when the track is behind -- which is how "Coup when you
+    are behind on Military Ops" falls out of the score."""
+    weights = GreedyWeights()
+    board = Board()
+    board.influence["Iran"]["US"] = 2
+    obs = _clean_obs(Side.USSR, 4)
+    obs = dataclasses.replace(obs, action_round=action_rounds(obs.turn))
+    coup = Action(DecisionKind.OPS_TYPE, {"type": "coup"})
+    behind = dataclasses.replace(obs, military_ops={"US": 4, "USSR": 0})
+    level = dataclasses.replace(obs, military_ops={"US": 4, "USSR": 4})
+    ctx = {"ops": 3, "bonus": None}
+    behind_score = _score_ops_type(
+        weights, board, dataclasses.replace(behind, pending_decision=_ops_type_decision(3)), coup
+    )
+    level_score = _score_ops_type(
+        weights, board, dataclasses.replace(level, pending_decision=_ops_type_decision(3)), coup
+    )
+    assert behind_score - level_score == pytest.approx(6.0)
+    assert ctx  # the context shape above is what the decision carries
+
+
+def _ops_type_decision(ops):
+    return Decision(
+        id=907, actor=Side.USSR, kind=DecisionKind.OPS_TYPE,
+        options=(
+            Action(DecisionKind.OPS_TYPE, {"type": "influence"}),
+            Action(DecisionKind.OPS_TYPE, {"type": "coup"}),
+            Action(DecisionKind.OPS_TYPE, {"type": "realignment"}),
+        ),
+        context={"ops": ops, "bonus": None},
+    )
+
+
+def test_a_held_suicide_card_is_a_strand_at_defcon_2():
+    """Holding the opponent's DEFCON degrader at DEFCON 2 is a card that cannot
+    be committed at all: Ops fires their event and the Space Race is the only
+    door left. It is only a *strand* once that door is used up."""
+    obs = dataclasses.replace(
+        _clean_obs(Side.USSR, 3), hand=("Duck_and_Cover", "Fidel", "Five_Year_Plan")
+    )
+    # The Space Race attempt is still available this turn: disposable.
+    assert _unavoidable_strands(obs, Side.USSR) == 0
+    spent = dataclasses.replace(obs, space_race_attempts={"US": 0, "USSR": 1})
+    assert _unavoidable_strands(spent, Side.USSR) == 1
+    # Two of them with one attempt: one is unavoidable either way.
+    two = dataclasses.replace(obs, hand=("Duck_and_Cover", "Soviets_Shoot_Down_KAL_007"))
+    assert _unavoidable_strands(two, Side.USSR) == 1
+    assert _unavoidable_strands(
+        dataclasses.replace(two, space_race_attempts={"US": 0, "USSR": 1}), Side.USSR
+    ) == 2
+    # A card that is fine at DEFCON 2 does not count.
+    assert _unavoidable_strands(
+        dataclasses.replace(obs, hand=("Fidel", "Five_Year_Plan")), Side.USSR
+    ) == 0
+
+
+def test_the_strand_penalty_applies_only_to_a_coup_that_drops_to_defcon_2():
+    weights = GreedyWeights()
+    obs = dataclasses.replace(
+        _clean_obs(Side.USSR, 3), hand=("Duck_and_Cover", "Soviets_Shoot_Down_KAL_007")
+    )
+    iran = Board().countries["Iran"]  # Battleground: a Coup there drops DEFCON
+    plain = next(info for info in Board().countries.values() if not info.battleground)
+    assert iran.battleground and not plain.battleground
+    assert _strand_penalty(weights, obs, Side.USSR, iran) == pytest.approx(
+        weights.defcon_strand_penalty
+    )
+    assert _strand_penalty(weights, obs, Side.USSR, plain) == pytest.approx(0.0)
+    # At DEFCON 4 the drop lands on 3, so there is a turn of slack.
+    assert _strand_penalty(weights, dataclasses.replace(obs, defcon=4), Side.USSR, iran) == 0.0
+    # And with nothing stranded, taking DEFCON to 2 is just ordinary caution.
+    assert _strand_penalty(weights, dataclasses.replace(obs, hand=("Fidel",)), Side.USSR, iran) == 0.0
+
+
+def test_a_stranded_card_is_pushed_to_the_space_race_at_defcon_3():
+    weights = GreedyWeights()
+    obs = dataclasses.replace(_clean_obs(Side.USSR, 3), hand=("Duck_and_Cover",))
+    assert _strand_disposal_bonus(weights, obs, Side.USSR, "Duck_and_Cover") == pytest.approx(
+        weights.strand_disposal_bonus
+    )
+    # Not at DEFCON 4+: the marker recovers at the end of the turn, so there is
+    # no countdown yet and the Ops are worth more.
+    at4 = dataclasses.replace(obs, defcon=4)
+    assert _strand_disposal_bonus(weights, at4, Side.USSR, "Duck_and_Cover") == 0.0
+    # And not for a card that is playable at DEFCON 2.
+    assert _strand_disposal_bonus(weights, obs, Side.USSR, "Fidel") == 0.0
+
+
+def test_the_card_choice_refuses_a_card_with_no_safe_mode():
+    """The card choice happens *before* the mode choice, so a card that cannot
+    be committed safely has to lose here too -- `_score_play_mode` never sees a
+    card that was not picked. This is the shape of the remaining DEFCON-1
+    losses: at DEFCON 2, holding five cards, the bot picked We Will Bury You for
+    its 4 Ops (the highest score in the hand) and every mode left was fatal."""
+    obs = _clean_obs(Side.US, 2)
+    decision = Decision(
+        id=909, actor=Side.US, kind=DecisionKind.ACTION_ROUND_PLAY,
+        options=(
+            Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "We_Will_Bury_You"}),
+            Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "Nuclear_Test_Ban"}),
+        ),
+    )
+    hand = ("We_Will_Bury_You", "Nuclear_Test_Ban")
+    disposable = dataclasses.replace(obs, pending_decision=decision, hand=hand)
+    # The Space Race attempt is still available, so the play is to dispose of it
+    # -- worth more than the 4 Ops it would otherwise look like.
+    assert GreedyPlayer().choose_action(disposable, []).payload["card"] == "We_Will_Bury_You"
+    # With the attempt spent, the card is a loss waiting for the hand to empty.
+    spent = dataclasses.replace(disposable, space_race_attempts={"US": 1, "USSR": 0})
+    assert GreedyPlayer().choose_action(spent, []).payload["card"] == "Nuclear_Test_Ban"
+    # And when it is the only card in hand it is played: nothing else is legal,
+    # so the refusal must not turn into a crash or a stall. (The option list is
+    # what the engine builds from the hand, so it has to be rebuilt here too.)
+    alone = dataclasses.replace(
+        obs,
+        hand=("We_Will_Bury_You",),
+        space_race_attempts={"US": 1, "USSR": 0},
+        pending_decision=Decision(
+            id=910, actor=Side.US, kind=DecisionKind.ACTION_ROUND_PLAY,
+            options=(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": "We_Will_Bury_You"}),),
+        ),
+    )
+    assert GreedyPlayer().choose_action(alone, []).payload["card"] == "We_Will_Bury_You"
+
+
+def test_the_bot_prefers_spacing_a_stranded_card_over_spending_it():
+    """The two halves meet here: the Space Race disposal bonus has to be enough
+    to beat the Ops of a 2-Ops card the bot would otherwise spend."""
+    obs = dataclasses.replace(_clean_obs(Side.USSR, 3), hand=("Duck_and_Cover",))
+    decision = Decision(
+        id=908, actor=Side.USSR, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "event"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),
+        ),
+        context={"card": "Duck_and_Cover"},
+    )
+    chosen = GreedyPlayer().choose_action(
+        dataclasses.replace(obs, pending_decision=decision), []
+    ).payload["mode"]
+    assert chosen == "space_race"
 
 
 # -- Space Race card lists, from "General Strategy: The Space Race" ----------

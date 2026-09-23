@@ -78,6 +78,31 @@ routed to the operator is described in [BOTS.md](BOTS.md).
   and a `Player` has to re-derive it from card knowledge, so a decision
   carrying that fact would retire the whole class of fallback losses at
   once.
+- **`GreedyPlayer`'s own-event valuation is a table of extremes**
+  (`_OWN_EVENT_VALUE`), not a model of the events: it prices the playbook's
+  unconditional calls ("Always event", "Free event") and leaves every
+  conditional one on the Ops-first default. The known misses are the
+  *timing* judgements that need state the bot does not track (Quagmire/Bear
+  Trap, "worthless played late", "headline it to tax their coups"), and the
+  ones that depend on the opponent's position rather than its own
+  (Wargames, Arms Race, Ask Not). Extending the table is cheap; extending it
+  slowly is deliberate, because each entry is a judgement a later reader has
+  to be able to check against the sentence it came from.
+- **The DEFCON clock only charges for Coup-driven drops and for cards at
+  DEFCON 2.** `_strand_penalty` prices taking the marker from 3 to 2 with a
+  card that only becomes unplayable at 2, and `_score_action_round_play`
+  refuses such a card once it is at 2 — but an *event* that drops the marker
+  to 2 while a second such card stays in hand is the same position and is not
+  priced. The card set that moves DEFCON is small (Duck and Cover, KAL-007, We
+  Will Bury You, How I Learned to Stop Worrying), and over 10 self-played games
+  with the shipped rules the situation did not arise once — which is why this
+  is a documented gap rather than a rule: it is unpriced, not unreachable.
+- **`scoreboard_value` is linear, and so it is myopic.** It prices the VP
+  track and the Military Operations shortfall difference, but it has no
+  notion of protecting a lead: a bot 15 VP ahead should trade differently
+  from one 15 behind, and a linear term cannot express that. Distance to the
+  VP-to-win threshold is the obvious next term, and it is the same missing
+  piece as "play for the endgame" in `_OWN_EVENT_VALUE`.
 - **`LLMPlayer` resends its conversation every call**, now with a
   character-budget safety valve: `STRUGGLER_LLM_CONTEXT_CHARS` (or the
   `max_context_chars` constructor arg) drops the oldest turns with a marker
