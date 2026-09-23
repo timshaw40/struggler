@@ -13,7 +13,9 @@ from struggler.bots.greedy import (
     _USSR_SPACE_RACE,
     GreedyPlayer,
     GreedyWeights,
+    TurnPlan,
     _defcon_suicide_risk,
+    plan_turn,
     _in_bonus_region,
     _is_reshuffle_turn,
     _realignment_severs_access,
@@ -27,7 +29,7 @@ from struggler.bots.greedy import (
     scoreboard_value,
 )
 from struggler.bots.naive import FirstLegalPlayer, RandomPlayer
-from struggler.engine import Action, Decision, DecisionKind, Engine, Side
+from struggler.engine import Action, Decision, DecisionKind, Engine, Region, Side
 from struggler.engine.board import Board
 from struggler.engine.cards import action_rounds
 from struggler.runner import play_game
@@ -1127,3 +1129,191 @@ def test_a_new_suicide_rule_must_be_taught_to_the_classifier(monkeypatch):
     monkeypatch.setattr(greedy, "_defcon_suicide_risk", lambda *a, **k: True)
     with pytest.raises(AssertionError, match="neither category"):
         greedy.defcon_risk_kind(_clean_obs(Side.USSR, 2), Side.USSR, "Containment", "ops")
+
+
+# -- the turn plan: one plan, five scorers ------------------------------------
+
+_USSR_DISPOSE_HAND = ("CIA_Created", "Duck_and_Cover", "Decolonization")
+
+
+def _plan_obs(side, defcon, hand, influence=None):
+    engine = Engine.new_game(seed=1)
+    obs = _clean_obs(side, defcon, influence)
+    return dataclasses.replace(engine.observe(side), defcon=defcon, influence=obs.influence, hand=tuple(hand))
+
+
+def test_plan_turn_is_pure_and_frozen():
+    """The acceptance criterion as an assertion: the same observation plans
+    the same plan twice, and the plan cannot be mutated in place. A plan
+    stored on the player would silently diverge between pickled worker copies
+    and MCTS clones, so there is deliberately nothing to store it in."""
+    obs = _plan_obs(Side.USSR, 4, _USSR_DISPOSE_HAND, [(Side.USSR, "Angola", 3)])
+    weights = GreedyWeights()
+    first, second = plan_turn(obs, Side.USSR, weights), plan_turn(obs, Side.USSR, weights)
+    assert first == second
+    assert isinstance(first, TurnPlan)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        first.defcon_floor = 2  # type: ignore[misc]
+
+
+def test_plan_dispose_orders_unconditional_first_then_higher_ops():
+    """While the marker is still high (DEFCON 5 here -- every existing
+    DEFCON-2 rule is silent), the plan already names the cards that cannot be
+    committed at 2: Duck and Cover kills on commit, CIA Created only hands
+    over Ops, Decolonization is the USSR's own and always committable."""
+    obs = _plan_obs(Side.USSR, 5, _USSR_DISPOSE_HAND, [(Side.USSR, "Angola", 3)])
+    plan = plan_turn(obs, Side.USSR, GreedyWeights())
+    assert plan.dispose == ("Duck_and_Cover", "CIA_Created")
+
+
+def test_plan_floor_is_three_while_a_card_must_leave():
+    obs = _plan_obs(Side.USSR, 4, ("Duck_and_Cover",))
+    assert plan_turn(obs, Side.USSR, GreedyWeights()).defcon_floor == 3
+    clean = _plan_obs(Side.USSR, 4, ("Decolonization",))
+    assert plan_turn(clean, Side.USSR, GreedyWeights()).defcon_floor == 2
+    # The floor never floats above the marker: at DEFCON 2 there is nothing
+    # left to hold high.
+    low = _plan_obs(Side.USSR, 2, ("Duck_and_Cover",))
+    assert plan_turn(low, Side.USSR, GreedyWeights()).defcon_floor == 2
+
+
+def test_plan_floor_ignores_conditional_holdings():
+    """CIA Created needs the opponent's cooperation to kill -- they must
+    choose to coup into DEFCON 1, which loses for them, so they usually
+    decline. Refusing every battleground coup at 3 for that would concede
+    certain tempo against a danger that mostly does not materialise, so the
+    floor stays at 2 and only the unconditional kind engages it."""
+    obs = _plan_obs(Side.USSR, 4, ("CIA_Created",), [(Side.USSR, "Angola", 3)])
+    plan = plan_turn(obs, Side.USSR, GreedyWeights())
+    assert plan.dispose == ("CIA_Created",)
+    assert plan.defcon_floor == 2
+
+
+def test_plan_region_focus_follows_the_held_scoring_card():
+    europe = _plan_obs(Side.US, 5, ("Europe_Scoring", "Olympic_Games"))
+    assert plan_turn(europe, Side.US, GreedyWeights()).region_focus is Region.EUROPE
+    se_asia = _plan_obs(Side.US, 5, ("Southeast_Asia_Scoring",))
+    assert plan_turn(se_asia, Side.US, GreedyWeights()).region_focus is Region.ASIA
+    none = _plan_obs(Side.US, 5, ("Olympic_Games",))
+    assert plan_turn(none, Side.US, GreedyWeights()).region_focus is None
+
+
+def _action_round_decision(*cards):
+    return Decision(
+        id=910, actor=Side.USSR, kind=DecisionKind.ACTION_ROUND_PLAY,
+        options=tuple(Action(DecisionKind.ACTION_ROUND_PLAY, {"card": c}) for c in cards),
+        context={},
+    )
+
+
+def test_action_round_play_prefers_a_dispose_card_while_an_attempt_remains():
+    """At DEFCON 4 the old refusal is silent (it only fires at 2), so without
+    the plan Duck and Cover scores its Ops minus the opponent-event penalty
+    and loses to an ordinary 2-Ops card. With the plan it is picked -- it has
+    to be *chosen* now, because the mode choice comes after."""
+    player = GreedyPlayer()
+    obs = dataclasses.replace(
+        _plan_obs(Side.USSR, 4, ("Duck_and_Cover", "Decolonization")),
+        pending_decision=_action_round_decision("Duck_and_Cover", "Decolonization"),
+    )
+    scores = player.option_scores(obs)
+    assert scores[0] > scores[1]
+    assert player.choose_action(obs, []).payload["card"] == "Duck_and_Cover"
+    # Attempt spent: the same card is refused -- preferring it now would spend
+    # the action round on a card with nowhere to go.
+    spent = dataclasses.replace(obs, space_race_attempts={"USSR": 1})
+    refused = player.option_scores(spent)
+    assert refused[0] <= -player.weights.defcon_suicide_penalty
+
+
+def test_play_mode_spaces_a_dispose_card_while_the_marker_is_high():
+    """`_strand_disposal_bonus` only prices disposal at DEFCON 3 and below, so
+    at 5 the Space Race has to beat tempting Ops on the plan alone. Same Ops
+    on both cards, so the only difference left is the plan's bonus."""
+    player = GreedyPlayer()
+    decision = Decision(
+        id=911, actor=Side.USSR, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+        ),
+        context={"card": "Duck_and_Cover"},
+    )
+    at5 = dataclasses.replace(_plan_obs(Side.USSR, 5, ("Duck_and_Cover",)), pending_decision=decision)
+    space, ops = player.option_scores(at5)
+    assert space > ops, (space, ops)
+    control = dataclasses.replace(at5, pending_decision=dataclasses.replace(decision, context={"card": "Containment"}))
+    space_control, _ = player.option_scores(control)
+    assert space - space_control == player.weights.strand_disposal_bonus
+
+
+def _plan_ops_type_decision():
+    return Decision(
+        id=912, actor=Side.USSR, kind=DecisionKind.OPS_TYPE,
+        options=tuple(
+            Action(DecisionKind.OPS_TYPE, {"type": t}) for t in ("influence", "coup", "realignment")
+        ),
+        context={"ops": 3},
+    )
+
+
+def test_ops_type_refuses_a_coup_below_the_plan_floor():
+    """DEFCON 3, holding Duck and Cover: the only battleground coup (Iran)
+    would take the marker to 2 with the card still in hand, so "coup" is
+    refused as an Ops type. A non-degrading coup (Jordan) stays live."""
+    player = GreedyPlayer()
+    iran = dataclasses.replace(
+        _plan_obs(Side.USSR, 3, ("Duck_and_Cover",), [(Side.US, "Iran", 2)]),
+        pending_decision=_plan_ops_type_decision(),
+    )
+    assert player.option_scores(iran)[1] <= -player.weights.defcon_self_kill_penalty
+    jordan = dataclasses.replace(
+        _plan_obs(Side.USSR, 3, ("Duck_and_Cover",), [(Side.US, "Jordan", 1)]),
+        pending_decision=_plan_ops_type_decision(),
+    )
+    assert player.option_scores(jordan)[1] > -player.weights.defcon_self_kill_penalty
+
+
+def test_coup_target_refuses_a_floor_breaking_battleground():
+    """The same floor at the target decision: Iran refused, Jordan live, at a
+    DEFCON where every pre-plan rule is silent (all of them fire at 2)."""
+    player = GreedyPlayer()
+
+    def decide(country):
+        return Decision(
+            id=913, actor=Side.USSR, kind=DecisionKind.COUP_TARGET,
+            options=(Action(DecisionKind.COUP_TARGET, {"country": country}),),
+            context={"ops": 3},
+        )
+
+    iran = dataclasses.replace(
+        _plan_obs(Side.USSR, 3, ("Duck_and_Cover",), [(Side.US, "Iran", 2)]),
+        pending_decision=decide("Iran"),
+    )
+    assert player.option_scores(iran)[0] <= -player.weights.defcon_self_kill_penalty
+    jordan = dataclasses.replace(
+        _plan_obs(Side.USSR, 3, ("Duck_and_Cover",), [(Side.US, "Jordan", 1)]),
+        pending_decision=decide("Jordan"),
+    )
+    assert player.option_scores(jordan)[0] > -player.weights.defcon_self_kill_penalty
+
+
+def test_place_influence_prefers_the_plan_region():
+    """Same country, same board; the only difference is the hand. With Europe
+    Scoring held, France costs exactly the plan's bonus more than with a
+    scoreless hand -- placement agrees with the card choice."""
+    player = GreedyPlayer()
+    decision = Decision(
+        id=914, actor=Side.US, kind=DecisionKind.PLACE_INFLUENCE,
+        options=(Action(DecisionKind.PLACE_INFLUENCE, {"country": "France"}),),
+        context={},
+    )
+    focused = dataclasses.replace(
+        _plan_obs(Side.US, 5, ("Europe_Scoring",)), pending_decision=decision
+    )
+    plain = dataclasses.replace(
+        _plan_obs(Side.US, 5, ("Olympic_Games",)), pending_decision=decision
+    )
+    assert player.option_scores(focused)[0] - player.option_scores(plain)[0] == pytest.approx(
+        player.weights.plan_region_focus_bonus
+    )

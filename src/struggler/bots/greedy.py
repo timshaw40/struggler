@@ -204,6 +204,14 @@ class GreedyWeights:
     # rejects, so it is priced under the influence alternatives.
     t1_us_retaliatory_coup_penalty: float = 25.0
 
+    # -- the turn plan (see `plan_turn`) --
+    # Influence in the region the plan is contesting this turn outranks equal
+    # influence elsewhere. Sized above `influence_base` (1.0) so it is not
+    # noise, and below a battleground control swing (5.0) so it orders
+    # *regions* without overriding *control*. A PLAYBOOK judgement: the size
+    # relative to those two neighbours is the rule.
+    plan_region_focus_bonus: float = 2.0
+
 
 # Standard openings (Twilight Strategy). Targets are influence AFTER setup,
 # including printed at-start (E. Germany already has 3).
@@ -779,6 +787,111 @@ def _scoring_card_favorability(board: Board, side: Side, cid: str) -> float:
     return net if side is Side.US else -net
 
 
+"""The turn plan, from Twilight Strategy's "General Strategy: DEFCON" and
+"General Strategy: The Space Race".
+
+The governing rule: "you lose the game if DEFCON drops to 1 on your turn. It
+doesn't matter who 'caused' it: if it happened on your watch, you're
+responsible for humanity's destruction." Every scorer prices exactly one
+decision, so without a plan the bot creates its own losses several turns
+before they happen -- the measured case is a hand holding a card that cannot
+be committed at DEFCON 2, discovered only once the marker is already there
+(the #34 death trace). The plan names those cards while the marker is still
+high, and every scorer consults it:
+
+- `dispose` generalises the Space Race article's top priority ("cards that
+  will immediately lose you the game (e.g., DEFCON suicide cards)") from
+  DEFCON 2 up the whole track: shed them early, through the one door a turn;
+- `defcon_floor` is the article's responsibility rule as a number: this turn,
+  the bot's own actions may not take the marker below it;
+- `region_focus` keeps placement pointed at the scoring card in hand, so this
+  turn's influence agrees with the card choice instead of each re-deriving it.
+"""
+
+
+@dataclass(frozen=True)
+class TurnPlan:
+    """What this turn is for. Pure data, recomputed from each Observation --
+    never stored on the player, never cached across decisions (see below)."""
+
+    dispose: tuple[str, ...]
+    """Cards in hand that cannot be committed at DEFCON 2, most urgent first:
+    the unconditional degraders (committing one *is* the loss), then the
+    conditional ones, higher Ops first within each kind (the greater
+    temptation to spend, so the first to shed). The Space Race takes one card
+    a turn -- two with Captured Nazi Scientist -- so a plan holding two is a
+    plan to lose one of them; the order says which."""
+    defcon_floor: int
+    """The lowest DEFCON the bot's own actions may leave this turn: 3 while an
+    *unconditional* degrader is held (dropping to 2 with one stranded is the
+    measured loss), 2 otherwise, never above the current marker. Conditional
+    holdings do not engage it -- see `plan_turn`."""
+    region_focus: Region | None
+    """Where this turn's influence is worth most: the region of the held
+    scoring card the side scores best, or None with no scoring card in hand."""
+
+
+def plan_turn(observation: Observation, side: Side, weights: GreedyWeights) -> TurnPlan:
+    """The plan for this turn, from this observation alone.
+
+    A pure function of `(observation, side, weights)`: no instance state, no
+    module-level cache, recomputed every time a scorer needs it. That is load
+    bearing, not style -- `PlayerSpec` is pickled to worker processes and
+    `MCTSPlayer` clones games, so a plan stored on the player would silently
+    diverge between clones. It also keeps greedy honest under ADR-0005: the
+    plan sees only `observe(side)`, exactly what the scorers see.
+    """
+    at_two = replace(observation, defcon=2)
+    urgent = [
+        cid
+        for cid in observation.hand
+        if _defcon_suicide_risk(at_two, side, cid, "ops")
+    ]
+
+    def _urgency(cid: str) -> tuple[int, int]:
+        card = _CARDS.get(cid)
+        return (0 if cid in _DEFCON_UNCONDITIONAL else 1, -(card.ops if card else 0))
+
+    dispose = tuple(sorted(urgent, key=_urgency))
+    # The floor engages only for the unconditional kind. A conditional card at
+    # DEFCON 2 is usually still committable -- the opponent must choose to coup
+    # into DEFCON 1, which loses for them, so they usually decline -- while
+    # refusing every battleground coup at 3 for one concedes certain tempo
+    # against a danger that mostly does not materialise. The unconditional
+    # kind has no such escape: committing one *is* the loss.
+    floor = 3 if any(cid in _DEFCON_UNCONDITIONAL for cid in dispose) else 2
+    defcon_floor = max(2, min(observation.defcon, floor))
+    return TurnPlan(
+        dispose=dispose,
+        defcon_floor=defcon_floor,
+        region_focus=_plan_region_focus(observation, side, weights),
+    )
+
+
+def _plan_region_focus(
+    observation: Observation, side: Side, weights: GreedyWeights
+) -> Region | None:
+    """The held scoring card's region, best first -- the same price the card
+    choice itself uses (`scoring_card_weight` on the favourability), so the
+    focus and the card agree. Southeast Asia scores as Asia: there is no
+    Region for the subregion, and Asia is where its influence sits."""
+    board = Board()
+    _sync_board(board, observation)
+    best: Region | None = None
+    best_value = 0.0
+    for cid in observation.hand:
+        region = SCORING_CARD_REGION.get(cid)
+        if region is None:
+            if cid == "Southeast_Asia_Scoring":
+                region = Region.ASIA
+            else:
+                continue
+        value = weights.scoring_card_weight * _scoring_card_favorability(board, side, cid)
+        if best is None or value > best_value:
+            best, best_value = region, value
+    return best
+
+
 # -- per-decision-kind scorers -------------------------------------------------
 
 
@@ -803,10 +916,21 @@ def _score_place_influence(weights: GreedyWeights, board: Board, observation: Ob
         return _score_setup_place(board, side, country)
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
+    # The plan's region: this turn's influence goes where the held scoring
+    # card scores, so placement agrees with the card choice. A placement the
+    # plan is not contesting keeps its ordinary price.
+    plan = plan_turn(observation, side, weights)
+    focus = (
+        weights.plan_region_focus_bonus
+        if plan.region_focus is not None
+        and board.countries[country].region is plan.region_focus
+        else 0.0
+    )
     return (
         weights.influence_base
         + gain
         + _t1_placement_bonus(weights, board, observation, side, country)
+        + focus
         - (cost - 1) * weights.doubled_cost_penalty
     )
 
@@ -871,6 +995,14 @@ def _score_coup_target(weights: GreedyWeights, board: Board, observation: Observ
     if _coup_is_suicide(observation, side):
         return -weights.defcon_self_kill_penalty
     if observation.defcon <= 2 and _coup_risks_defcon(observation, side, info):
+        return -weights.defcon_self_kill_penalty
+    # The plan's floor, consulted at the target too: a battleground coup that
+    # takes the marker below it is refused even when it would not end the game
+    # outright. Dropping to 2 with a dispose card in hand is the measured loss
+    # -- legal, and lost several turns later.
+    if _coup_risks_defcon(observation, side, info) and (
+        observation.defcon - 1 < plan_turn(observation, side, weights).defcon_floor
+    ):
         return -weights.defcon_self_kill_penalty
 
     gain = _expected_coup_gain(weights, board, observation, side, country, info, ops)
@@ -994,12 +1126,19 @@ def _best_influence_value(
 
 
 def _best_coup_value(
-    weights: GreedyWeights, board: Board, observation: Observation, side: Side, ops: int, bonus: list[str] | None
+    weights: GreedyWeights, board: Board, observation: Observation, side: Side, ops: int, bonus: list[str] | None,
+    floor: int = 2,
 ) -> float | None:
     """Best expected Coup value among proxy-legal targets, or None if every
     one of them would be a DEFCON self-kill. Region-lock effects beyond
     `RULES["coup_min_defcon"]` (NATO, The Reformer, ...) are not replicated
-    here -- out of scope for v1 (core board decisions); see the module docstring."""
+    here -- out of scope for v1 (core board decisions); see the module docstring.
+
+    `floor` is the turn plan's `defcon_floor`: a target whose coup would take
+    the marker below it is skipped, so "coup" as an Ops type is refused when
+    every coup left breaks the plan. At 2 this is exactly the old rule (a
+    degrading coup at DEFCON 2 ends the game); at 3 it is the plan holding the
+    marker high while a dispose card is still in hand."""
     if _coup_is_suicide(observation, side):
         return None  # every target loses the game under Cuban Missile Crisis
     opponent = side.opponent
@@ -1010,6 +1149,8 @@ def _best_coup_value(
         if observation.defcon < RULES["coup_min_defcon"].get(info.region.name, 1):
             continue
         if observation.defcon <= 2 and _coup_risks_defcon(observation, side, info):
+            continue
+        if _coup_risks_defcon(observation, side, info) and observation.defcon - 1 < floor:
             continue
         target_ops = ops + sum(1 for b in (bonus or []) if _in_bonus_region(info, b))
         gain = _expected_coup_gain(weights, board, observation, side, cid, info, target_ops)
@@ -1049,7 +1190,8 @@ def _score_ops_type(weights: GreedyWeights, board: Board, observation: Observati
     if ops_type == "influence":
         return weights.influence_base + _best_influence_value(weights, board, side, ops)
     if ops_type == "coup":
-        best = _best_coup_value(weights, board, observation, side, ops, bonus)
+        floor = plan_turn(observation, side, weights).defcon_floor
+        best = _best_coup_value(weights, board, observation, side, ops, bonus, floor)
         if best is None:
             # No Coup target is safe at the current DEFCON: refuse "coup" as
             # an Ops type outright, rather than let COUP_TARGET default into
@@ -1135,6 +1277,18 @@ def _score_action_round_play(
     # waiting for the moment the hand empties, and only "nothing else to play"
     # should reach it.
     if _defcon_suicide_risk(observation, side, cid, "ops"):
+        if _space_race_attempts_left(observation, side) > 0:
+            score += weights.strand_disposal_bonus
+        else:
+            score -= weights.defcon_suicide_penalty
+        return score
+    # The plan generalises that refusal up the track: a dispose card must be
+    # *chosen* while the marker is still high (the mode choice comes after, so
+    # `_score_play_mode` never sees a card that was not picked). Prefer it
+    # while an attempt remains; refuse it once the attempt is gone, or the
+    # marker drops and the refusal above is all that stands between the bot
+    # and a forced loss.
+    if cid in plan_turn(observation, side, weights).dispose:
         if _space_race_attempts_left(observation, side) > 0:
             score += weights.strand_disposal_bonus
         else:
@@ -1392,12 +1546,22 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
 
     if mode == "space_race":
         expected_vp = _space_race_expected_vp(observation, side)
+        # `_strand_disposal_bonus` only prices disposal at DEFCON 3 and below;
+        # the plan extends it up the track, so a dispose card is spaced while
+        # the marker is still high even when its Ops are tempting.
+        early_disposal = (
+            weights.strand_disposal_bonus
+            if cid in plan_turn(observation, side, weights).dispose
+            and observation.defcon > 3
+            else 0.0
+        )
         return (
             weights.space_race_base
             + weights.space_race_vp_weight * expected_vp
             + _space_race_card_bonus(weights, side, cid)
             + _reshuffle_timing_bonus(weights, side, observation, cid)
             + _strand_disposal_bonus(weights, observation, side, cid)
+            + early_disposal
             - weights.space_race_ops_penalty * ops
         )
     if mode == "ops":
