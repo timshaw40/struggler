@@ -407,12 +407,68 @@ def test_unconditional_defcon_degraders_are_lethal_only_at_defcon_2():
         assert not _defcon_suicide_risk(at3, Side.US, cid, "event"), cid
 
 
-def test_only_the_event_mode_is_lethal():
-    """Ops and the Space Race never resolve the card's text."""
-    obs = _clean_obs(Side.US, 2)
-    for mode in ("ops", "space_race", "un_intervention"):
-        assert not _defcon_suicide_risk(obs, Side.US, "Duck_and_Cover", mode), mode
-    assert _defcon_suicide_risk(obs, Side.US, "Duck_and_Cover", "event")
+def test_an_opponent_suicide_card_is_lethal_on_an_ops_play_too():
+    """The engine fires the opponent's event on an Ops play, and never offers
+    an opponent card as a voluntary "event" (`_play_modes`), so Ops is the only
+    door through which a bot can trigger one."""
+    # The USSR holding a US DEFCON degrader: its text resolves whichever way
+    # the card is committed.
+    assert _defcon_suicide_risk(_clean_obs(Side.USSR, 2), Side.USSR, "Duck_and_Cover", "ops")
+    # The US holding its own copy: an Ops play resolves nothing.
+    assert not _defcon_suicide_risk(_clean_obs(Side.US, 2), Side.US, "Duck_and_Cover", "ops")
+    # Same asymmetry for the "hands the opponent Ops" category.
+    assert _defcon_suicide_risk(
+        _clean_obs(Side.USSR, 2, [(Side.USSR, "Angola", 3)]), Side.USSR, "CIA_Created", "ops")
+    assert not _defcon_suicide_risk(
+        _clean_obs(Side.US, 2, [(Side.US, "Angola", 3)]), Side.US, "CIA_Created", "ops")
+
+
+def test_the_space_race_and_un_intervention_never_resolve_the_text():
+    obs = _clean_obs(Side.USSR, 2)
+    for mode in ("space_race", "un_intervention"):
+        assert not _defcon_suicide_risk(obs, Side.USSR, "Duck_and_Cover", mode), mode
+    # And a mode the bot does not know at all is not lethal either.
+    assert not _defcon_suicide_risk(obs, Side.USSR, "Duck_and_Cover", "not_a_mode")
+
+
+def test_the_bot_does_not_play_an_opponent_suicide_card_for_ops():
+    """Regression for the measured loss path: 30 of 33 DEFCON-1 losses in 40
+    self-played games resolved through an opponent card played for Ops."""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.USSR)
+    decision = Decision(
+        id=903, actor=Side.USSR, kind=DecisionKind.PLAY_MODE,
+        options=(
+            Action(DecisionKind.PLAY_MODE, {"mode": "ops"}),
+            Action(DecisionKind.PLAY_MODE, {"mode": "space_race"}),
+        ),
+        context={"card": "Duck_and_Cover"},
+    )
+    player = GreedyPlayer()
+    at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
+    assert player.choose_action(at2, []).payload["mode"] == "space_race"
+    assert player.option_scores(at2)[0] <= -player.weights.defcon_suicide_penalty
+    # At DEFCON 3 the drop only reaches 2, so the Ops play is live again.
+    at3 = dataclasses.replace(obs, pending_decision=decision, defcon=3)
+    assert player.option_scores(at3)[0] > -player.weights.defcon_suicide_penalty
+
+
+def test_the_bot_never_sets_defcon_to_one():
+    """How I Learned to Stop Worrying offers DEFCON levels as its options, and
+    the first one is an immediate loss for the side choosing it."""
+    engine = Engine.new_game(seed=1)
+    obs = engine.observe(Side.US)
+    decision = Decision(
+        id=904, actor=Side.US, kind=DecisionKind.EVENT_CHOICE,
+        options=tuple(
+            Action(DecisionKind.EVENT_CHOICE, {"choice": c}) for c in ("1", "2", "3", "4", "5")
+        ),
+        context={"event": "How_I_Learned_to_Stop_Worrying", "choose_side": "US"},
+    )
+    player = GreedyPlayer()
+    at2 = dataclasses.replace(obs, pending_decision=decision, defcon=2)
+    assert player.choose_action(at2, []).payload["choice"] == "5"
+    assert player.option_scores(at2)[0] <= -player.weights.defcon_self_kill_penalty
 
 
 def test_opponent_ops_cards_need_a_coupeable_battleground():

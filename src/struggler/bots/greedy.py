@@ -32,7 +32,10 @@ branch order:
   1. Never choose a Coup (or an Ops type / Coup target that could become
      one) that would drop DEFCON to 1 -- an instant loss for the acting
      side (`defcon_self_kill_penalty`, orders of magnitude above every
-     other weight).
+     other weight). The same penalty covers committing a card whose text
+     resolves to DEFCON 1 on this turn, *including* an opponent's card
+     played for Ops, whose event fires too (`defcon_suicide_penalty`; see
+     `_defcon_suicide_risk`).
   2. A safe Coup with a good expected margin outscores placing Influence
      (`coup_base` plus the expected board-value swing).
     3. Among Influence targets, Battlegrounds and progress toward control
@@ -106,6 +109,12 @@ class GreedyWeights:
     # Playing a DEFCON sucker (see _defcon_suicide_risk) is the same class of
     # mistake as couping into DEFCON 1, so it gets the same penalty.
     defcon_suicide_penalty: float = 1_000_000.0
+    # How I Learned to Stop Worrying picks a DEFCON *level* to set. Small: the
+    # levels differ only in how much Military Operations pressure they put on
+    # the opponent versus how much Coup freedom they leave open, and the
+    # decision has no competing option to be outbid against -- the only thing
+    # that must dominate is "never 1", which is the self-kill penalty above.
+    defcon_setting_weight: float = 0.5
 
     # -- per-ops-type base preference (before the marginal/expected board_value swing) --
     coup_base: float = 5.0
@@ -392,17 +401,45 @@ def _opponent_can_coup_a_battleground(observation: Observation, side: Side) -> b
 
 
 def _defcon_suicide_risk(observation: Observation, side: Side, cid: str, mode: str) -> bool:
-    """Whether playing `cid` as `mode` can lose the game to DEFCON 1.
+    """Whether committing `cid` as `mode` can lose the game to DEFCON 1.
 
-    Only the *event* can: playing a card for Ops or the Space Race never
-    resolves its text, and UN Intervention explicitly cancels it. `mode` is the
-    play mode, so "event" is the only one that matters.
+    The question is not which mode was picked, but *whose event text resolves*
+    on this side's turn, and whether that text is fatal at this DEFCON. Two
+    things can resolve a card's text:
+
+    - its own event, which is `mode == "event"` -- and equally a Headline pick,
+      since 5.1 resolves a headlined card as its event;
+    - the *opponent's* event, which fires whenever their card is played for
+      Ops (`Engine._push_play_mode`: "An opponent's event also fires when their
+      card is played for Ops"). The engine never offers a voluntary "event"
+      mode for an opponent's card (`_play_modes`), so an Ops play is the *only*
+      way a bot can trigger one -- and pricing only the `event` mode left the
+      Ops door open. Measured over 40 self-played greedy games before this
+      rule: 30 of the 33 DEFCON-1 losses resolved through an opponent card
+      played for Ops (Duck and Cover and KAL-007 almost always), each one
+      choosing `event_first` at the `EVENT_OPS_ORDER` prompt that follows.
+
+    The Space Race and UN Intervention never resolve the text, so they are
+    always safe. NEUTRAL cards never fire as the opponent's event, so an Ops
+    play of one is safe too.
     """
-    if mode != "event":
-        return False
     if observation.defcon > 2:
         # Categories 1 and 2 both need the marker at 2: with DEFCON at 3 a
         # single drop lands on 2, which is bad play but not a loss.
+        return False
+    card = _CARDS.get(cid)
+    if card is None:
+        return False
+    if mode == "event":
+        resolves = True
+    elif mode == "ops":
+        # Mirrors `Engine._is_opponent_event`: only a card that belongs to the
+        # opponent fires on an Ops play. One's own (or a neutral) card's text
+        # is inert unless it is played as an event.
+        resolves = card.side.value == side.opponent.value
+    else:
+        return False  # space_race / un_intervention never resolve the text
+    if not resolves:
         return False
     if cid in _DEFCON_UNCONDITIONAL:
         return True
@@ -1015,6 +1052,13 @@ def _score_play_mode(weights: GreedyWeights, board: Board, observation: Observat
         score = weights.ops_mode_per_point * ops
         if card.side.value == side.opponent.value:
             score -= weights.opponent_event_ops_penalty  # fires their Event
+            # ...and if that Event is a DEFCON suicide, the Ops play loses the
+            # game exactly as an event play of one's own would: see
+            # _defcon_suicide_risk. Checked *after* the ordinary penalty so the
+            # refusal is one value, not a score that another weight could
+            # outbid.
+            if _defcon_suicide_risk(observation, side, cid, mode):
+                return -weights.defcon_suicide_penalty
         return score
     if mode == "un_intervention":
         # UN Intervention cancels the opponent card's Event, so no penalty.
@@ -1044,6 +1088,28 @@ def _score_event_choice(weights: GreedyWeights, board: Board, observation: Obser
         # elsewhere either; see _score_play_mode above).
         card = _CARDS.get(action.payload["choice"])
         return float(card.ops) if card is not None else 0.0
+    if event == "How_I_Learned_to_Stop_Worrying":
+        # "Set DEFCON to any level, then +5 to the phasing side's Military
+        # Operations track" -- the options *are* DEFCON levels, and the first
+        # one is an immediate loss for the side choosing it (8.1.3). This is
+        # the one card in the deck whose first-listed option is suicide, and
+        # the unscored fallback walked into it: 3 of 40 self-played games
+        # ended here before this rule.
+        #
+        # Above 1, the level is a trade: a higher DEFCON raises the
+        # opponent's Military Operations requirement (the requirement *is* the
+        # DEFCON level, and the +5 Ops this event grants cover the phasing
+        # side's own at any level), while a lower one restricts where Coups
+        # may be made. The bot takes the highest level, which is the one that
+        # cannot lose to a DEFCON drop on its own turn -- the same
+        # safety-first reading the card's own playbook entry takes
+        # ("Usually better to use for ops. If evented, never set defcon to 1").
+        level = action.payload.get("choice")
+        if level is None:
+            return 0.0
+        if level == "1":
+            return -weights.defcon_suicide_penalty
+        return weights.defcon_setting_weight * float(level)
     return 0.0
 
 

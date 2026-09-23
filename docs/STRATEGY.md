@@ -29,6 +29,18 @@ and annotated-games (theory). These are **our** operational rules for
   at DEFCON 2. Space or hold opponent suicide cards. CIA Created / Lone
   Gunman / Grain Sales are suicide if the opponent can coup a
   battleground.
+- **Their event fires when you play their card for Ops, too.** The engine
+  resolves an opponent's event on an Ops play (`Engine._push_play_mode`),
+  and never offers their card as a voluntary event — so at DEFCON 2 the
+  card must not be committed *at all*, whatever mode is picked. Space Race
+  it, or play something else and hold it: the "play it for Ops instead"
+  escape that is correct for a neutral or own-side card is not one here.
+- **How I Learned to Stop Worrying** offers DEFCON *levels* as its choice,
+  and the first one ends the game for the side picking it. Never choose 1;
+  above that the level trades the opponent's Military Operations
+  requirement (which is the DEFCON level, and this event's own +5 Ops
+  covers the phasing side's at any level) against how much Coup freedom
+  stays open. Take the highest.
 
 ## Events vs Ops
 

@@ -64,12 +64,20 @@ routed to the operator is described in [BOTS.md](BOTS.md).
 
 - **`GreedyPlayer` scores the core decision kinds** (`PLACE_INFLUENCE`,
   `COUP_TARGET`, `REALIGNMENT_TARGET`, `OPS_TYPE`, `HEADLINE_PLAY`,
-  `ACTION_ROUND_PLAY`, `PLAY_MODE`) plus one card-specific `EVENT_CHOICE`
-  (Aldrich Ames Remix). Other event-specific decision kinds fall back to the
+  `ACTION_ROUND_PLAY`, `PLAY_MODE`) plus two card-specific `EVENT_CHOICE`
+  heuristics (Aldrich Ames Remix; How I Learned to Stop Worrying, whose
+  first-listed option sets DEFCON to 1 and so loses the game for the side
+  picking it). Other event-specific decision kinds fall back to the
   first legal option. This is approved scope, not an oversight: extend
-  `_SCORERS` as each one earns a heuristic worth writing. Note the fallback is
-  a measurable strength debt — `MCTSPlayer`'s rollouts run on this policy, so
-  a missing heuristic weakens search too.
+  `_SCORERS` as each one earns a heuristic worth writing. The fallback is a
+  measurable strength debt, not a theoretical one — `MCTSPlayer`'s rollouts
+  run on this policy, so a missing heuristic weakens search too, and
+  `scripts/behavior_probe.py` measured 3 of 40 self-played games ending on
+  that one `EVENT_CHOICE` default before it was scored. The general fix is
+  an engine-side one: the engine knows which options are self-destructive
+  and a `Player` has to re-derive it from card knowledge, so a decision
+  carrying that fact would retire the whole class of fallback losses at
+  once.
 - **`LLMPlayer` resends its conversation every call**, now with a
   character-budget safety valve: `STRUGGLER_LLM_CONTEXT_CHARS` (or the
   `max_context_chars` constructor arg) drops the oldest turns with a marker
