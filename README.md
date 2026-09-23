@@ -174,7 +174,7 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 
 ## Tests
 
-600 tests. They are the reason the rest of this is trustworthy: the engine's
+620 tests. They are the reason the rest of this is trustworthy: the engine's
 invariants are checked over random legal play rather than by example, and the
 strategy rules in `GreedyPlayer` each have a test that fails if the rule is
 removed.
@@ -265,10 +265,12 @@ The engine's backbone — difficult work, used more or less as designed:
 
 ### Added since
 
-- **The browser UI** (`ui/`, ~5,100 lines) and `scripts/serve_ui.py`: map
+- **The browser UI** (`ui/`, ~5,300 lines) and `scripts/serve_ui.py`: map
   rendering from board coordinates, click-to-place with the influence and
   DEFCON tracks, dice and card reveals, the history feed, a draggable split
-  between map and log, the start screen.
+  between map and log, the start screen, a floating action box that
+  shrink-wraps to its content, and a World view that fills the map's height so
+  a narrow window leaves no band above the hand.
 - **The VASSAL pipeline**: `install_vassal_ui_assets.py` maps the official
   module's art onto engine card ids, and `calibrate_countries.py` measures
   country rectangles from the board so markers land on the printed ovals.
@@ -278,7 +280,7 @@ The engine's backbone — difficult work, used more or less as designed:
 - **The strategy work**: [`docs/STRATEGY.md`](docs/STRATEGY.md) codes the
   published *Twilight Strategy* general-strategy articles into the greedy
   heuristic, quoting each article's sentence beside the rule it produced.
-- **The test suite** — 600 tests, including property-based invariants over
+- **The test suite** — 620 tests, including property-based invariants over
   random legal play and the strategy-rule tests.
 - **The documentation set** ([`docs/`](docs/), five ADRs, `CONTEXT.md`).
 

@@ -307,6 +307,37 @@ reaches it (rule 6.4.4), via `Engine._update_space_race_ability` and the
 `space_race_headline_reveal_holder` / `space_race_discard_holder` /
 `space_race_extra_round_holder`.
 
+### Which cards may be sent
+
+`Engine._can_space_race` gates the `space_race` play mode, and four kinds of
+card are outside it:
+
+- **The China Card** — forbidden by both printed faces. Spacing it would also
+  hand the opponent the +1 end-game VP for holding it (12.2) and forfeit its
+  4 Ops and Asian bonus.
+- **UN Intervention** — its own text: "may not be discarded for the Space
+  Race." Its only other use is the `un_intervention` combo mode offered on an
+  opponent's card (above), which stays available.
+- **Scoring cards** — no Ops to give up and no event to avoid, so spacing one
+  would be a way to dodge scoring a region rather than a way to dispose of an
+  unwanted event. `_play_modes` already routes a scoring card to its `event`
+  alone; the guard keeps that true for a direct caller.
+- **The acting side's own events**, while `events_enabled`. The Space Race
+  exists to dispose of an *opponent's* event the side must play anyway;
+  sending one's own to space would skip its upside, the opposite of the rule's
+  purpose. Neutral cards have no side's event to protect and stay spaceable.
+
+Ownership is judged by the card's printed side, so a card seized from the
+opponent's hand (Grain Sales to Soviets, Missile Envy, Ussuri River Skirmish)
+stays spaceable by its new holder. With events off nothing can fire, so the
+own-event guard does not apply and the option set is not silently narrowed.
+
+This is an *engine* rule, not a bot heuristic: the option is never offered.
+The reason it is enforced here rather than priced by `GreedyPlayer` is in
+`docs/BOTS.md` — a search that scores a root action by rolling out with a
+map-influence evaluator cannot see the China Card's deferred value, and
+sampled its way into spacing it on 6 of 40 seeds at one live decision.
+
 Box 4's sole holder picks their Headline card *second*, after seeing the
 opponent's already-committed pick. `_headline_pick_order` reverses the
 default USSR-then-US pick order for it, and `_push_headline` surfaces the
