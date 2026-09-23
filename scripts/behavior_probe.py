@@ -38,7 +38,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from struggler.arena import PlayerSpec, make_player  # noqa: E402
-from struggler.bots.greedy import _CARDS, _defcon_suicide_risk  # noqa: E402
+from struggler.bots.greedy import (  # noqa: E402
+    DEFCON_RISK_CONDITIONAL,
+    DEFCON_RISK_NONE,
+    DEFCON_RISK_UNCONDITIONAL,
+    _CARDS,
+    defcon_risk_kind,
+)
 from struggler.engine import DecisionKind, Engine, Side  # noqa: E402
 from struggler.runner import play_game  # noqa: E402
 
@@ -87,7 +93,12 @@ def summarize(game: dict) -> dict:
     """Behavior counters for one probed game."""
     counts = collections.Counter()
     events_offered = events_fired = 0
-    opponent_ops = opponent_suicide_ops = opponent_suicide_forced = 0
+    opponent_ops = 0
+    # Split by *kind* of risk, not lumped: the two sets mean different things
+    # (see `greedy.defcon_risk_kind`). One combined number printed beside
+    # "0 games ended at DEFCON 1" reads as a contradiction and misleads.
+    risk = collections.Counter()
+    forced = collections.Counter()
     for observation, decision, action in game["log"]:
         counts[f"kind:{decision.kind.value}"] += 1
         if decision.kind is not DecisionKind.PLAY_MODE:
@@ -106,20 +117,21 @@ def summarize(game: dict) -> dict:
                 events_fired += 1
         if not own and mode == "ops":
             opponent_ops += 1
-            if _defcon_suicide_risk(observation, observation.side, cid, "ops"):
-                opponent_suicide_ops += 1
+            kind = defcon_risk_kind(observation, observation.side, cid, "ops")
+            if kind != DEFCON_RISK_NONE:
+                risk[kind] += 1
                 if len(decision.options) == 1:
                     # Nothing else was on offer: the loss was created earlier,
                     # by holding this card into a DEFCON-2 round, not here.
-                    opponent_suicide_forced += 1
+                    forced[kind] += 1
     return {
         **game,
         "counts": counts,
         "own_events_offered": events_offered,
         "own_events_fired": events_fired,
         "opponent_cards_ops": opponent_ops,
-        "opponent_suicide_ops": opponent_suicide_ops,
-        "opponent_suicide_forced": opponent_suicide_forced,
+        "opponent_risk": risk,
+        "opponent_risk_forced": forced,
     }
 
 
@@ -149,11 +161,24 @@ def report(rows: list[dict], us: PlayerSpec, ussr: PlayerSpec, events: bool) -> 
     fired = sum(r["own_events_fired"] for r in rows)
     rate = f"{100 * fired / offered:.0f}%" if offered else "n/a"
     print(f"  own events     {fired} fired / {offered} offered ({rate})")
-    suicide = sum(r["opponent_suicide_ops"] for r in rows)
-    forced = sum(r["opponent_suicide_forced"] for r in rows)
+    # Two numbers, not one: `_defcon_suicide_risk` is an over-approximation by
+    # design, and the two card sets behind it mean different things. A single
+    # combined count printed beside "0 games ended at DEFCON 1" reads as a
+    # contradiction, and it will mislead the next person to read this.
+    risk = collections.Counter()
+    forced = collections.Counter()
+    for r in rows:
+        risk.update(r["opponent_risk"])
+        forced.update(r["opponent_risk_forced"])
     print(f"  opponent cards {sum(r['opponent_cards_ops'] for r in rows)} "
-          f"spent on Ops, of which {suicide} at a DEFCON-suicide risk "
-          f"({forced} of those with no other option on offer)")
+          f"spent on Ops, of which:")
+    print(f"    unconditional risk  {risk[DEFCON_RISK_UNCONDITIONAL]}  "
+          f"({forced[DEFCON_RISK_UNCONDITIONAL]} with no other option on offer)"
+          f"  -- the event drops DEFCON itself; any of these at DEFCON 2 is a loss")
+    print(f"    conditional risk    {risk[DEFCON_RISK_CONDITIONAL]}  "
+          f"({forced[DEFCON_RISK_CONDITIONAL]} with no other option on offer)"
+          f"  -- hands the opponent Ops; they must choose to coup into DEFCON 1,")
+    print(f"    {' ' * 20}     which loses for them, so it is usually declined")
 
     defcon_rows = [r for r in rows if r["reason"] == "defcon_1"]
     if defcon_rows:

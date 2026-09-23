@@ -660,6 +660,34 @@ pure-stdlib (no numpy/torch) and use `multiprocessing("spawn")`.
   self-played games to a DEFCON-1 self-kill by turn 5, neither of which
   showed up in a score. Read it before trusting a gate result, and again
   after any change to the DEFCON rules or the event heuristics.
+
+  Its risk line reports **two counts, not one**, because
+  `greedy._defcon_suicide_risk` is an over-approximation that covers two
+  different situations (`greedy.defcon_risk_kind`):
+
+  - *unconditional* (`_DEFCON_UNCONDITIONAL`: Duck and Cover, We Will Bury
+    You, KAL-007) — the event drops DEFCON itself, so committing one at
+    DEFCON 2 is a real loss. This count must be **0**; a non-zero reading is
+    a live DEFCON hole, not a number to explain away.
+  - *conditional* (`_DEFCON_OPPS_FOR_OPPONENT`: CIA Created, Lone Gunman,
+    Grain Sales to Soviets, Tear Down This Wall) — the event hands the
+    opponent Ops, and they must choose to coup a battleground. Couping into
+    DEFCON 1 loses the game for the *couper*, so a rational opponent usually
+    declines and the risk mostly does not materialise.
+
+  The two used to be printed as one number, which read as a contradiction
+  beside "0 games ended at DEFCON 1" (it was 56 on seeds 1-40, all of them
+  conditional) and misled the first person to read it.
+- **`scripts/h2h_revisions.py`** — the cross-revision gate. `arena.py`
+  compares players built from the *same* revision, so gating a bot change
+  against the previous bot needs this: extract the old file
+  (`git show <sha>:src/struggler/bots/greedy.py > /tmp/greedy_old.py`) and
+  pass it in. It loads both revisions in one process under private module
+  names, plays every seed with the seats swapped, and prints W-L-D, the win
+  rate with its Wilson interval, the end-reason split, and the DEFCON-1 loss
+  count *per revision*. Gate on the win rate **and** that column: the
+  DEFCON-1 count is what caught every real bug in this bot, including two
+  the win rate did not move on.
 - **`scripts/tune_greedy.py`** — CEM over `GreedyWeights`. Sampling is a
   Gaussian in log-weight space (all tunable weights are positive); fitness is
   the mean score across a fixed ladder (random, first, incumbent) on
