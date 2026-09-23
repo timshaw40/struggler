@@ -6,7 +6,7 @@ import importlib.util
 import random
 from pathlib import Path
 
-from struggler.bots.checkpoint import weights_to_dict
+from struggler.bots.checkpoint import FROZEN, weights_to_dict
 from struggler.bots.greedy import GreedyWeights
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +20,20 @@ def test_vec_to_weights_clamps_and_keeps_guardrails():
     weights = tg.vec_to_weights([1_000_000.0] * tg.DIM, base)
     assert weights.defcon_self_kill_penalty == base.defcon_self_kill_penalty
     assert all(getattr(weights, f) <= tg.CLAMP[1] for f in tg.TUNABLE)
+
+
+def test_the_tuner_never_perturbs_a_guardrail_or_a_playbook_judgement():
+    """The sentinels and the source-quoted judgements are held fixed: their
+    magnitude (or their size *relative* to the other playbook weights) is the
+    rule, and a per-dimension log-Gaussian search has no notion of either."""
+    frozen = set(FROZEN)
+    assert frozen.isdisjoint(tg.TUNABLE)
+    assert set(FROZEN).issubset(GreedyWeights.__dataclass_fields__), "a typo'd name would freeze nothing"
+    base = GreedyWeights()
+    # A sample that would otherwise move every dimension leaves them alone.
+    weights = tg.logvec_to_weights([3.0] * tg.DIM, base)
+    for name in FROZEN:
+        assert getattr(weights, name) == getattr(base, name), name
 
 
 def test_log_sample_maps_to_positive_weights():

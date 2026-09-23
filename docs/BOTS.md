@@ -537,6 +537,26 @@ def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
   the real engine enforces) — `defcon_self_kill_penalty` in `GreedyWeights`
   is orders of magnitude above every other weight specifically so this
   never gets outweighed by board value.
+- **DEFCON safety for card text** is a *separate* question from the Coup
+  rules above, and it is about **whose event resolves**, not about which
+  play mode was picked. Two things can resolve a card's text on this side's
+  turn: its own event (the `event` mode — and equally a Headline pick, which
+  5.1 resolves as the card's event), or the *opponent's* event, which fires
+  whenever their card is played for Ops (`Engine._push_play_mode`), and
+  which the engine never offers as a voluntary `event` mode — so for an
+  opponent's card, an Ops play is the only door through which a bot can
+  trigger one, and it is exactly as dangerous as an event play of its own.
+  `_defcon_suicide_risk(observation, side, cid, mode)` therefore tests
+  "does the text resolve, and is it fatal at this DEFCON", returning False
+  for the Space Race and UN Intervention (neither resolves the text) and
+  for a NEUTRAL card played for Ops (neutral events never fire that way).
+  `defcon_suicide_penalty` prices it, at the same magnitude as the Coup
+  self-kill. Pricing only the `event` mode left the Ops door open: measured
+  with `scripts/behavior_probe.py` over 40 self-played games before the
+  rule, 30 of 33 DEFCON-1 losses resolved through an opponent card played
+  for Ops (`Duck_and_Cover` and `KAL-007` almost always), each one then
+  taking the engine's `EVENT_OPS_ORDER` default of resolving the event
+  first.
 - **Which card, and how to spend it** (headline pick, action-round card
   pick, Ops vs. Event vs. Space Race mode): a card not worth its Ops value
   right now is worth more sent to the Space Race track instead (its
@@ -576,12 +596,27 @@ pure-stdlib (no numpy/torch) and use `multiprocessing("spawn")`.
   simple `elo` read the results. `scripts/run_arena.py` is the CLI.
   **Evaluate against a ladder, and gate on head-to-head, never on win rate
   vs one fixed opponent** — that saturates and misleads once a bot passes it.
+- **`scripts/behavior_probe.py`** — the arena's companion, and the reason a
+  head-to-head number is readable at all. It plays the same matchups and
+  reports what the games *looked* like: how each ended, how long they
+  lasted, the decision that immediately preceded every DEFCON-1 loss, own
+  events fired vs offered, opponent cards spent on Ops at a DEFCON-suicide
+  risk, and Coups/Realignments/Space Race attempts per game. Win rate alone
+  cannot distinguish a bot that plays well from one that is lucky — and at
+  this level it cannot even distinguish a bot that plays *at all*: the
+  shipped greedy fired 0 of 394 own-event opportunities and lost 33 of 40
+  self-played games to a DEFCON-1 self-kill by turn 5, neither of which
+  showed up in a score. Read it before trusting a gate result, and again
+  after any change to the DEFCON rules or the event heuristics.
 - **`scripts/tune_greedy.py`** — CEM over `GreedyWeights`. Sampling is a
   Gaussian in log-weight space (all tunable weights are positive); fitness is
   the mean score across a fixed ladder (random, first, incumbent) on
-  side-swapped seeds. `defcon_self_kill_penalty` is a guardrail and is never
-  tuned. The best candidate is re-scored on a *held-out* seed bank against the
-  incumbent and only saved if it wins. This deliberately avoids the earlier
+  side-swapped seeds. What it never perturbs is `checkpoint.FROZEN`: the
+  guardrail sentinels (`defcon_self_kill_penalty`, `defcon_suicide_penalty`),
+  and the `PLAYBOOK` judgements quoted from the strategy source, whose
+  comments depend on their relative sizes — see the `checkpoint` module
+  docstring. The best candidate is re-scored on a *held-out* seed bank against
+  the incumbent and only saved if it wins. This deliberately avoids the earlier
   champion-vs-challenger self-play tuner's failure mode (a single opponent).
 - **`bots/value.py` + `scripts/train_value.py`** — a learned, antisymmetric
   board value (`value(US) + value(USSR) = 1`) over ~19 public-state features,

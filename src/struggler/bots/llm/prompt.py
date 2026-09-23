@@ -115,6 +115,9 @@ _COMMON_GUIDANCE = [
     "  - Reserve non-Battleground coups for when DEFCON is already at 2"
     "  - 1 or 2 Stability battlegrounds are especially cheap to coup, don't coup countries with more stability.",
     "  - Never trigger a DEFCON-degrading Event on your own AR at DEFCON 2. Same for opponent Events that hand them Ops.",
+    "  - An opponent's card fires ITS event when you play it for Ops -- the engine never lets you play their card as an event, "
+    "so 'play it for Ops instead' is not an escape from a DEFCON-degrading opponent card. At DEFCON 2, don't commit it at all: "
+    "space it, or play a different card and hold it. How I Learned to Stop Worrying offers DEFCON levels -- never pick 1.",
     "  - Plan every turn to space one card: one with a nasty rival event but without high ops that makes it not worth it using as Ops.",
     "  - Deck reshuffles on turns 3 and 7. From turn 7 on, discarding is removal.",
     "  - Resolve the opponent Event first, then spend the Ops to repair it.",
