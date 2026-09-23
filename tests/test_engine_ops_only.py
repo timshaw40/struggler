@@ -126,6 +126,15 @@ def test_observe_exposes_public_track_state():
     assert obs.military_ops == {"US": 3, "USSR": 0}
 
 
+def test_observe_reports_whether_the_event_layer_is_on():
+    # The `event` play mode is offered either way, but with events off it
+    # resolves no text at all, so a player that prices events has to be able
+    # to tell the two games apart. Public by construction (it is a property
+    # of the match, like the variant), so it is not a hidden-information leak.
+    assert Engine.new_game(seed=1).observe(Side.US).events_enabled is True
+    assert Engine.new_game(seed=1, events=False).observe(Side.US).events_enabled is False
+
+
 def test_observe_does_not_leak_in_progress_secret_headline_pick():
     # Headline is a simultaneous, secret reveal: while USSR has picked but
     # US hasn't, US's Observation must not carry USSR's pick anywhere.

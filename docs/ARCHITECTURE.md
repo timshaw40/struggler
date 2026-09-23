@@ -222,3 +222,11 @@ through the public API alone, with no event mechanics involved" is a
 property worth being able to test in isolation. `serialize()` carries
 `events_enabled` alongside `turn_effects` and `game_effects`, so a saved
 game round-trips its event state either way (mandate #5).
+
+`Observation.events_enabled` reports the same flag, because a `Player` has
+to know whether playing a card for its event does anything at all: with the
+layer off, the `event` mode is still offered (the enumeration stays uniform)
+but it is a no-op discard, and a bot that priced events without checking
+this would misprice every card in an events-off game — the mode exists, the
+text does not. Same shape as `Observation.space_race_attempts`: public game
+state the engine tracked and had simply never surfaced.

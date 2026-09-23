@@ -189,3 +189,9 @@ class Observation:
     # Underlined event cards whose permanent effect is live, face-up beside
     # the board (2.2.5) — public, like the discard pile.
     in_play_cards: tuple[str, ...]
+    # Whether the event layer is on for this game (`Engine.events_enabled`,
+    # the `events=False` Ops-only variant). Public by construction, and the
+    # only way a `Player` can tell whether playing a card for its event
+    # resolves any text at all: with the layer off the `event` mode is still
+    # offered, but it is a no-op discard.
+    events_enabled: bool
