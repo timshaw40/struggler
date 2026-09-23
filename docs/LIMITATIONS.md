@@ -77,7 +77,11 @@ routed to the operator is described in [BOTS.md](BOTS.md).
   an engine-side one: the engine knows which options are self-destructive
   and a `Player` has to re-derive it from card knowledge, so a decision
   carrying that fact would retire the whole class of fallback losses at
-  once.
+  once. Measured instance: self-play seed 27, where the USSR played the US's
+  Star Wars for Ops at DEFCON 2 and the US seat's fallback took the first
+  discard card — Duck and Cover — ending the game. Both revisions lose this
+  shape (the head-to-head DEFCON-1 column ties 2-2 on it), so it is a
+  pre-existing hole the turn plan does not cover, and the natural next rule.
 - **`GreedyPlayer`'s own-event valuation is a table of extremes**
   (`_OWN_EVENT_VALUE`), not a model of the events: it prices the playbook's
   unconditional calls ("Always event", "Free event") and leaves every
@@ -97,6 +101,22 @@ routed to the operator is described in [BOTS.md](BOTS.md).
   Will Bury You, How I Learned to Stop Worrying), and over 10 self-played games
   with the shipped rules the situation did not arise once — which is why this
   is a documented gap rather than a rule: it is unpriced, not unreachable.
+- **The turn plan has four blind spots.** `defcon_floor` only constrains
+  *coups* — an event that drops the marker to 2 while a dispose card stays
+  in hand is the same lost position and is still unpriced (the gap above).
+  The floor deliberately does not engage for conditional holdings either:
+  holding CIA Created at 3 and couping to 2 enters a position the existing
+  refusals manage (the opponent usually declines the losing coup), which is
+  a judgement call, not a proof — see the plan tests.
+  `dispose` only names cards lethal at DEFCON 2, so a card that is merely
+  awful (the rest of the Space Race lists) never enters the plan. The
+  ordering inside `dispose` is a heuristic, not a measurement: higher Ops
+  first assumes the greater temptation is the greater urgency. And
+  `region_focus` is an argmax over current favourability — a proxy for
+  "where influence changes the scored outcome most", which ignores which
+  countries are actually contestable this turn. Each of these is a place the
+  plan can be extended without changing its shape: the fields stay, the
+  contents get smarter.
 - **`scoreboard_value` is linear, and so it is myopic.** It prices the VP
   track and the Military Operations shortfall difference, but it has no
   notion of protecting a lead: a bot 15 VP ahead should trade differently

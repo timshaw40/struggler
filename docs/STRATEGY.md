@@ -68,6 +68,17 @@ and annotated-games (theory). These are **our** operational rules for
   card choice too, and refused there once the attempt is gone. Dropping DEFCON
   to 2 with two such cards in hand is a lost position entered several turns
   earlier, which is what the Coup scoring charges for.
+- **Keep the countdown as an explicit turn plan.** The bot recomputes
+  `plan_turn` from each observation: `dispose` names the hand's unplayable
+  cards first ("cards that will immediately lose you the game (e.g.,
+  DEFCON suicide cards)" — the Space Race article's top priority),
+  `defcon_floor` holds the marker at 3 while an unconditional one is held ("you lose the
+  game if DEFCON drops to 1 on your turn. It doesn't matter who 'caused'
+  it: if it happened on your watch, you're responsible for humanity's
+  destruction" — the DEFCON article's governing rule), and `region_focus`
+  points this turn's influence at the held scoring card's region. Five
+  scorers consult it: the card choice, the play mode, the Ops type, the
+  coup target, and influence placement.
 - **Coup when you are behind on Military Operations.** Coups and war events
   pay the requirement, realignments do not, and the shortfall is assessed at
   the end of the turn — so the same Coup is worth more on the last action

@@ -630,6 +630,47 @@ loss shapes measured on this bot were of that kind: the rule was right and
 one decision too late. When a rule is "never do X", check which decision
 actually performs X and whether the scorer for it has the facts.
 
+### The turn plan
+
+Every scorer above prices exactly one decision, so without a plan the bot
+creates its own losses several turns before they happen: the measured case
+is a hand holding a card that cannot be committed at DEFCON 2, discovered
+only once the marker is already there (the #34 death trace). `plan_turn`
+in `bots/greedy.py` is the plan it consults at each decision instead — a
+pure function of `(observation, side, weights)` returning a `TurnPlan` with
+three fields:
+
+- `dispose`: the cards in hand that cannot be committed at DEFCON 2, most
+  urgent first (unconditional degraders, then conditional ones, higher Ops
+  first). Consulted by `_score_action_round_play` — a dispose card is
+  preferred while a Space Race attempt remains and refused once it is gone
+  — and by `_score_play_mode`, which spaces a dispose card even at high
+  DEFCON, where `_strand_disposal_bonus` is silent and the Ops are tempting.
+- `defcon_floor`: the lowest DEFCON the bot's own actions may leave this
+  turn — 3 while an *unconditional* degrader is held, 2 otherwise, never
+  above the current marker. Conditional holdings do not engage it: the
+  opponent must choose to coup into DEFCON 1, which loses for them, so they
+  usually decline, and refusing every battleground coup at 3 for that would
+  concede certain tempo against a danger that mostly does not materialise.
+  Consulted by `_score_ops_type` (a "coup" with no floor-legal target is
+  refused as an Ops type) and `_score_coup_target` (a battleground coup
+  below the floor is refused as a target).
+- `region_focus`: the held scoring card's region, or None. Consulted by
+  `_score_place_influence`, so this turn's influence agrees with the card
+  choice instead of each re-deriving it.
+
+Purity is load bearing, not style: `plan_turn` holds no instance state and
+no cache, because `PlayerSpec` is pickled to worker processes and
+`MCTSPlayer` clones games — a stored plan would silently diverge between
+clones. It also keeps greedy honest under ADR-0005: the plan sees only
+`observe(side)`. Every field has a test that fails with the field's wiring
+removed (this repo's standard for a strategy rule), and the plan is gated
+like any other change: `scripts/h2h_revisions.py` against the previous bot
+plus the probe's unconditional-risk line at 0. If a run ever shows a
+DEFCON-1 loss or a collapsing end turn, check the plan is being consulted
+before touching a weight — every failure of this kind so far has been a
+rule written correctly and never reached, not a rule with the wrong number.
+
 `tests/test_greedy.py` covers the DEFCON safety rule, the fallback
 behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`
 over many seeds, both seat assignments) — a regression net for "the

@@ -41,6 +41,8 @@ PLAYBOOK = (
     "realignment_above_defcon_2_penalty",
     # How I Learned to Stop Worrying's DEFCON-level preference
     "defcon_setting_weight",
+    # The turn plan's region focus (sized against influence_base and control)
+    "plan_region_focus_bonus",
 )
 
 # What the tuner holds fixed. `tune_greedy.py` reads this, not `GUARDRAILS`.

@@ -44,7 +44,7 @@ Single-context layout: `CONTEXT.md` and `docs/adr/` at the repo root. See
 
 - **Python**: 3.12+.
 - **Tests**: `pytest`, plus `hypothesis` for property-based tests. Run the
-  full suite before committing (`.venv/bin/pytest -q`, ~620 tests, well under
+  full suite before committing (`.venv/bin/pytest -q`, ~660 tests, about
   a minute). Four `test_web_ui.py` tests fail when binding a socket is denied
   by the sandbox; those are environmental, not regressions.
 - **Environment**: `.venv` managed with `uv` (`uv pip install --python
