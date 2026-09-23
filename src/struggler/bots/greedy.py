@@ -914,18 +914,29 @@ def _score_place_influence(weights: GreedyWeights, board: Board, observation: Ob
     country = action.payload["country"]
     if observation.pending_decision.context.get("setup"):
         return _score_setup_place(board, side, country)
+    return _place_influence_value(weights, board, observation, side, country)
+
+
+def _place_influence_value(
+    weights: GreedyWeights, board: Board, observation: Observation, side: Side, country: str
+) -> float:
+    """The shared economics of one influence point: base, marginal board swing,
+    turn-1 tiers, the plan's region, minus the doubled-cost penalty. Used by
+    both the Ops-type scorer and the event scorer, so a free point and a paid
+    point agree on where countries rank."""
     cost = board.influence_cost(side, country)
     gain = _marginal_gain(weights, board, side, country, 1)
     # The plan's region: this turn's influence goes where the held scoring
     # card scores, so placement agrees with the card choice. A placement the
-    # plan is not contesting keeps its ordinary price.
-    plan = plan_turn(observation, side, weights)
-    focus = (
-        weights.plan_region_focus_bonus
-        if plan.region_focus is not None
-        and board.countries[country].region is plan.region_focus
-        else 0.0
-    )
+    # plan is not contesting keeps its ordinary price. The plan is built from
+    # the observer's hand, so it only applies when the mover *is* the
+    # observer -- every current event moves the chooser's own side, and a
+    # future one that does not keeps the board economics without the focus.
+    focus = 0.0
+    if side is observation.side:
+        plan = plan_turn(observation, side, weights)
+        if plan.region_focus is not None and board.countries[country].region is plan.region_focus:
+            focus = weights.plan_region_focus_bonus
     return (
         weights.influence_base
         + gain
@@ -933,6 +944,33 @@ def _score_place_influence(weights: GreedyWeights, board: Board, observation: Ob
         + focus
         - (cost - 1) * weights.doubled_cost_penalty
     )
+
+
+def _score_event_influence(
+    weights: GreedyWeights, board: Board, observation: Observation, action: Action
+) -> float:
+    """Event-driven influence (Decolonization, Suez Crisis, Junta's placement,
+    ...): one country per decision, no Ops changing hands.
+
+    Without this, the kind falls back to the first legal option -- the
+    candidates arrive in map order, so the bot "preferred" whatever country
+    the data file lists first. The measured case: Decolonization placing
+    into non-battlegrounds while battlegrounds in the same region sat empty.
+    Placement reuses the Ops economics exactly (a free point should rank
+    countries like a paid one); removal prices the board swing the points
+    are worth to the mover, from the chooser's side of the board."""
+    ctx = observation.pending_decision.context
+    mover = Side(ctx["inf_side"])
+    country = action.payload["country"]
+    if ctx["op"] == "place":
+        return _place_influence_value(weights, board, observation, mover, country)
+    have = board.influence[country][mover.value]
+    n = have if ctx.get("whole") else min(ctx.get("amount", 1), have)
+    before = board_value(weights, board, observation.side)
+    board.influence[country][mover.value] -= n
+    after = board_value(weights, board, observation.side)
+    board.influence[country][mover.value] += n
+    return after - before
 
 
 def _t1_placement_bonus(
@@ -1635,6 +1673,7 @@ def _score_event_choice(weights: GreedyWeights, board: Board, observation: Obser
 
 _SCORERS: dict[DecisionKind, Callable[[GreedyWeights, Board, Observation, Action], float]] = {
     DecisionKind.PLACE_INFLUENCE: _score_place_influence,
+    DecisionKind.EVENT_INFLUENCE: _score_event_influence,
     DecisionKind.COUP_TARGET: _score_coup_target,
     DecisionKind.REALIGNMENT_TARGET: _score_realignment_target,
     DecisionKind.OPS_TYPE: _score_ops_type,

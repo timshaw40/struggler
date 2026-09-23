@@ -616,10 +616,14 @@ def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
   option set is unchanged, so the Space Race stays a live choice: only the
   cards it can never be right to send are missing from it.
 
-Only the core board decision kinds get real heuristics; every
-event-specific kind falls back to the first legal option. That scope, and
-why it is deliberate, is in [LIMITATIONS.md](LIMITATIONS.md) — extend
-`_SCORERS` as each kind earns a heuristic worth writing.
+Only the core board decision kinds plus `EVENT_INFLUENCE` get real
+heuristics; every other event-specific kind falls back to the first legal
+option. That scope, and why it is deliberate, is in
+[LIMITATIONS.md](LIMITATIONS.md) — extend `_SCORERS` as each kind earns a
+heuristic worth writing. Event placement reuses the Ops economics exactly
+(a free point ranks countries like a paid one), and event removal prices
+the board swing the points are worth to the mover — before this,
+Decolonization placed into whatever the candidate list ordered first.
 
 A refusal has to be repeated at **every** decision level that can commit the
 card, because each scorer is only ever asked about the options of its own

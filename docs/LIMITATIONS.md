@@ -64,7 +64,9 @@ routed to the operator is described in [BOTS.md](BOTS.md).
 
 - **`GreedyPlayer` scores the core decision kinds** (`PLACE_INFLUENCE`,
   `COUP_TARGET`, `REALIGNMENT_TARGET`, `OPS_TYPE`, `HEADLINE_PLAY`,
-  `ACTION_ROUND_PLAY`, `PLAY_MODE`) plus two card-specific `EVENT_CHOICE`
+  `ACTION_ROUND_PLAY`, `PLAY_MODE`) plus `EVENT_INFLUENCE` (placement reuses
+  the Ops economics, removal prices the board swing) and two card-specific
+  `EVENT_CHOICE`
   heuristics (Aldrich Ames Remix; How I Learned to Stop Worrying, whose
   first-listed option sets DEFCON to 1 and so loses the game for the side
   picking it). Other event-specific decision kinds fall back to the
