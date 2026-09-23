@@ -1317,3 +1317,53 @@ def test_place_influence_prefers_the_plan_region():
     assert player.option_scores(focused)[0] - player.option_scores(plain)[0] == pytest.approx(
         player.weights.plan_region_focus_bonus
     )
+
+
+# -- event influence is scored, not first-listed --------------------------------
+
+_DECOLONIZATION_CTX = {
+    "event": "Decolonization", "op": "place", "choose_side": "USSR",
+    "inf_side": "USSR", "remaining": 4, "cap": 1, "whole": False,
+    "requires_uncontrolled": False, "exclude_controlled_by": None,
+    "amount": 1, "placed": {},
+}
+
+
+def _event_influence_decision(ctx, *countries):
+    return Decision(
+        id=920, actor=Side(Side(ctx["choose_side"])), kind=DecisionKind.EVENT_INFLUENCE,
+        options=tuple(
+            Action(DecisionKind.EVENT_INFLUENCE, {"country": c}) for c in countries
+        ),
+        context=dict(ctx),
+    )
+
+
+def test_event_placement_prefers_battlegrounds_over_list_order():
+    """The reported game: Decolonization's candidates arrive in map order, so
+    the old first-option fallback placed into whatever the data file lists
+    first. A battleground is worth more than a non-battleground in the same
+    empty region, whichever order the options arrive in."""
+    player = GreedyPlayer()
+    # Cameroon (non-BG) lists before Nigeria (BG); the bot must not care.
+    decide = _event_influence_decision(_DECOLONIZATION_CTX, "Cameroon", "Nigeria")
+    obs = dataclasses.replace(_clean_obs(Side.USSR, 5), pending_decision=decide)
+    assert player.choose_action(obs, []).payload["country"] == "Nigeria"
+    # And reversed: still Nigeria, proving this is valuation, not position.
+    decide2 = _event_influence_decision(_DECOLONIZATION_CTX, "Nigeria", "Cameroon")
+    obs2 = dataclasses.replace(_clean_obs(Side.USSR, 5), pending_decision=decide2)
+    assert player.choose_action(obs2, []).payload["country"] == "Nigeria"
+
+
+def test_event_removal_takes_the_highest_value_target():
+    """Suez Crisis lists France first, but the UK stack is worth more: removal
+    prices the board swing, not the candidate order."""
+    player = GreedyPlayer()
+    ctx = dict(
+        _DECOLONIZATION_CTX, event="Suez_Crisis", op="remove", inf_side="US",
+        remaining=4, cap=2,
+    )
+    decide = _event_influence_decision(ctx, "France", "UK")
+    obs = _clean_obs(Side.USSR, 5, [(Side.US, "UK", 5), (Side.US, "France", 1)])
+    obs = dataclasses.replace(obs, pending_decision=decide)
+    assert player.choose_action(obs, []).payload["country"] == "UK"
