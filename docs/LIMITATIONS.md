@@ -10,6 +10,20 @@ way.
   than an ongoing visibility grant surfaced through `observe()`. Modeling
   it properly would add a new hidden/shared-visibility field to the public
   `Observation` API, which is a larger change than a card-logic fix.
+- **The Space Race accepts a narrower card set than the printed rules do.**
+  `Engine._can_space_race` refuses the China Card, UN Intervention, scoring
+  cards, and (with events on) the acting side's own events; see
+  [CARDS.md](CARDS.md) for the per-card reasons, three of which are the
+  cards' own printed text. The fourth — one's own events — is a deliberate
+  **engine-level** restriction rather than a bot heuristic, so it changes
+  play for every `Player`, human included. The justification is that the
+  alternative is not a fair choice for any non-search player either: a bot
+  that scores a root action by rolling out with a map-influence evaluator
+  cannot see a card's deferred value, and empirically spaced the China Card
+  on 6 of 40 seeds at one live decision. Removing the option makes the
+  mistake unrepresentable rather than merely discouraged. If a future
+  evaluator can price a held card's deferred value, this is the first
+  limitation to lift.
 
 ## Data
 

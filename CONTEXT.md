@@ -72,7 +72,10 @@ repeated here.
 - **VP** — victory points, US-positive (a positive total favors the US).
 - **Military Ops** — the military-operations track.
 - **Space Race** — the 1–8 track; reaching box 8 grants an absolute 8
-  action rounds per turn (6.4.4).
+  action rounds per turn (6.4.4). A card is **spaceable** when
+  `Engine._can_space_race` allows it for that side: the China Card, UN
+  Intervention, scoring cards, and the side's own events are not, so a
+  "spaceable" card is the opponent's event one cannot otherwise mitigate.
 - **Influence vs. realignment "up to" spends** — a player may stop an
   influence or realignment spend early, once one point/roll is down
   (6.1.3 / 6.2.2); the decision offers an explicit stop option.
