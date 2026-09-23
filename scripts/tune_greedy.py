@@ -27,10 +27,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from struggler.arena import PlayerSpec, head_to_head, play_one, run_matchup  # noqa: E402
-from struggler.bots.checkpoint import GUARDRAILS, load_weights, save_weights, weights_to_dict  # noqa: E402
+from struggler.bots.checkpoint import FROZEN, load_weights, save_weights, weights_to_dict  # noqa: E402
 from struggler.bots.greedy import GreedyWeights  # noqa: E402
 
-TUNABLE = [f.name for f in fields(GreedyWeights) if f.name not in GUARDRAILS]
+TUNABLE = [f.name for f in fields(GreedyWeights) if f.name not in FROZEN]
 DIM = len(TUNABLE)
 LOG_FLOOR = 0.03  # minimum per-dimension std in log space
 CLAMP = (1e-4, 1e4)
@@ -42,7 +42,7 @@ def _clamp(x: float) -> float:
 
 def vec_to_weights(vec: list[float], guard: GreedyWeights) -> GreedyWeights:
     kw = {f: _clamp(v) for f, v in zip(TUNABLE, vec)}
-    for g in GUARDRAILS:
+    for g in FROZEN:
         kw[g] = getattr(guard, g)
     return GreedyWeights(**kw)
 

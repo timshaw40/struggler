@@ -1,9 +1,19 @@
 """JSON (de)serialization for `GreedyWeights`.
 
 Tuned weights need to be saved, diffed, and reconstructed inside worker
-processes, so they cross a process boundary as a plain dict. Guardrail
-fields (currently just `defcon_self_kill_penalty`) are still written but the
-tuner never perturbs them.
+processes, so they cross a process boundary as a plain dict. Two groups of
+fields are still written but never perturbed by the tuner:
+
+- `GUARDRAILS` — the "never do this" sentinels, whose magnitude is the whole
+  point (`defcon_self_kill_penalty`, `defcon_suicide_penalty`);
+- `PLAYBOOK` — the judgements quoted from the strategy source (see
+  `docs/STRATEGY.md`), whose comments depend on their *relative* sizes: the
+  turn-1 plan is deliberately "below the headline bonus (40) and above the
+  ordinary board-value swing a single Influence point buys". A per-dimension
+  log-Gaussian search has no notion of those orderings, so tuning the set
+  freely can dissolve a sourced rule into an arbitrary number without anyone
+  noticing. Change one deliberately, with its source quoted and the arena gate
+  run — not as a search dimension.
 """
 
 from __future__ import annotations
@@ -15,7 +25,26 @@ from typing import Any, Mapping
 
 from struggler.bots.greedy import GreedyWeights
 
-GUARDRAILS = ("defcon_self_kill_penalty",)
+GUARDRAILS = ("defcon_self_kill_penalty", "defcon_suicide_penalty")
+
+PLAYBOOK = (
+    # Turn 1, from "General Strategy: Turn 1"
+    "t1_headline_bonus",
+    "t1_iran_coup_bonus",
+    "t1_plan_bonus",
+    "t1_us_retaliatory_coup_penalty",
+    # Space Race / reshuffles / realignments, from their articles
+    "space_race_card_bonus",
+    "reshuffle_timing_bonus",
+    "realignment_access_bonus",
+    "realignment_at_defcon_2_bonus",
+    "realignment_above_defcon_2_penalty",
+    # How I Learned to Stop Worrying's DEFCON-level preference
+    "defcon_setting_weight",
+)
+
+# What the tuner holds fixed. `tune_greedy.py` reads this, not `GUARDRAILS`.
+FROZEN = GUARDRAILS + PLAYBOOK
 
 
 def weights_to_dict(weights: GreedyWeights) -> dict[str, float]:
