@@ -174,7 +174,7 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 
 ## Tests
 
-637 passing tests (8 skipped on the current tree). They are the reason the rest
+654 passing tests (4 skipped on the current tree). They are the reason the rest
 of this is trustworthy: the engine's invariants are checked over random legal
 play rather than by example, and the strategy rules in `GreedyPlayer` each have
 a test that fails if the rule is removed.
@@ -196,6 +196,7 @@ and the value fit are pure-stdlib.
 pip install -e ".[rl]"
 
 python scripts/run_arena.py --help          # head-to-head / round-robin, Elo
+python scripts/h2h_revisions.py --help      # gate a bot change vs the previous bot
 python scripts/tune_greedy.py --help        # CEM over GreedyWeights
 python scripts/train_value.py --help        # learned MCTS board value
 python scripts/train_ppo.py --iterations 200 --games 64 --workers 8
@@ -280,7 +281,7 @@ The engine's backbone — difficult work, used more or less as designed:
 - **The strategy work**: [`docs/STRATEGY.md`](docs/STRATEGY.md) codes the
   published *Twilight Strategy* general-strategy articles into the greedy
   heuristic, quoting each article's sentence beside the rule it produced.
-- **The test suite** — 637 passing tests, including property-based invariants over
+- **The test suite** — 654 passing tests, including property-based invariants over
   random legal play and the strategy-rule tests.
 - **The documentation set** ([`docs/`](docs/), five ADRs, `CONTEXT.md`).
 

@@ -1073,3 +1073,57 @@ def test_realignments_are_preferred_at_defcon_2():
 
     assert score(2) > score(3), "DEFCON 2 should favour the realignment"
     assert score(3) == score(5)
+
+
+# -- the probe's risk counter: two sets, two meanings ------------------------
+
+
+def test_defcon_risk_kind_names_the_two_sets_separately():
+    """The probe printed one combined number beside "0 games ended at DEFCON 1",
+    which reads as a contradiction and misleads. `_defcon_suicide_risk` is an
+    over-approximation by design -- right for a scorer, wrong for a counter."""
+    from struggler.bots.greedy import (
+        DEFCON_RISK_CONDITIONAL,
+        DEFCON_RISK_NONE,
+        DEFCON_RISK_UNCONDITIONAL,
+        defcon_risk_kind,
+    )
+
+    # Category 1: the event drops DEFCON itself. Real at DEFCON 2.
+    at2 = _clean_obs(Side.USSR, 2)
+    assert defcon_risk_kind(at2, Side.USSR, "Duck_and_Cover", "ops") == DEFCON_RISK_UNCONDITIONAL
+
+    # Category 2: the event hands the opponent Ops. It only threatens when they
+    # have a battleground of ours to coup, which is why the flag is conditional.
+    armed = _clean_obs(Side.USSR, 2, [(Side.USSR, "Angola", 3)])
+    assert defcon_risk_kind(armed, Side.USSR, "CIA_Created", "ops") == DEFCON_RISK_CONDITIONAL
+    # Same card, nothing to coup: not a risk at all.
+    assert defcon_risk_kind(_clean_obs(Side.USSR, 2), Side.USSR, "CIA_Created", "ops") == DEFCON_RISK_NONE
+
+    # A safe card, and a safe context, are both "none".
+    assert defcon_risk_kind(at2, Side.USSR, "Containment", "ops") == DEFCON_RISK_NONE
+    assert defcon_risk_kind(_clean_obs(Side.USSR, 4), Side.USSR, "Duck_and_Cover", "ops") == DEFCON_RISK_NONE
+
+
+def test_defcon_risk_kind_agrees_with_the_predicate_it_wraps():
+    """It must never disagree with `_defcon_suicide_risk`, or the counter and
+    the scorer would be reading different games."""
+    from struggler.bots.greedy import DEFCON_RISK_NONE, defcon_risk_kind
+
+    for obs_side, defcon, country in ((Side.USSR, 2, None), (Side.US, 2, None), (Side.USSR, 3, None)):
+        obs = _clean_obs(obs_side, defcon, [(obs_side, "Angola", 3)] if country else None)
+        for cid in ("Duck_and_Cover", "CIA_Created", "Containment", "Lone_Gunman"):
+            for mode in ("ops", "event", "space_race"):
+                flagged = _defcon_suicide_risk(obs, obs_side, cid, mode)
+                kind = defcon_risk_kind(obs, obs_side, cid, mode)
+                assert (kind != DEFCON_RISK_NONE) == flagged, (cid, mode, kind)
+
+
+def test_a_new_suicide_rule_must_be_taught_to_the_classifier(monkeypatch):
+    """`defcon_risk_kind` raises rather than bucketing an unknown case as
+    "cannot kill me" -- the one answer that must never be wrong."""
+    import struggler.bots.greedy as greedy
+
+    monkeypatch.setattr(greedy, "_defcon_suicide_risk", lambda *a, **k: True)
+    with pytest.raises(AssertionError, match="neither category"):
+        greedy.defcon_risk_kind(_clean_obs(Side.USSR, 2), Side.USSR, "Containment", "ops")

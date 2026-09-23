@@ -517,6 +517,45 @@ def _opponent_can_coup_a_battleground(observation: Observation, side: Side) -> b
     return False
 
 
+DEFCON_RISK_NONE = "none"
+"""Committing this card cannot lose the game to DEFCON 1."""
+DEFCON_RISK_UNCONDITIONAL = "unconditional"
+"""The event drops DEFCON itself, so committing it at DEFCON 2 *is* the loss.
+`_DEFCON_UNCONDITIONAL` -- Duck and Cover, We Will Bury You, KAL-007."""
+DEFCON_RISK_CONDITIONAL = "conditional"
+"""The event hands the opponent Ops, and they must choose to coup a
+battleground with them. Couping into DEFCON 1 loses the game for the *couping*
+side, so a rational opponent usually declines and the risk mostly does not
+materialise. `_DEFCON_OPPS_FOR_OPPONENT` -- CIA Created, Lone Gunman, Grain
+Sales to Soviets, Tear Down This Wall."""
+
+
+def defcon_risk_kind(observation: Observation, side: Side, cid: str, mode: str) -> str:
+    """`_defcon_suicide_risk`'s two card sets, named separately.
+
+    The predicate is deliberately an over-approximation: it answers "could this
+    kill me", not "will this kill me". That is the right question for a scorer
+    (never gamble the game) and the wrong one for a *counter*, where the two
+    sets mean very different things -- an unconditional risk at DEFCON 2 is a
+    real loss, while a conditional one is usually declined by the opponent.
+    Reporting them as one number produced a line that read as a contradiction
+    ("56 at a DEFCON-suicide risk" beside "0 games ended at DEFCON 1").
+    """
+    if not _defcon_suicide_risk(observation, side, cid, mode):
+        return DEFCON_RISK_NONE
+    if cid in _DEFCON_UNCONDITIONAL:
+        return DEFCON_RISK_UNCONDITIONAL
+    if cid in _DEFCON_OPPS_FOR_OPPONENT:
+        return DEFCON_RISK_CONDITIONAL
+    # `_defcon_suicide_risk` grew a third case without this function being
+    # taught about it. Fail loudly rather than silently bucketing it as
+    # "cannot kill me", which is the one answer that must never be wrong.
+    raise AssertionError(
+        f"{cid!r} is a DEFCON-suicide risk but is in neither category; "
+        f"teach defcon_risk_kind() about it"
+    )
+
+
 def _defcon_suicide_risk(observation: Observation, side: Side, cid: str, mode: str) -> bool:
     """Whether committing `cid` as `mode` can lose the game to DEFCON 1.
 
