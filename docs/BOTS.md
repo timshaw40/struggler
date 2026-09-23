@@ -564,6 +564,49 @@ def board_value(weights: GreedyWeights, board: Board, side: Side) -> float:
   Ops-point value forfeited) — the concrete form of "send bad cards to the
   Space Race." A scoring card's headline/play value is its `score_region()`
   net VP, signed favorably or unfavorably for the acting side.
+- **Own events are priced, narrowly** (`_OWN_EVENT_VALUE`). The `event` mode
+  spends no Ops, so the choice is "the event, or `ops` points of Operations",
+  and the table holds only the cards the playbook calls a default — "Always
+  event", "Strong event", "Free event" — with the value in `board_value`
+  units compared directly against `ops_mode_per_point` x the card's Ops.
+  Everything conditional ("Event once they've invested in the Middle East",
+  "Worthless played late") is deliberately *not* priced: an unlisted card
+  keeps the Ops-first default, which is right far more often than a guess
+  would be. Two cards carry their condition instead of being dropped
+  (`_EARLY_TURN_EVENTS`: Containment and Brezhnev Doctrine are "first AR of
+  the turn" cards, and the action round is in the observation). The same
+  table prices the Headline pick, since a headline resolves as the event and
+  costs no action round. Before it existed the bot fired an own event in
+  **0 of 1298** opportunities over 40 self-played games — it played every
+  game as an Ops-only opponent.
+- **The DEFCON marker is a clock, not just a floor** (`_unavoidable_strands`).
+  A card whose text resolves to DEFCON 1 cannot be committed at all once the
+  marker is at 2 — Ops fires the opponent's event and the Space Race is the
+  only door left, one attempt a turn (two with Captured Nazi Scientist, read
+  from `game_effects`). So holding one is a countdown, and three places pay
+  for it: the **card choice** (`_score_action_round_play`) scores such a card
+  as the disposal it should be when an attempt is left, and as a
+  `defcon_suicide_penalty` loss when there is not — the mode choice happens
+  *after* the card choice, so a card that is never picked can never be
+  spaced; a Coup that would take DEFCON from 3 to 2 is priced at
+  `defcon_strand_penalty` per card that would then be unplayable
+  (`_strand_penalty`); and such a card is pushed to the Space Race at
+  `strand_disposal_bonus` while the marker is still high.
+  The card-choice half is the one that mattered: the remaining DEFCON-1
+  losses all had the same shape — at DEFCON 2, holding five cards, the bot
+  picked the opponent's 4-Ops DEFCON degrader for its Ops (the highest score
+  in the hand) and every mode left for that card was fatal. `_score_play_mode`
+  cannot see that, because it is never asked about a card that was not picked.
+- **The scoreboard is priced** (`scoreboard_value`): the VP track, plus the
+  Military Operations requirement as a *shortfall difference* between the
+  sides, weighted by how near the end of the turn it is (the requirement is
+  only assessed then). `board_value` alone prices the board and nothing
+  else, so the bot was indifferent to the score and to Military Ops; the
+  learned value in `bots/value.py` already takes both as features, and this
+  is the hand-written version of the same terms. It is what makes "Coup when
+  you are behind on Military Ops" fall out of the score (`milops_gain`,
+  applied in `_score_ops_type` and `_best_coup_value`) rather than needing a
+  rule of its own, and it feeds `MCTSPlayer`'s depth-capped estimate too.
 
   Which cards may reach that choice at all is the *engine's* rule, not the
   bot's: `_can_space_race` refuses the China Card, UN Intervention, scoring
@@ -577,6 +620,15 @@ Only the core board decision kinds get real heuristics; every
 event-specific kind falls back to the first legal option. That scope, and
 why it is deliberate, is in [LIMITATIONS.md](LIMITATIONS.md) — extend
 `_SCORERS` as each kind earns a heuristic worth writing.
+
+A refusal has to be repeated at **every** decision level that can commit the
+card, because each scorer is only ever asked about the options of its own
+decision. `_score_play_mode` cannot refuse a card that
+`_score_action_round_play` picked for its Ops, and a target the Coup scorer
+is never asked about cannot be refused by it either. Both of the DEFCON-1
+loss shapes measured on this bot were of that kind: the rule was right and
+one decision too late. When a rule is "never do X", check which decision
+actually performs X and whether the scorer for it has the facts.
 
 `tests/test_greedy.py` covers the DEFCON safety rule, the fallback
 behavior, and a win-rate sanity check (`GreedyPlayer` vs. `RandomPlayer`

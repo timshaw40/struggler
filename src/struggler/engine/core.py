@@ -276,6 +276,7 @@ class Engine:
             # and is never surfaced here.
             turn_effects=copy.deepcopy(self.turn_effects),
             game_effects=copy.deepcopy(self.game_effects),
+            events_enabled=self.events_enabled,
         )
 
     @property

@@ -7,7 +7,9 @@ Search never steps the live engine. Each simulation:
    player's own seeded RNG (never the live engine's).
 2. Play one root action, then `GreedyPlayer` for both seats (DEFCON suicide
    avoidance included) until terminal or `rollout_depth`.
-3. Score: win 1 / draw 0.5 / loss 0, or `board_value` at the depth cap.
+3. Score: win 1 / draw 0.5 / loss 0, or `board_value` plus the scoreboard
+   (`scoreboard_value`: VP and the Military Operations requirement) at the
+   depth cap.
 
 Imperfect-info approximation
 ----------------------------
@@ -32,7 +34,7 @@ import math
 import random
 from typing import Any, Sequence
 
-from struggler.bots.greedy import GreedyPlayer, board_value
+from struggler.bots.greedy import GreedyPlayer, board_value, scoreboard_value
 from struggler.engine import Action, Engine, Observation, Period, Side
 from struggler.engine.cards import cards_entering, load_cards
 from struggler.engine.player import Event
@@ -139,7 +141,20 @@ def _position_value(
         # A learned value over the same public board replaces the hand heuristic
         # (and lets `rollout_depth` drop sharply for the same strength).
         return value.value_for_engine(engine, side)
-    return 0.5 + 0.5 * math.tanh(board_value(greedy.weights, engine.board, side) / _VALUE_SCALE)
+    # `board_value` alone cannot tell a won position from a lost one at the same
+    # board shape, so the depth-capped estimate was blind to the score and to
+    # the Military Operations requirement. Both are in the same units, so they
+    # add before the squash.
+    score = board_value(greedy.weights, engine.board, side) + scoreboard_value(
+        greedy.weights,
+        side,
+        vp=engine.vp,
+        defcon=engine.defcon,
+        military_ops=engine.military_ops,
+        turn=engine.turn,
+        action_round=engine.action_round,
+    )
+    return 0.5 + 0.5 * math.tanh(score / _VALUE_SCALE)
 
 
 class MCTSPlayer:
