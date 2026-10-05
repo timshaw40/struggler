@@ -9,6 +9,18 @@
 <body>
 <main>
   <div id="leftcol">
+    <div id="dashboard" aria-label="Game overview">
+      <div id="dashboard-status"></div><small id="save-status" role="status"></small>
+    </div>
+    <div id="connection-status" hidden role="status"><span id="connection-message"></span><button type="button" id="connection-retry">Retry</button></div>
+    <div id="planbar" hidden>
+      <button type="button" id="plan-toggle" aria-pressed="false">Plan placements</button>
+      <div id="plan-controls" hidden><span id="plan-count"></span><div id="plan-chips"></div>
+        <button type="button" id="plan-undo">Undo planned point</button>
+        <button type="button" id="plan-clear">Clear</button>
+        <button type="button" id="plan-commit">Commit placements</button>
+      </div>
+    </div>
     <div id="boardarea">
       <div id="boardwrap">
         <div id="boardbox">
@@ -36,6 +48,7 @@
        aria-label="Resize the log column" title="Drag to resize · double-click to reset"></div>
   <aside id="panel">
     <h1>Struggler<span class="hbtns">
+      <button id="librarybtn" type="button" title="Saved games" aria-label="Saved games">▤</button>
       <button id="helpbtn" type="button" title="How to play (?)" aria-label="How to play">?</button>
       <button id="focusbtn" type="button" title="Map only (M)" aria-label="Map only">⛶</button>
       <button id="cog" type="button" title="Settings" aria-label="Settings" onclick="toggleSettings()">⚙</button>
@@ -43,6 +56,7 @@
     <div id="gamestatus"></div>
     <div id="settings" hidden></div>
     <div id="panelscroll">
+      <details id="overview" open><summary>Strategic overview</summary><div id="strategic-overview"></div></details>
       <div id="feedbar"></div>
       <div id="feed"></div>
       <div id="status" role="status" aria-live="polite"></div>
@@ -55,6 +69,7 @@
 <div id="start" hidden role="dialog" aria-modal="true" aria-label="Start a new game">
   <div class="scard">
     <h2>New game</h2>
+    <button type="button" id="start-library" class="continue-games" hidden>Continue / saved games</button>
     <p class="ssub">Pick your side — the other seat is played by the bot.</p>
     <div class="ssides" role="radiogroup" aria-label="Your side">
       <label class="sside">
@@ -77,12 +92,19 @@
     <button type="button" id="startgo">Start game</button>
   </div>
 </div>
+<div id="library" hidden role="dialog" aria-modal="true" aria-labelledby="library-title">
+  <div class="library-card"><header><h2 id="library-title">Your games</h2><button type="button" id="library-close" aria-label="Close saved games">✕</button></header>
+    <p>Saved automatically after every move. Continue a game or revisit a result.</p>
+    <div id="library-list"></div><button type="button" id="library-new">New game</button>
+  </div>
+</div>
 <div id="winner" hidden role="dialog" aria-modal="true" aria-label="Game over"></div>
 <div id="winnerchip" hidden>
   <button type="button" id="wchip">Game over — show summary</button>
 </div>
 <div id="toast" hidden></div>
 <div id="live" class="sr-only" aria-live="polite"></div>
+<script src="/experience.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -1480,3 +1480,74 @@ body:has(#dicebox:not([hidden])) #decision {
  * the row past the box and turning it into a horizontal scroller. */
 #decision .countrybtns button b { overflow-wrap: anywhere; }
 #decision .cost2txt { color: #f08a4b; font-weight: 700; }
+
+/* Readable public state above the map, with detail in the collapsible panel. */
+#dashboard { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid #394151; }
+#dashboard-status { display: flex; flex-wrap: wrap; gap: 6px 16px; font-weight: 650; }
+#dashboard-status .danger { color: #ffaaa5; }
+#save-status { color: #b4bece; white-space: nowrap; font-size: 11px; }
+#save-status.save-failed { color: #ffaaa5; white-space: normal; }
+#connection-status { padding: 10px 14px; background: #493928; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#connection-status[hidden], #planbar[hidden], #plan-controls[hidden], #library[hidden] { display: none; }
+#connection-status button { flex: none; }
+#overview { margin: 0 0 12px; padding: 10px; background: var(--panel2); border: 1px solid #394151; border-radius: 10px; }
+#overview > summary { cursor: pointer; font-weight: 700; }
+.overview-tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 11px; }
+.overview-tracks b { display: block; font-size: 12px; }
+.overview-note { color: #b4bece; font-size: 11px; margin: 6px 0; line-height: 1.5; }
+.overview-caption { display: flex; justify-content: space-between; gap: 8px; margin: 10px 0 5px; font-weight: 650; font-size: 12px; }
+.overview-caption small { color: #b4bece; font-size: 10px; font-weight: 400; }
+.region-score > button { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; width: 100%; padding: 7px 5px; border: 0; border-bottom: 1px solid #394151; border-radius: 0; background: transparent; color: var(--text); text-align: left; font-size: 12px; }
+.region-score > button small { width: 100%; color: var(--gold); }
+.region-score > button .us { color: #82b6ff; }
+.region-score > button .ussr { color: #ff9c97; }
+.region-detail { padding: 3px 7px 9px; background: #171c24; font-size: 11px; }
+.region-detail p { margin: 7px 0; }
+.region-detail button { font-size: 11px; padding: 4px 8px; }
+#strategic-overview > details { margin-top: 10px; font-size: 11px; }
+#strategic-overview > details p { margin: 8px 0; color: #c1cad9; }
+#planbar { flex: none; padding: 7px 12px; background: #242c35; border-bottom: 1px solid #485365; }
+#planbar button { font-size: 12px; padding: 5px 10px; }
+#plan-toggle[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+#plan-controls { margin-top: 6px; font-size: 12px; }
+#plan-count { display: block; margin-bottom: 5px; }
+#plan-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+#plan-chips span { padding: 2px 7px; background: #363d49; border-radius: 20px; }
+#plan-commit { background: var(--gold); color: #1d2129; font-weight: 700; }
+.plan-ghost { position: absolute; bottom: 0; right: 0; z-index: 3; background: #242c35; color: var(--gold); border: 1px dashed var(--gold); border-radius: 4px; padding: 1px 4px; font-size: 12px; font-weight: 750; pointer-events: none; }
+#decision button.opt { flex-wrap: wrap; }
+#decision .consequence-note { flex-basis: 100%; max-width: 380px; font-size: 11px; font-weight: 400; color: #bdc7d6; line-height: 1.5; text-align: left; }
+.card-consequences { padding: 8px 10px; background: #232833; color: var(--text); font-size: 12px; line-height: 1.5; }
+#countrytip .consequence { font-size: 11px; color: #d8e2ef; }
+#library { position: fixed; inset: 0; z-index: 110; background: #090c12d9; display: grid; place-items: center; padding: 18px; }
+.library-card { width: min(660px, 100%); max-height: 88vh; overflow-y: auto; padding: 22px; background: var(--panel2); border: 1px solid #485365; border-radius: 16px; box-shadow: 0 20px 80px #0008; }
+.library-card header { display: flex; justify-content: space-between; align-items: center; }
+.library-card h2 { margin: 0; font-size: 25px; }
+.library-card > p { color: #bdc7d6; }
+.saved-game { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid #394151; border-radius: 10px; padding: 14px; margin: 10px 0; background: var(--panel); }
+.saved-game p { margin: 5px 0; font-size: 12px; }
+.saved-game small { color: #bdc7d6; }
+.saved-game button { flex: none; font-size: 12px; }
+#library-new { margin-top: 12px; }
+#start .continue-games { width: 100%; margin: 14px 0 0; padding: 10px; border-color: var(--gold); color: var(--gold); }
+#library button:focus-visible, #planbar button:focus-visible, #overview button:focus-visible, #librarybtn:focus-visible, #connection-status button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+@media (max-width: 600px) {
+  #dashboard { align-items: flex-start; flex-direction: column; gap: 3px; padding: 7px 10px; }
+  #dashboard-status { font-size: 12px; gap: 3px 9px; }
+  .saved-game { flex-direction: column; align-items: flex-start; }
+  .library-card { padding: 16px; }
+}
+#library button, #planbar button, #connection-status button, #librarybtn, #start .continue-games {
+  appearance: none; font: inherit; color: var(--text); background: #1c222c;
+  border: 1px solid #485365; border-radius: 8px; padding: 7px 11px; cursor: pointer;
+}
+#librarybtn { font-size: 15px; padding: 2px 6px; }
+#library button:hover, #planbar button:hover, #connection-status button:hover { border-color: var(--gold); }
+#planbar button { font-size: 12px; }
+#planbar button:disabled { opacity: .45; cursor: default; }
+#planbar #plan-commit { background: var(--gold); color: #1d2129; }
+#planbar #plan-toggle[aria-pressed="true"] { color: var(--gold); border-color: var(--gold); }
+#countrytip:has(.consequence) { max-width: min(330px, calc(100vw - 16px)); white-space: normal; }
+#countrytip .consequence { line-height: 1.45; }
+
+.region-detail button { appearance: none; color: var(--text); background: #1c222c; border: 1px solid #485365; border-radius: 6px; cursor: pointer; }

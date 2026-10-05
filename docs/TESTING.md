@@ -104,3 +104,8 @@ Going forward:
   card, a flag) can transiently live, update the shared invariant helper in
   `conftest.py` once, rather than letting each test file's own copy drift
   out of sync with it.
+
+Browser persistence and previews are covered in `test_web_experience.py`: exact
+engine/RNG restoration, secret headline handling, durable undo, damaged saves,
+non-mutating scoring, and atomic influence plan validation. Check library,
+recovery, and staged map placement in the browser after UI changes.

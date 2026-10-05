@@ -14,6 +14,7 @@ commit when you change what it specifies.
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The decision stack, the public API, `Engine`, core types |
 | [docs/CARDS.md](docs/CARDS.md) | `events.py`, `cards.json`, anything card-related |
+| [docs/BROWSER.md](docs/BROWSER.md) | Browser UI, local saves, recovery, scoring and placement previews |
 | [docs/BOTS.md](docs/BOTS.md) | `bots/`, the `Player` protocol, physical mode, training/eval tooling |
 | [docs/TESTING.md](docs/TESTING.md) | Adding or changing any test, or regenerating a golden replay |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Before "fixing" something that may be a documented simplification |

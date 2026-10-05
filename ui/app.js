@@ -135,7 +135,12 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
 
 async function fetchJson(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    const err = new Error(payload.error || `${url}: ${res.status}`);
+    err.serverFailure = res.status >= 500;
+    throw err;
+  }
   return res.json();
 }
 
@@ -236,7 +241,7 @@ async function boot() {
     await bootInner();
   } catch (err) {
     console.error(err);
-    showError("Failed to load the game: " + err.message);
+    reportConnectionProblem(err);
     busy = false;
     render();
   }
@@ -327,6 +332,7 @@ async function bootInner() {
     if (e.target && e.target.name === "start-side") syncSideCards();
   });
   installKeyboard();
+  installExperience();
 
   const [cards, manifest, countries, facts] = await Promise.all([
     fetchJson("/cards"),
@@ -631,8 +637,9 @@ let dragMoved = 0;
 async function refresh() {
   try {
     state = await fetchJson("/state");
+    clearConnectionProblem();
   } catch (err) {
-    showError("Lost connection to the game server.");
+    reportConnectionProblem(err);
     throw err;
   }
   render();
@@ -666,15 +673,17 @@ async function act(index) {
         decision_id: state.decision ? state.decision.id : null,
       }),
     }).then((r) => r.json());
+    if (data.error && !data.state) throw new Error(data.error);
     if (data.error && data.state) {
       console.warn("/action rejected:", data.error);
+      showError(data.error);
       state = data.state;  // resync to the server's real position
       return;
     }
     state = data.state || data;  // error replies carry the current state
   } catch (err) {
     console.error(err);
-    showError("That move could not be sent: " + err.message);
+    reportConnectionProblem(err);
   } finally {
     busy = false;
     render();
@@ -1443,7 +1452,8 @@ function showCountryTip(el, cid, inf) {
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
     + `<span class="ussr">USSR ${inf.USSR}</span></div>`
     + `<div class="cfacts">${countryFactsLine(cid, inf)}</div>`
-    + countryChoiceLine(cid)
+    + (planMode ? "" : countryChoiceLine(cid))
+    + placementPreviewHtml(cid)
     + `<div class="odds"></div>`;
   countryTip.hidden = false;
   tipCid = cid;
@@ -1902,7 +1912,7 @@ function renderActionBar({ bump = false } = {}) {
   if (stale) stale.remove();
   actionBar.classList.toggle("hasdone", !!doneOpt);
   let text = actionBarLastAction;
-  if (d) text = placementDirective(d);
+  if (d) text = planMode ? `Plan influence on the map — ${planCountries.length} point${planCountries.length === 1 ? "" : "s"} planned; commit to place` : placementDirective(d);
   else if (!text) {
     actionBar.hidden = true;
     return;
@@ -1923,7 +1933,7 @@ function renderActionBar({ bump = false } = {}) {
     b.type = "button";
     b.className = "donebtn";
     b.textContent = optionLabel(doneOpt) || "Done";
-    b.disabled = busy;
+    b.disabled = busy || planMode;
     b.title = "Finish placing (Enter)";
     b.addEventListener("click", () => act(doneOpt.index));
     actionBar.append(b);
@@ -1937,7 +1947,7 @@ function render() {
   // from being torn down every poll (and lets expanded rows survive).
   const d = state.decision;
   const sig = [
-    state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
+    state.game_id, state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
     state.play_restriction || "-",
     d ? `${d.kind}:${d.options.length}` : "-",
     // Placement's directive carries a budget that changes without the option
@@ -1963,6 +1973,7 @@ function render() {
   if (fly.opp.length) enqueueBeat();
   drainRolls();
   enqueuePlacements(fly.opp);
+  renderExperience();
   renderBoard();
   renderPanel();
   renderEffectsHud();
@@ -2049,10 +2060,11 @@ function renderBoard() {
   const d = state.decision;
   for (const [cid, inf] of Object.entries(state.influence)) {
     const pos = POS[cid];
-    const target = d ? countryOption(cid) : null;
+    const candidate = d ? countryOption(cid) : null;
+    const target = planAllows(cid) ? candidate : null;
     // No influence and not a legal target: blank box, VASSAL-style.
     // A 0/0 legal target still renders (empty glow, no pips) so it stays clickable.
-    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
+    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0 && !(planResult && planResult.influence[cid]))) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     if (pos.w && pos.h) {
@@ -2089,11 +2101,17 @@ function renderBoard() {
       el.setAttribute("role", "button");
       el.addEventListener("click", () => {
         if (dragMoved > 6) return;  // that was a map drag, not a click
-        act(target);
+        mapPick(target);
       });
       el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (dragMoved <= 6) act(target); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (dragMoved <= 6) mapPick(target); }
       });
+    }
+    if (planMode && planResult && planResult.influence[cid]) {
+      const ghost = document.createElement('span'); ghost.className = 'plan-ghost';
+      const n = planCountries.filter((c) => c === cid).length;
+      ghost.textContent = `+${n}`; ghost.title = 'Planned influence — not committed';
+      el.append(ghost);
     }
     host.append(el);
   }
@@ -2267,8 +2285,8 @@ function renderPanel() {
   // honest once the player's own move is on the board: while their click is
   // still in flight (`busy`) or their chit is still landing (`settling`), the
   // row would announce the bot over influence the player has not seen arrive.
-  const waiting = (state.watch && playing && !state.is_terminal)
-    || (!busy && !settling());
+  const waiting = !state.is_terminal && !connectionProblem && ((state.watch && playing)
+    || (!state.decision && !busy && !settling()));
   if (waiting) {
     const wait = document.createElement("div");
     wait.className = "feedrow wait";
@@ -2841,6 +2859,11 @@ function showPreview(cid, card) {
     }
     previewEl.append(box);
   }
+  const opt = state.decision && state.decision.options.find((o) => o.payload.card === cid);
+  if (opt) {
+    const note = document.createElement('div'); note.className = 'card-consequences';
+    note.textContent = previewLines(opt.index).join(' '); previewEl.append(note);
+  }
   previewEl.hidden = false;
   const r = card.getBoundingClientRect();
   const w = previewEl.offsetWidth;
@@ -3142,6 +3165,7 @@ function renderDecision() {
     b.innerHTML = `${glyphSvg(optionGlyph(o), "ficon opticon")}<b>${esc(optionLabel(o))}</b>`;
     b.disabled = busy;  // a stale option while an action is in flight
     b.addEventListener("click", () => act(o.index));
+    addOptionPreview(b, o.index);
     main.append(b);
   }
 }
@@ -3294,7 +3318,7 @@ async function catchUp() {
   while (state && !state.is_terminal && !state.decision && gen === catchUpGen) {
     const n = state.history_len ?? (state.history || []).length;
     if (n === prev) {
-      if (++stall > 3) break;
+      if (++stall > 3) { reportConnectionProblem(new Error('The opponent stopped making progress.')); break; }
     } else stall = 0;
     prev = n;
     render();
@@ -3302,7 +3326,7 @@ async function catchUp() {
     try {
       next = await fetchJson("/state");
     } catch (err) {
-      showError("Lost connection to the game server.");
+      reportConnectionProblem(err);
       return;
     }
     if (gen !== catchUpGen) return;   // a new game started while this was out
@@ -3454,7 +3478,7 @@ function renderWinner() {
   // Record once per game, keyed by the (monotonic) seed: a browser reload of
   // the final screen must not pad the record with the same result again.
   if (state.winner && !state.watch) {
-    const key = `struggler.recorded:${state.seed}`;
+    const key = `struggler.recorded:${state.save_id || state.seed}`;
     if (!localStorage.getItem(key)) {
       bumpRecord(state.human_side, state.winner === state.human_side);
       localStorage.setItem(key, "1");
@@ -3462,8 +3486,8 @@ function renderWinner() {
   }
   // Build the dialog once per game; rebuilding every render would destroy the
   // focused buttons and drop keyboard focus.
-  if (overlay.dataset.forSeed !== String(state.seed)) {
-    overlay.dataset.forSeed = String(state.seed);
+  if (overlay.dataset.forSeed !== String(state.save_id || state.game_id)) {
+    overlay.dataset.forSeed = String(state.save_id || state.game_id);
     winnerFocused = false;
     winnerDismissed = false;
     overlay.innerHTML = winnerSummaryHtml();
@@ -3599,10 +3623,10 @@ function helpHtml() {
     + `<p>A marker is one country's Influence: the white pip is a country `
     + `someone is merely present in, the coloured pip is one they control `
     + `(control is ahead by at least the country's Stability). A gold `
-    + `<b>2</b> badge means a placement there costs 2 Ops. Battlegrounds are `
-    + `worth double in Scoring and cost DEFCON when couped.</p>`
+    + `<b>2</b> badge means a placement there costs 2 Ops. Battlegrounds add `
+    + `1 VP when controlled at scoring and help determine domination/control; coups there normally lower DEFCON.</p>`
     + `<h3>Defeat</h3>`
-    + `<p>DEFCON 1 loses the game for whoever caused it, and a side at 20 VP `
+    + `<p>At DEFCON 1, the phasing player (whose action round it is) loses, and a side at 20 VP `
     + `wins outright. Europe control ends it too.</p>`
     + `<h3>Keys</h3><div class="hkeys">${keys}</div>`;
 }
