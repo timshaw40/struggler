@@ -65,9 +65,13 @@ def test_the_feed_is_re_rendered_when_the_board_settles():
     to arrive, which is what made the ordering feel wrong in the first place."""
     fx = body_of("enqueueFx")
     assert "flushSettleWaiters()" in fx
-    assert "renderPanel()" in fx, "the feed's Thinking row must be re-evaluated on drain"
+    assert "renderPanel()" in fx or (
+        "render()" in fx and "renderPanel()" in body_of("render")
+    ), "the feed's Thinking row must be re-evaluated on drain"
     # …and the decision box, which is the other half of the same claim.
-    assert "renderDecision()" in fx
+    assert "renderDecision()" in fx or (
+        "render()" in fx and "renderDecision()" in body_of("render")
+    )
 
 
 def test_settle_waiters_fire_once_the_board_is_quiet():

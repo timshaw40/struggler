@@ -67,7 +67,7 @@ function resetPlan() {
 }
 
 function renderExperience() {
-  if (!state) return;
+  if (!state || dicePresentationPending()) return;
   const phase = state.phase === 'setup' ? 'Setup' : state.phase === 'headline' ? 'Headline' : `Round ${state.action_round}`;
   $('#dashboard-status').innerHTML = `<span>Turn ${state.turn} · ${esc(phase)}</span><span>${esc(scoreText(state.vp))}</span>`
     + `<span class="${state.defcon <= 2 ? 'danger' : ''}">DEFCON ${state.defcon}${state.defcon === 2 ? ' · Nuclear danger' : ''}</span>`
@@ -107,6 +107,7 @@ function renderExperience() {
 }
 
 function renderOverview() {
+  if (dicePresentationPending()) return;
   const host = $("#strategic-overview");
   const signature = JSON.stringify([state.game_id, state.strategy, state.military_ops, state.space_race,
                                     state.defcon, state.turn_effects, state.game_effects, overviewOpen,
@@ -198,7 +199,7 @@ function placementPreviewHtml(country) {
 }
 
 async function stagePlan(country) {
-  if (!planMode || planPending || busy) return;
+  if (!planMode || planPending || busy || dicePresentationPending()) return;
   const proposed = country ? [...planCountries, country] : planCountries.slice(0, -1);
   if (!proposed.length) { resetPlan(); renderExperience(); renderBoard(); return; }
   const generation = ++planGeneration;
@@ -214,7 +215,7 @@ async function stagePlan(country) {
 }
 
 async function commitPlacementPlan() {
-  if (!planResult || planPending || busy) return;
+  if (!planResult || planPending || busy || dicePresentationPending()) return;
   busy = true; render();
   try {
     const next = await experiencePost('/plan/commit', {countries: planCountries, game_id: state.game_id, decision_id: state.decision.id});
@@ -282,6 +283,7 @@ function closeLibrary() {
 async function loadSavedGame(id, button) {
   if (busy) return;
   busy = true; button.disabled = true;
+  await fxChain;
   catchUpGen += 1;
   try {
     const data = await experiencePost('/games/load', {id});

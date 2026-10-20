@@ -653,12 +653,13 @@ function tick() {
   inFlight = true;
   refresh().catch(() => {}).finally(() => {
     inFlight = false;
-    if (state && state.watch && playing && !state.is_terminal) setTimeout(tick, 400);
+    if (state && state.watch && playing && !state.is_terminal)
+      fxChain.then(() => { if (state.watch && playing && !state.is_terminal) setTimeout(tick, 400); });
   });
 }
 
 async function act(index) {
-  if (busy) return;
+  if (busy || dicePresentationPending()) return;
   busy = true;
   render();
   try {
@@ -924,16 +925,18 @@ const ROLL_KIND = {
   coup_roll: 1, war_roll: 1, space_race_roll: 1, contest_roll: 1,
   quagmire_roll: 1, realignment_actor_roll: 1, realignment_opponent_roll: 1,
 };
-/* Past this many queued FX, an opponent's roll is dropped rather than burying
- * the player's own move behind bot animation (see drainRolls). */
-const FX_ROLL_DROP_LIMIT = 5;
+/* Hold the entire result surface, including history and score tracks, until
+ * every newly received roll has been shown. Realignments span two polls. */
+let dicePending = 0;
+function dicePresentationPending() {
+  return dicePending > 0 || pendingRealignActor !== null;
+}
 let seenTotal = -1;
 let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
 /* One ordered FX queue: card reveals, dice and scoring popups all run in the
  * order their events happened. (Previously reveals and dice were separate
  * chains, and dice waited on *all* reveals — so a card played later could jump
- * ahead of an earlier roll.) `fxBacklog` lets a deep opponent batch drop its
- * own rolls rather than bury the player's. */
+ * ahead of an earlier roll.) Results remain hidden until queued dice finish. */
 let fxChain = Promise.resolve();
 let fxBacklog = 0;
 /* When the last placement of a spend lands, the opponent's turn begins. The
@@ -958,14 +961,12 @@ function enqueueFx(fn) {
     .finally(() => {
       fxBacklog -= 1;
       flushSettleWaiters();
-      // When the queue drains, refresh the decision box (it was showing
-      // "Resolving…" and can now show the next decision / "Opponent thinking…").
+      // Publish the resolved snapshot only after its dice have finished.
+      // A full render releases the board, tracks, history, and next decision.
       if (fxBacklog === 0 && state) queueMicrotask(() => {
         if (!state) return;
-        renderDecision();
-        // The feed's "Thinking…" row is the other half of the same claim: drop
-        // it here too, or it lingers past the last chit landing.
-        renderPanel();
+        lastRenderSig = null;
+        render();
       });
     });
   fxChain = queued;
@@ -1101,13 +1102,16 @@ function drainRolls() {
 
   // One pass, in event order, queueing each event's FX onto the shared chain.
   const enqueueDiceItem = (item) => {
-    // Always show the player's own rolls, and every roll in a watched game --
-    // there is no player action to protect there, and dropping both sides'
-    // rolls is why watch mode looked like it never rolled.
-    const who = item.kind === "score" ? null : actorOf(item.e || item.actor || item.opp);
-    const protectingPlayer = who !== null && !state.watch && who !== state.human_side;
-    if (protectingPlayer && fxBacklog >= FX_ROLL_DROP_LIMIT) return;
-    enqueueFx(() => (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item)));
+    // Rolls are never discarded to shorten the queue. The board must not
+    // jump past a result whose dice the player has not seen.
+    if (item.kind !== "score") dicePending += 1;
+    enqueueFx(async () => {
+      try {
+        await (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item));
+      } finally {
+        if (item.kind !== "score") dicePending -= 1;
+      }
+    });
   };
 
   for (let i = 0; i < fresh.length; i++) {
@@ -1146,7 +1150,10 @@ function drainRolls() {
 
   // Center-of-map caption: one update per fresh event, in cursor order.
   for (let i = 0; i < fresh.length; i++) {
-    showAction(fresh[i], hist[start + i - 1]);
+    const event = fresh[i], previous = hist[start + i - 1];
+    // Its paired opponent roll will announce a realignment's outcome.
+    if (event.kind !== "realignment_actor_roll")
+      enqueueFx(() => showAction(event, previous));
   }
 }
 
@@ -1324,11 +1331,12 @@ function showDice(item) {
     box.querySelector(".dtitle").textContent = rollTitle(item);
     const values = rollValues(item);
     const settled = rollDice(box.querySelector(".dice"), values);
+    let landed = false;
     box.hidden = false;
     box.classList.add("rolling");
     let done = false;
     const finish = () => {
-      if (done) return;
+      if (done || !landed) return;
       done = true;
       box.hidden = true;
       box.classList.remove("rolling");
@@ -1336,8 +1344,10 @@ function showDice(item) {
       resolve();
     };
     // The result reads once the dice have stopped, then holds long enough to
-    // take in; a click moves on immediately.
+    // take in; a click can move on only after the dice have landed.
     setTimeout(() => {
+      if (done) return;
+      landed = true;
       box.classList.remove("rolling");
       box.querySelector(".doutcome").textContent = rollOutcome(item);
     }, settled);
@@ -1439,6 +1449,7 @@ function countryChoiceLine(cid) {
  * plain text when a header asset is missing. Positioned above the marker,
  * viewport-clamped. */
 function showCountryTip(el, cid, inf) {
+  if (dicePresentationPending()) return;
   // Works in every view: markers are positioned in board coordinates and the
   // tip is placed from the element's viewport rect, so region views are fine.
   if (!countryTip) {
@@ -1750,6 +1761,7 @@ function effectEntry(key, value, defaultScope) {
  * turn_effects / game_effects), grouped by duration. Hover a chip for the
  * effect text and a card-face preview. */
 function renderEffectsHud() {
+  if (dicePresentationPending()) return;
   const host = $("#effectshud");
   if (!host || !state) return;
   host.textContent = "";
@@ -1903,6 +1915,7 @@ function clearAction() {
  * element (#actionbar) is separate from the decision box, so the map keeps its
  * full height. */
 function renderActionBar({ bump = false } = {}) {
+  if (dicePresentationPending()) return;
   if (!actionBar) return;
   const d = isMapOnlyPick(state && state.decision) ? state.decision : null;
   const doneOpt = d && d.options.find((o) => o.payload && o.payload.stop);
@@ -1960,9 +1973,15 @@ function render() {
   if (sig === lastRenderSig) return;
   lastRenderSig = sig;
 
-  // Order the FX so one side's turn reads as one beat: the player's placements
-  // land first, then a short pause, then the opponent's reveals/rolls/placements.
+  // Queue dice before publishing their resolved snapshot. Placement-only
+  // updates still give the player's chits priority over the opponent's.
   prefetchOdds(state.decision);
+  drainRolls();
+  if (dicePresentationPending()) {
+    if (countryTip) countryTip.hidden = true;
+    if (previewEl) previewEl.hidden = true;
+    return;
+  }
   const fly = flyDiff();
   // The player's own chits are priority: if their click lands while the queue
   // is still busy, it must not sit behind it.
@@ -1971,7 +1990,6 @@ function render() {
   // catchUp() polls the server faster than the FX play, so an unguarded beat
   // charged 400 ms of dead air to every one of the bot's setup placements.
   if (fly.opp.length) enqueueBeat();
-  drainRolls();
   enqueuePlacements(fly.opp);
   renderExperience();
   renderBoard();
@@ -2000,6 +2018,7 @@ let cueWasMine = null;     // null until the first render, so a reload is quiet
 let faviconAlert = null;
 
 function renderCue() {
+  if (dicePresentationPending()) return;
   if (!state) return;
   const over = !!state.is_terminal;
   // `state.decision` only ever carries the human's own decision (the server
@@ -2048,6 +2067,7 @@ function setFavicon(alert) {
 }
 
 function renderBoard() {
+  if (dicePresentationPending()) return;
   if (!state) return;
   $("#board").onerror = () => $("#boardwrap").classList.add("noboard");
   // A hovered marker is destroyed on rebuild, so its mouseleave may never fire;
@@ -2201,6 +2221,7 @@ function kv(label, value) {
 }
 
 function renderGameStatus() {
+  if (dicePresentationPending()) return;
   const el = $("#gamestatus");
   if (!el || !state) return;
   const phase = state.phase === "action_rounds" ? `Round ${state.action_round}`
@@ -2218,6 +2239,7 @@ function renderGameStatus() {
 }
 
 function renderPanel() {
+  if (dicePresentationPending()) return;
   renderGameStatus();
 
   const status = $("#status");
@@ -2821,6 +2843,7 @@ function cardEl(cid, actionIndex, locked = null) {
 /* Hover preview: floats just above the hovered card, viewport-clamped
  * (it drops below the card when there is no room above). */
 function showPreview(cid, card) {
+  if (dicePresentationPending()) return;
   if (!previewEl) return;
   previewEl.textContent = "";
   const m = META[cid] || {};
@@ -2915,6 +2938,7 @@ function cardBlockReason(cid) {
 }
 
 function renderHand() {
+  if (dicePresentationPending()) return;
   const host = $("#hand");
   host.textContent = "";
   // Undo lives here, not only inside the decision box: the mistake a player
@@ -3022,6 +3046,7 @@ function placementOperationsLine(d) {
 }
 
 function renderDecision() {
+  if (dicePresentationPending()) return;
   const box = $("#decision");
   box.textContent = "";
   const d = state.decision;
@@ -3272,6 +3297,7 @@ function fillSettings() {
 async function postGame(path) {
   if (busy) return;  // a second click must not forfeit/restart twice
   busy = true;
+  await fxChain;
   catchUpGen += 1;   // any boot poll still in flight is now stale
   render();
   try {
@@ -3322,6 +3348,8 @@ async function catchUp() {
     } else stall = 0;
     prev = n;
     render();
+    await fxChain;
+    if (gen !== catchUpGen) return;
     let next;
     try {
       next = await fetchJson("/state");
@@ -3349,6 +3377,7 @@ function forfeitGame() {
 async function goBack() {
   if (busy) return;  // a second click must not fire a second /back (409)
   busy = true;
+  await fxChain;
   render();
   try {
     const res = await fetch("/back", { method: "POST" });
@@ -3464,6 +3493,7 @@ async function startGame() {
 }
 
 function renderWinner() {
+  if (dicePresentationPending()) return;
   const overlay = $("#winner");
   const chip = $("#winnerchip");
   if (!state.is_terminal) {

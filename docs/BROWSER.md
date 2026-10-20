@@ -25,3 +25,22 @@ Direct map placement remains the default. Setup placement is not batch planned.
 
 Implementation: `src/struggler/web_support.py`, `scripts/serve_ui.py`, and
 `ui/experience.js`. Regression coverage: `tests/test_web_experience.py`.
+
+## Dice presentation order
+
+The engine resolves and saves chance immediately; the client presents that
+resolved snapshot only after its dice animation finishes. Influence counters,
+tracks, strategic scores, history, next decisions, and game-over dialogs all
+wait at the same presentation barrier. Resizing or opening sidebar detail must
+not reveal the result early. A realignment received across two polls waits for
+both dice, and no bot roll is dropped because of an animation backlog.
+Clicks cannot dismiss dice while they are tumbling; after landing, the player
+can dismiss the result or let it close automatically. Bot polling waits for
+queued animations before requesting another step. Undo, game loading, and new
+games wait for queued animations before replacing the position.
+
+`tests/browser/dice_order.cjs` runs the production render and animation queue
+with controllable dice promises. It covers all roll types, split realignments,
+watch mode, batched rolls, backlog, resize callbacks, and early dismissal.
+Run it with `node tests/browser/dice_order.cjs`; `test_dice_ui.py` also invokes
+it when Node.js is available.

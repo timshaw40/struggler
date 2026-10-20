@@ -179,7 +179,7 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for any known limitations.
 
 ## Tests
 
-676 passing tests (4 skipped on the current tree). They are the reason the rest
+677 passing tests (4 skipped on the current tree). They are the reason the rest
 of this is trustworthy: the engine's invariants are checked over random legal
 play rather than by example, and the strategy rules in `GreedyPlayer` each have
 a test that fails if the rule is removed.
@@ -286,7 +286,7 @@ The engine's backbone — difficult work, used more or less as designed:
 - **The strategy work**: [`docs/STRATEGY.md`](docs/STRATEGY.md) codes the
   published *Twilight Strategy* general-strategy articles into the greedy
   heuristic, quoting each article's sentence beside the rule it produced.
-- **The test suite** — 676 passing tests, including property-based invariants over
+- **The test suite** — 677 passing tests, including property-based invariants over
   random legal play and the strategy-rule tests.
 - **The documentation set** ([`docs/`](docs/), five ADRs, `CONTEXT.md`).
 
