@@ -135,7 +135,12 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
 
 async function fetchJson(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    const err = new Error(payload.error || `${url}: ${res.status}`);
+    err.serverFailure = res.status >= 500;
+    throw err;
+  }
   return res.json();
 }
 
@@ -236,7 +241,7 @@ async function boot() {
     await bootInner();
   } catch (err) {
     console.error(err);
-    showError("Failed to load the game: " + err.message);
+    reportConnectionProblem(err);
     busy = false;
     render();
   }
@@ -327,6 +332,7 @@ async function bootInner() {
     if (e.target && e.target.name === "start-side") syncSideCards();
   });
   installKeyboard();
+  installExperience();
 
   const [cards, manifest, countries, facts] = await Promise.all([
     fetchJson("/cards"),
@@ -631,8 +637,9 @@ let dragMoved = 0;
 async function refresh() {
   try {
     state = await fetchJson("/state");
+    clearConnectionProblem();
   } catch (err) {
-    showError("Lost connection to the game server.");
+    reportConnectionProblem(err);
     throw err;
   }
   render();
@@ -646,12 +653,13 @@ function tick() {
   inFlight = true;
   refresh().catch(() => {}).finally(() => {
     inFlight = false;
-    if (state && state.watch && playing && !state.is_terminal) setTimeout(tick, 400);
+    if (state && state.watch && playing && !state.is_terminal)
+      fxChain.then(() => { if (state.watch && playing && !state.is_terminal) setTimeout(tick, 400); });
   });
 }
 
 async function act(index) {
-  if (busy) return;
+  if (busy || dicePresentationPending()) return;
   busy = true;
   render();
   try {
@@ -666,15 +674,17 @@ async function act(index) {
         decision_id: state.decision ? state.decision.id : null,
       }),
     }).then((r) => r.json());
+    if (data.error && !data.state) throw new Error(data.error);
     if (data.error && data.state) {
       console.warn("/action rejected:", data.error);
+      showError(data.error);
       state = data.state;  // resync to the server's real position
       return;
     }
     state = data.state || data;  // error replies carry the current state
   } catch (err) {
     console.error(err);
-    showError("That move could not be sent: " + err.message);
+    reportConnectionProblem(err);
   } finally {
     busy = false;
     render();
@@ -915,16 +925,18 @@ const ROLL_KIND = {
   coup_roll: 1, war_roll: 1, space_race_roll: 1, contest_roll: 1,
   quagmire_roll: 1, realignment_actor_roll: 1, realignment_opponent_roll: 1,
 };
-/* Past this many queued FX, an opponent's roll is dropped rather than burying
- * the player's own move behind bot animation (see drainRolls). */
-const FX_ROLL_DROP_LIMIT = 5;
+/* Hold the entire result surface, including history and score tracks, until
+ * every newly received roll has been shown. Realignments span two polls. */
+let dicePending = 0;
+function dicePresentationPending() {
+  return dicePending > 0 || pendingRealignActor !== null;
+}
 let seenTotal = -1;
 let pendingRealignActor = null;  // actor roll awaiting its opponent roll across polls
 /* One ordered FX queue: card reveals, dice and scoring popups all run in the
  * order their events happened. (Previously reveals and dice were separate
  * chains, and dice waited on *all* reveals — so a card played later could jump
- * ahead of an earlier roll.) `fxBacklog` lets a deep opponent batch drop its
- * own rolls rather than bury the player's. */
+ * ahead of an earlier roll.) Results remain hidden until queued dice finish. */
 let fxChain = Promise.resolve();
 let fxBacklog = 0;
 /* When the last placement of a spend lands, the opponent's turn begins. The
@@ -949,14 +961,12 @@ function enqueueFx(fn) {
     .finally(() => {
       fxBacklog -= 1;
       flushSettleWaiters();
-      // When the queue drains, refresh the decision box (it was showing
-      // "Resolving…" and can now show the next decision / "Opponent thinking…").
+      // Publish the resolved snapshot only after its dice have finished.
+      // A full render releases the board, tracks, history, and next decision.
       if (fxBacklog === 0 && state) queueMicrotask(() => {
         if (!state) return;
-        renderDecision();
-        // The feed's "Thinking…" row is the other half of the same claim: drop
-        // it here too, or it lingers past the last chit landing.
-        renderPanel();
+        lastRenderSig = null;
+        render();
       });
     });
   fxChain = queued;
@@ -1092,13 +1102,16 @@ function drainRolls() {
 
   // One pass, in event order, queueing each event's FX onto the shared chain.
   const enqueueDiceItem = (item) => {
-    // Always show the player's own rolls, and every roll in a watched game --
-    // there is no player action to protect there, and dropping both sides'
-    // rolls is why watch mode looked like it never rolled.
-    const who = item.kind === "score" ? null : actorOf(item.e || item.actor || item.opp);
-    const protectingPlayer = who !== null && !state.watch && who !== state.human_side;
-    if (protectingPlayer && fxBacklog >= FX_ROLL_DROP_LIMIT) return;
-    enqueueFx(() => (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item)));
+    // Rolls are never discarded to shorten the queue. The board must not
+    // jump past a result whose dice the player has not seen.
+    if (item.kind !== "score") dicePending += 1;
+    enqueueFx(async () => {
+      try {
+        await (item.kind === "score" ? showScore(item.e, item.prev) : showDice(item));
+      } finally {
+        if (item.kind !== "score") dicePending -= 1;
+      }
+    });
   };
 
   for (let i = 0; i < fresh.length; i++) {
@@ -1137,7 +1150,10 @@ function drainRolls() {
 
   // Center-of-map caption: one update per fresh event, in cursor order.
   for (let i = 0; i < fresh.length; i++) {
-    showAction(fresh[i], hist[start + i - 1]);
+    const event = fresh[i], previous = hist[start + i - 1];
+    // Its paired opponent roll will announce a realignment's outcome.
+    if (event.kind !== "realignment_actor_roll")
+      enqueueFx(() => showAction(event, previous));
   }
 }
 
@@ -1315,11 +1331,12 @@ function showDice(item) {
     box.querySelector(".dtitle").textContent = rollTitle(item);
     const values = rollValues(item);
     const settled = rollDice(box.querySelector(".dice"), values);
+    let landed = false;
     box.hidden = false;
     box.classList.add("rolling");
     let done = false;
     const finish = () => {
-      if (done) return;
+      if (done || !landed) return;
       done = true;
       box.hidden = true;
       box.classList.remove("rolling");
@@ -1327,8 +1344,10 @@ function showDice(item) {
       resolve();
     };
     // The result reads once the dice have stopped, then holds long enough to
-    // take in; a click moves on immediately.
+    // take in; a click can move on only after the dice have landed.
     setTimeout(() => {
+      if (done) return;
+      landed = true;
       box.classList.remove("rolling");
       box.querySelector(".doutcome").textContent = rollOutcome(item);
     }, settled);
@@ -1430,6 +1449,7 @@ function countryChoiceLine(cid) {
  * plain text when a header asset is missing. Positioned above the marker,
  * viewport-clamped. */
 function showCountryTip(el, cid, inf) {
+  if (dicePresentationPending()) return;
   // Works in every view: markers are positioned in board coordinates and the
   // tip is placed from the element's viewport rect, so region views are fine.
   if (!countryTip) {
@@ -1443,7 +1463,8 @@ function showCountryTip(el, cid, inf) {
     + `<div class="cstats"><span class="us">US ${inf.US}</span> · `
     + `<span class="ussr">USSR ${inf.USSR}</span></div>`
     + `<div class="cfacts">${countryFactsLine(cid, inf)}</div>`
-    + countryChoiceLine(cid)
+    + (planMode ? "" : countryChoiceLine(cid))
+    + placementPreviewHtml(cid)
     + `<div class="odds"></div>`;
   countryTip.hidden = false;
   tipCid = cid;
@@ -1740,6 +1761,7 @@ function effectEntry(key, value, defaultScope) {
  * turn_effects / game_effects), grouped by duration. Hover a chip for the
  * effect text and a card-face preview. */
 function renderEffectsHud() {
+  if (dicePresentationPending()) return;
   const host = $("#effectshud");
   if (!host || !state) return;
   host.textContent = "";
@@ -1893,6 +1915,7 @@ function clearAction() {
  * element (#actionbar) is separate from the decision box, so the map keeps its
  * full height. */
 function renderActionBar({ bump = false } = {}) {
+  if (dicePresentationPending()) return;
   if (!actionBar) return;
   const d = isMapOnlyPick(state && state.decision) ? state.decision : null;
   const doneOpt = d && d.options.find((o) => o.payload && o.payload.stop);
@@ -1902,7 +1925,7 @@ function renderActionBar({ bump = false } = {}) {
   if (stale) stale.remove();
   actionBar.classList.toggle("hasdone", !!doneOpt);
   let text = actionBarLastAction;
-  if (d) text = placementDirective(d);
+  if (d) text = planMode ? `Plan influence on the map — ${planCountries.length} point${planCountries.length === 1 ? "" : "s"} planned; commit to place` : placementDirective(d);
   else if (!text) {
     actionBar.hidden = true;
     return;
@@ -1923,7 +1946,7 @@ function renderActionBar({ bump = false } = {}) {
     b.type = "button";
     b.className = "donebtn";
     b.textContent = optionLabel(doneOpt) || "Done";
-    b.disabled = busy;
+    b.disabled = busy || planMode;
     b.title = "Finish placing (Enter)";
     b.addEventListener("click", () => act(doneOpt.index));
     actionBar.append(b);
@@ -1937,7 +1960,7 @@ function render() {
   // from being torn down every poll (and lets expanded rows survive).
   const d = state.decision;
   const sig = [
-    state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
+    state.game_id, state.seed, state.history_len, state.is_terminal, state.can_undo, busy, playing,
     state.play_restriction || "-",
     d ? `${d.kind}:${d.options.length}` : "-",
     // Placement's directive carries a budget that changes without the option
@@ -1950,9 +1973,15 @@ function render() {
   if (sig === lastRenderSig) return;
   lastRenderSig = sig;
 
-  // Order the FX so one side's turn reads as one beat: the player's placements
-  // land first, then a short pause, then the opponent's reveals/rolls/placements.
+  // Queue dice before publishing their resolved snapshot. Placement-only
+  // updates still give the player's chits priority over the opponent's.
   prefetchOdds(state.decision);
+  drainRolls();
+  if (dicePresentationPending()) {
+    if (countryTip) countryTip.hidden = true;
+    if (previewEl) previewEl.hidden = true;
+    return;
+  }
   const fly = flyDiff();
   // The player's own chits are priority: if their click lands while the queue
   // is still busy, it must not sit behind it.
@@ -1961,8 +1990,8 @@ function render() {
   // catchUp() polls the server faster than the FX play, so an unguarded beat
   // charged 400 ms of dead air to every one of the bot's setup placements.
   if (fly.opp.length) enqueueBeat();
-  drainRolls();
   enqueuePlacements(fly.opp);
+  renderExperience();
   renderBoard();
   renderPanel();
   renderEffectsHud();
@@ -1989,6 +2018,7 @@ let cueWasMine = null;     // null until the first render, so a reload is quiet
 let faviconAlert = null;
 
 function renderCue() {
+  if (dicePresentationPending()) return;
   if (!state) return;
   const over = !!state.is_terminal;
   // `state.decision` only ever carries the human's own decision (the server
@@ -2037,6 +2067,7 @@ function setFavicon(alert) {
 }
 
 function renderBoard() {
+  if (dicePresentationPending()) return;
   if (!state) return;
   $("#board").onerror = () => $("#boardwrap").classList.add("noboard");
   // A hovered marker is destroyed on rebuild, so its mouseleave may never fire;
@@ -2049,10 +2080,11 @@ function renderBoard() {
   const d = state.decision;
   for (const [cid, inf] of Object.entries(state.influence)) {
     const pos = POS[cid];
-    const target = d ? countryOption(cid) : null;
+    const candidate = d ? countryOption(cid) : null;
+    const target = planAllows(cid) ? candidate : null;
     // No influence and not a legal target: blank box, VASSAL-style.
     // A 0/0 legal target still renders (empty glow, no pips) so it stays clickable.
-    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0)) continue;
+    if (!pos || (target === null && inf.US === 0 && inf.USSR === 0 && !(planResult && planResult.influence[cid]))) continue;
     const el = document.createElement("div");
     el.className = "marker" + (target !== null ? " legal" : "");
     if (pos.w && pos.h) {
@@ -2089,11 +2121,17 @@ function renderBoard() {
       el.setAttribute("role", "button");
       el.addEventListener("click", () => {
         if (dragMoved > 6) return;  // that was a map drag, not a click
-        act(target);
+        mapPick(target);
       });
       el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (dragMoved <= 6) act(target); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (dragMoved <= 6) mapPick(target); }
       });
+    }
+    if (planMode && planResult && planResult.influence[cid]) {
+      const ghost = document.createElement('span'); ghost.className = 'plan-ghost';
+      const n = planCountries.filter((c) => c === cid).length;
+      ghost.textContent = `+${n}`; ghost.title = 'Planned influence — not committed';
+      el.append(ghost);
     }
     host.append(el);
   }
@@ -2183,6 +2221,7 @@ function kv(label, value) {
 }
 
 function renderGameStatus() {
+  if (dicePresentationPending()) return;
   const el = $("#gamestatus");
   if (!el || !state) return;
   const phase = state.phase === "action_rounds" ? `Round ${state.action_round}`
@@ -2200,6 +2239,7 @@ function renderGameStatus() {
 }
 
 function renderPanel() {
+  if (dicePresentationPending()) return;
   renderGameStatus();
 
   const status = $("#status");
@@ -2267,8 +2307,8 @@ function renderPanel() {
   // honest once the player's own move is on the board: while their click is
   // still in flight (`busy`) or their chit is still landing (`settling`), the
   // row would announce the bot over influence the player has not seen arrive.
-  const waiting = (state.watch && playing && !state.is_terminal)
-    || (!busy && !settling());
+  const waiting = !state.is_terminal && !connectionProblem && ((state.watch && playing)
+    || (!state.decision && !busy && !settling()));
   if (waiting) {
     const wait = document.createElement("div");
     wait.className = "feedrow wait";
@@ -2803,6 +2843,7 @@ function cardEl(cid, actionIndex, locked = null) {
 /* Hover preview: floats just above the hovered card, viewport-clamped
  * (it drops below the card when there is no room above). */
 function showPreview(cid, card) {
+  if (dicePresentationPending()) return;
   if (!previewEl) return;
   previewEl.textContent = "";
   const m = META[cid] || {};
@@ -2840,6 +2881,11 @@ function showPreview(cid, card) {
         + `US ${tier(pv.us)} vs USSR ${tier(pv.ussr)} · VP ${state.vp} → ${pv.vp_after}`;
     }
     previewEl.append(box);
+  }
+  const opt = state.decision && state.decision.options.find((o) => o.payload.card === cid);
+  if (opt) {
+    const note = document.createElement('div'); note.className = 'card-consequences';
+    note.textContent = previewLines(opt.index).join(' '); previewEl.append(note);
   }
   previewEl.hidden = false;
   const r = card.getBoundingClientRect();
@@ -2892,6 +2938,7 @@ function cardBlockReason(cid) {
 }
 
 function renderHand() {
+  if (dicePresentationPending()) return;
   const host = $("#hand");
   host.textContent = "";
   // Undo lives here, not only inside the decision box: the mistake a player
@@ -2999,6 +3046,7 @@ function placementOperationsLine(d) {
 }
 
 function renderDecision() {
+  if (dicePresentationPending()) return;
   const box = $("#decision");
   box.textContent = "";
   const d = state.decision;
@@ -3142,6 +3190,7 @@ function renderDecision() {
     b.innerHTML = `${glyphSvg(optionGlyph(o), "ficon opticon")}<b>${esc(optionLabel(o))}</b>`;
     b.disabled = busy;  // a stale option while an action is in flight
     b.addEventListener("click", () => act(o.index));
+    addOptionPreview(b, o.index);
     main.append(b);
   }
 }
@@ -3248,6 +3297,7 @@ function fillSettings() {
 async function postGame(path) {
   if (busy) return;  // a second click must not forfeit/restart twice
   busy = true;
+  await fxChain;
   catchUpGen += 1;   // any boot poll still in flight is now stale
   render();
   try {
@@ -3294,15 +3344,17 @@ async function catchUp() {
   while (state && !state.is_terminal && !state.decision && gen === catchUpGen) {
     const n = state.history_len ?? (state.history || []).length;
     if (n === prev) {
-      if (++stall > 3) break;
+      if (++stall > 3) { reportConnectionProblem(new Error('The opponent stopped making progress.')); break; }
     } else stall = 0;
     prev = n;
     render();
+    await fxChain;
+    if (gen !== catchUpGen) return;
     let next;
     try {
       next = await fetchJson("/state");
     } catch (err) {
-      showError("Lost connection to the game server.");
+      reportConnectionProblem(err);
       return;
     }
     if (gen !== catchUpGen) return;   // a new game started while this was out
@@ -3325,6 +3377,7 @@ function forfeitGame() {
 async function goBack() {
   if (busy) return;  // a second click must not fire a second /back (409)
   busy = true;
+  await fxChain;
   render();
   try {
     const res = await fetch("/back", { method: "POST" });
@@ -3440,6 +3493,7 @@ async function startGame() {
 }
 
 function renderWinner() {
+  if (dicePresentationPending()) return;
   const overlay = $("#winner");
   const chip = $("#winnerchip");
   if (!state.is_terminal) {
@@ -3454,7 +3508,7 @@ function renderWinner() {
   // Record once per game, keyed by the (monotonic) seed: a browser reload of
   // the final screen must not pad the record with the same result again.
   if (state.winner && !state.watch) {
-    const key = `struggler.recorded:${state.seed}`;
+    const key = `struggler.recorded:${state.save_id || state.seed}`;
     if (!localStorage.getItem(key)) {
       bumpRecord(state.human_side, state.winner === state.human_side);
       localStorage.setItem(key, "1");
@@ -3462,8 +3516,8 @@ function renderWinner() {
   }
   // Build the dialog once per game; rebuilding every render would destroy the
   // focused buttons and drop keyboard focus.
-  if (overlay.dataset.forSeed !== String(state.seed)) {
-    overlay.dataset.forSeed = String(state.seed);
+  if (overlay.dataset.forSeed !== String(state.save_id || state.game_id)) {
+    overlay.dataset.forSeed = String(state.save_id || state.game_id);
     winnerFocused = false;
     winnerDismissed = false;
     overlay.innerHTML = winnerSummaryHtml();
@@ -3599,10 +3653,10 @@ function helpHtml() {
     + `<p>A marker is one country's Influence: the white pip is a country `
     + `someone is merely present in, the coloured pip is one they control `
     + `(control is ahead by at least the country's Stability). A gold `
-    + `<b>2</b> badge means a placement there costs 2 Ops. Battlegrounds are `
-    + `worth double in Scoring and cost DEFCON when couped.</p>`
+    + `<b>2</b> badge means a placement there costs 2 Ops. Battlegrounds add `
+    + `1 VP when controlled at scoring and help determine domination/control; coups there normally lower DEFCON.</p>`
     + `<h3>Defeat</h3>`
-    + `<p>DEFCON 1 loses the game for whoever caused it, and a side at 20 VP `
+    + `<p>At DEFCON 1, the phasing player (whose action round it is) loses, and a side at 20 VP `
     + `wins outright. Europe control ends it too.</p>`
     + `<h3>Keys</h3><div class="hkeys">${keys}</div>`;
 }

@@ -34,6 +34,7 @@ import argparse
 import json
 import sys
 import threading
+import time
 import urllib.parse
 import webbrowser
 from enum import Enum
@@ -53,6 +54,8 @@ from struggler.engine.replay import (  # noqa: E402
     encode_action,
     replay_history,
 )
+from struggler.web_support import (GameLibrary, encode_history, decode_history,
+                                   strategic_overview, action_preview)
 from struggler.engine.types import Action  # noqa: E402
 
 UI_DIR = ROOT / "ui"
@@ -100,7 +103,8 @@ class Session:
     """One interactive game: the engine, the bot seats, the advance loop."""
 
     def __init__(self, seed: int, us: str, ussr: str, events: bool,
-                 include_ccw: bool = True, log_dir: str | None = None) -> None:
+                 include_ccw: bool = True, log_dir: str | None = None,
+                 library_dir: str | Path | None = None) -> None:
         humans = (us == "human") + (ussr == "human")
         if humans > 1:
             raise SystemExit("at most one human seat (no per-client identity)")
@@ -114,10 +118,100 @@ class Session:
         self.include_ccw = include_ccw
         self.setup_us_extra = 0
         self.log_dir = log_dir
-        self.game_id = 0
+        self.library = GameLibrary(library_dir) if library_dir else None
+        self.save_id = None
+        self.saved_at = None
+        self.save_error = None
+        self.game_id = time.time_ns() // 1_000_000 if self.library else 0
         self._log_writer: GameLogWriter | None = None
         self.lock = threading.Lock()
-        self._rebuild()
+        entries = self.library.entries() if self.library else []
+        if entries:
+            try:
+                self.load_game(entries[0]['id'])
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise RuntimeError(f"Could not restore saved game: {exc}") from exc
+        else:
+            self._rebuild()
+
+    def save_game(self) -> None:
+        if not self.library:
+            return
+        snapshot = dict(
+            engine=self.engine.serialize(), history=encode_history(self.history.history),
+            pending_headline=encode_history(self.history._pending_headline),
+            human_side=self.human_side.value, bot_kind=self.bot_kind,
+            us=self.us, ussr=self.ussr, events=self.events, watch=self.watch,
+            undo=None if self._undo is None else dict(
+                engine=self._undo['engine'], history=encode_history(self._undo['history']),
+                pending_headline=encode_history(self._undo['pending_headline'])),
+        )
+        try:
+            self.save_id, self.saved_at = self.library.write(self.save_id, self._json(snapshot))
+            self.save_error = None
+        except (OSError, ValueError, TypeError) as exc:
+            self.save_error = f"Automatic save failed: {exc}"
+            print(self.save_error)
+
+    def load_game(self, game: str) -> None:
+        if not self.library:
+            raise RuntimeError('Game library is not enabled')
+        snapshot = self.library.read(game)
+        # Decode everything before replacing the live session. A damaged save
+        # cannot leave the current game half-loaded.
+        engine = Engine.deserialize(snapshot['engine'])
+        history = decode_history(snapshot['history'])
+        pending = decode_history(snapshot['pending_headline'])
+        undo = snapshot.get('undo')
+        if undo:
+            undo = dict(engine=undo['engine'], history=decode_history(undo['history']),
+                        pending_headline=decode_history(undo['pending_headline']))
+        players = {Side(side): build_player(kind, seed=snapshot['engine']['seed'] + offset)
+                   for side, kind, offset in (('US', snapshot['us'], 1), ('USSR', snapshot['ussr'], 2))
+                   if kind != 'human'}
+        self._close_log()
+        self.engine, self.players = engine, players
+        self.seed = int(snapshot['engine']['seed'])
+        self.human_side = Side(snapshot['human_side'])
+        self.us, self.ussr = snapshot['us'], snapshot['ussr']
+        self.bot_kind, self.events = snapshot['bot_kind'], snapshot['events']
+        self.watch = snapshot['watch']
+        self.include_ccw = 'Chinese_Civil_War' in engine.board.countries
+        self.setup_us_extra = engine.setup_us_extra
+        self.history = HistoryBuilder(history)
+        self.history._pending_headline = pending
+        self._undo = undo
+        self.game_id += 1
+        self.save_id, self.saved_at = game, snapshot['saved_at']
+        self._rebind()
+        self._open_log(initial_actions=[encode_action(e.action) for e in history + pending])
+        self.save_game()
+
+    def placement_plan(self, countries: list[str], game_id: int, decision_id: int) -> tuple[Engine, list[Action]]:
+        if game_id != self.game_id or self.engine.pending_decision is None or decision_id != self.engine.pending_decision.id:
+            raise RuntimeError('The position changed. Please plan again.')
+        if self.watch or not isinstance(countries, list) or not 0 < len(countries) <= 20:
+            raise ValueError('Choose between 1 and 20 placements')
+        clone = Engine.deserialize(self.engine.serialize())
+        actions = []
+        for country in countries:
+            d = clone.pending_decision
+            if d is None or d.actor is not self.human_side or d.kind is not DecisionKind.PLACE_INFLUENCE or d.context.get('setup'):
+                raise ValueError('A plan must stay within the current Operations placement')
+            action = next((a for a in d.options if a.payload.get('country') == country), None)
+            if action is None:
+                raise ValueError(f'{country} is not a legal placement in this plan')
+            actions.append(action)
+            clone.step(action)
+        return clone, actions
+
+    def commit_plan(self, countries: list[str], game_id: int, decision_id: int) -> None:
+        _, actions = self.placement_plan(countries, game_id, decision_id)
+        self._undo = {'engine': self.engine.serialize(), 'history': list(self.history.history),
+                      'pending_headline': list(self.history._pending_headline)}
+        for action in actions:
+            self._step(action)
+        self.advance()
 
     @classmethod
     def resume(cls, log_path: str, us: str, ussr: str, log_dir: str | None = None) -> "Session":
@@ -134,6 +228,8 @@ class Session:
         session.events = bool(log.get("events", True))
         session.bot_kind = ussr if us == "human" else us
         session.log_dir = log_dir
+        session.library = None
+        session.save_id = session.saved_at = session.save_error = None
         session.game_id = 0
         session._log_writer = None
         session.lock = threading.Lock()
@@ -165,6 +261,7 @@ class Session:
 
     def _rebuild(self) -> None:
         self._close_log()  # finalize the outgoing game's log
+        self.save_id = None
         self.game_id += 1
         self.engine = Engine.new_game(
             seed=self.seed, events=self.events, include_ccw=self.include_ccw,
@@ -178,6 +275,7 @@ class Session:
         self.history = HistoryBuilder()
         self._undo = None
         self._open_log()
+        self.save_game()
 
     def restart(self, include_ccw: bool | None = None, side: str | None = None,
                 setup_us_extra: int | None = None) -> None:
@@ -216,11 +314,13 @@ class Session:
         # Rewrite the on-disk log to match the rewound game.
         self._close_log()
         self._open_log(initial_actions=[encode_action(e.action) for e in self.history.history])
+        self.save_game()
 
     def forfeit(self, **restart_kw: Any) -> str:
         """Opponent wins, then a new game starts. Returns the winner's side."""
         winner = self.human_side.opponent
         self.engine._win(winner, "forfeit")
+        self.save_game()
         side = winner.value
         self.restart(**restart_kw)
         return side
@@ -231,6 +331,7 @@ class Session:
         event = self.history.record(decision, action, self.engine)
         if self._log_writer is not None:
             self._log_writer.record_step(event)
+        self.save_game()
         detail = dict(action.payload)
         print(
             f"T{event.turn}/R{event.action_round} {event.actor.value:4s} "
@@ -323,6 +424,11 @@ class Session:
         decision = obs.pending_decision
         data: dict[str, Any] = {
             "game_id": self.game_id,
+            "save_id": self.save_id,
+            "saved_at": self.saved_at,
+            "save_error": self.save_error,
+            "library_enabled": self.library is not None,
+            "strategy": strategic_overview(engine),
             "human_side": self.human_side.value,
             "seed": self.seed,
             "include_ccw": "Chinese_Civil_War" in engine.board.countries,
@@ -389,6 +495,9 @@ class Session:
                 ],
             },
         }
+        if data['decision'] is not None:
+            data['action_previews'] = {str(i): action_preview(engine, decision, action)
+                                       for i, action in enumerate(decision.options)}
         return data
 
 
@@ -455,6 +564,15 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                     self._send_json(500, {"error": str(exc)})
                     return
                 self._send_json(200, payload)
+            elif route == "/games":
+                with session.lock:
+                    entries = session.library.entries() if session.library else []
+                self._send_json(200, {'games': entries})
+            elif route == "/position":
+                # A read-only refresh: retries must not spend another bot move.
+                with session.lock:
+                    payload = session.state()
+                self._send_json(200, payload)
             elif route == "/cards":
                 self._send_json(200, cards_meta)
             elif route == "/countryfacts":
@@ -482,7 +600,7 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                 self._send_json(200, payload)
             elif route in ("/", "/index.html"):
                 self._static("index.html")
-            elif route in ("/app.js", "/style.css", "/countries.json"):
+            elif route in ("/app.js", "/experience.js", "/style.css", "/countries.json"):
                 self._static(route.lstrip("/"))
             elif route.startswith("/assets/"):
                 self._static(str(Path("assets") / route[len("/assets/"):]))
@@ -508,6 +626,29 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                             decision_id=body.get("decision_id"),
                         )
                         code, payload = 200, session.state()
+                    elif self.path == "/games/load":
+                        session.load_game(body.get('id'))
+                        code, payload = 200, session.state()
+                    elif self.path in ('/plan', '/plan/commit'):
+                        countries = body.get('countries')
+                        game_id, decision_id = body.get('game_id'), body.get('decision_id')
+                        if self.path == '/plan/commit':
+                            session.commit_plan(countries, game_id, decision_id)
+                            code, payload = 200, session.state()
+                        else:
+                            clone, _ = session.placement_plan(countries, game_id, decision_id)
+                            d = clone.pending_decision
+                            code, payload = 200, {
+                                'influence': {c: clone.board.influence[c] for c in set(countries)},
+                                'next_options': [a.payload.get('country') for a in d.options if a.payload.get('country')]
+                                    if d and d.actor is session.human_side and d.kind is DecisionKind.PLACE_INFLUENCE else [],
+                                'context': session._json(d.context)
+                                    if d and d.actor is session.human_side and d.kind is DecisionKind.PLACE_INFLUENCE else {},
+                                'strategy': strategic_overview(clone),
+                                'controls': {c: clone.board.control(c).value if clone.board.control(c) else None for c in set(countries)},
+                                'previews': {a.payload['country']: action_preview(clone, d, a) for a in d.options if a.payload.get('country')}
+                                    if d and d.actor is session.human_side and d.kind is DecisionKind.PLACE_INFLUENCE else {},
+                            }
                     elif self.path == "/new":
                         session.restart(**_restart_opts(body))
                         code, payload = 200, session.state()
@@ -525,7 +666,7 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
                         code, payload = 200, session.state()
                     else:
                         code, payload = 404, {"error": "not found"}
-                except (ValueError, TypeError, RuntimeError) as exc:
+                except (ValueError, TypeError, RuntimeError, OSError, KeyError) as exc:
                     code, payload = 409, {"error": str(exc), "state": session.state()}
             self._send_json(code, payload)
 
@@ -547,15 +688,19 @@ def main() -> None:
                         help="write each game's replay log here (default: none)")
     parser.add_argument("--resume-log", default=None,
                         help="continue the game saved in this replay log instead of dealing fresh")
+    parser.add_argument('--library-dir', default=str(ROOT / 'data' / 'games'),
+                        help='automatic saves and game library (default: data/games)')
     args = parser.parse_args()
 
     if args.resume_log:
         session = Session.resume(
             args.resume_log, us=args.us, ussr=args.ussr, log_dir=args.log_dir
         )
+        session.library = GameLibrary(args.library_dir)
+        session.save_game()
     else:
         session = Session(seed=args.seed, us=args.us, ussr=args.ussr,
-                          events=args.events, log_dir=args.log_dir)
+                          events=args.events, log_dir=args.log_dir, library_dir=args.library_dir)
     cards_meta = {
         cid: {
             "number": card.number,

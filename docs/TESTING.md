@@ -104,3 +104,14 @@ Going forward:
   card, a flag) can transiently live, update the shared invariant helper in
   `conftest.py` once, rather than letting each test file's own copy drift
   out of sync with it.
+
+Browser persistence and previews are covered in `test_web_experience.py`: exact
+engine/RNG restoration, secret headline handling, durable undo, damaged saves,
+non-mutating scoring, and atomic influence plan validation. Check library,
+recovery, and staged map placement in the browser after UI changes.
+
+Dice ordering has an executable client regression in
+`tests/browser/dice_order.cjs` (Node.js). The pytest wrapper skips it when Node
+is unavailable; run the Node command explicitly for browser animation changes.
+It asserts that resolved board/history/score surfaces do not render before dice
+complete, including paired realignments across polling responses.

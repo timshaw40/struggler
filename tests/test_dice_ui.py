@@ -67,3 +67,16 @@ def test_the_dice_popup_sits_above_the_action_box():
         f"the dice box (z-index {dice}) would paint under the floating action "
         f"box (z-index {decision}) and rolls would be invisible"
     )
+
+
+def test_dice_finish_before_board_history_and_scores_change():
+    """Run the real client render/FX pipeline with controllable dice promises."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for the client timing regression")
+    result = subprocess.run([node, "tests/browser/dice_order.cjs"], cwd=ROOT,
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
