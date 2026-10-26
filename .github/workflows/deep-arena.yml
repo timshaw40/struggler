@@ -1,0 +1,82 @@
+# The deep bot's strength gate, run on demand: deep vs an opponent over many
+# side-swapped seeds, split into shards on separate runners because mcts games
+# are slow, then summarized. Actions → deep-arena → Run workflow.
+name: deep-arena
+
+on:
+  workflow_dispatch:
+    inputs:
+      opponent:
+        description: "opponent kind (mcts, greedy, ...)"
+        default: "mcts"
+      shards:
+        description: "number of runners"
+        default: "20"
+      seeds_per_shard:
+        description: "seeds per runner (each seed is two games, one per side)"
+        default: "5"
+      model_url:
+        description: "DeepStruggle ONNX model"
+        default: "https://huggingface.co/mihaild/deepstruggle/resolve/main/_models/E7-A8-R1-S44%406400M%2B%28R34%2CR34-S45%2CR34-S46%29%407120..7200M.onnx"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.p.outputs.shards }}
+    steps:
+      - id: p
+        run: echo "shards=$(python3 -c "import json; print(json.dumps(list(range(int('${{ inputs.shards }}')))))")" >> "$GITHUB_OUTPUT"
+
+  shard:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[deep]"
+      - name: Engine (the shim, built natively) and model
+        run: |
+          DEEP_CXX=clang++ scripts/build_deep_wasm.sh data/deep/libdeep.so
+          mkdir -p data/deep && curl -sSfL -o data/deep/model.onnx "${{ inputs.model_url }}"
+      - name: Play the shard
+        env:
+          STRUGGLER_DEEP_SHARED_LIB: data/deep/libdeep.so
+        run: |
+          n=${{ inputs.seeds_per_shard }}
+          start=$((5000 + ${{ matrix.shard }} * n))
+          python scripts/deep_gate.py --opponent "${{ inputs.opponent }}" --seeds "$start:$((start + n))" \
+            --workers "$(nproc)" --out shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.json
+
+  summary:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+          merge-multiple: true
+      - name: Summarize
+        run: |
+          pip install -e . >/dev/null
+          python scripts/deep_gate.py --summarize shards/*.json | tee summary.txt
+          echo "::notice title=deep arena::$(python -c "print(open('summary.txt').read().replace('%','%25').replace(chr(10),'%0A'))")"
+          cat summary.txt >> "$GITHUB_STEP_SUMMARY"
