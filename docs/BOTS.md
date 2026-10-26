@@ -889,6 +889,17 @@ counted in `stats` by reason. Setup placements always fall back (DeepStruggle's
 setup bonus differs), as does a fresh instance until its first boundary, for
 example after a server restart.
 
+**Outright wins come first** (`bots/deep/safety.py`). DeepStruggle's expert
+review found the network declining decisive wins (Wargames at a winning lead
+429 of 430 times; events that reach 20 VP about half the time), which
+self-play cannot see. Before asking the network, at a card, play-mode, branch
+or deferred-Ops decision, and only when a win is plausible (a 10+ VP lead,
+DEFCON 2, or turn 10), the player searches each option for a line that ends
+the game in its favour using only its own choices, single-option steps and
+dice that win on every face; a step that draws on DeepStruggle's RNG (a hidden
+card) disqualifies the line. The search is bounded at 400 positions. Over 16
+games against greedy it fired 12 times and added no visible latency.
+
 With a random stand-in model (`tests/deep_fixtures.py`) over 8 games the
 network made 90% of the decisions; every fallback was a setup placement. Strength is measured only with a real model, in the arena:
 
