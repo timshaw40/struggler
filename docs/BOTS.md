@@ -898,6 +898,12 @@ python scripts/run_arena.py --include-mcts --include-deep data/deep/model.onnx -
 python scripts/serve_ui.py --us human --ussr deep
 ```
 
+The `mcts` half of the gate is slow (about 25 minutes a game on 2 cores), so
+`scripts/deep_gate.py` plays one shard of seeds as JSON and summarizes shards,
+and `.github/workflows/deep-arena.yml` (Actions → deep-arena → Run workflow)
+splits the seeds across runners, building the engine and downloading the
+model itself, and reports the combined result as a notice on the run.
+
 `build_player("deep")` reads `STRUGGLER_DEEP_MODEL` (default
 `data/deep/model.onnx`); the engine is `STRUGGLER_DEEP_ENGINE` (native),
 `STRUGGLER_DEEP_SHARED_LIB`, or the WebAssembly build (`STRUGGLER_DEEP_WASM`,
