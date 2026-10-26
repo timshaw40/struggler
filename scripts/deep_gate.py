@@ -1,6 +1,7 @@
 """Deep bot vs one opponent, side-swapped, as JSON (one shard of the gate).
 
     python scripts/deep_gate.py --opponent mcts --seeds 5000:5010 --workers 4 --out shard.json
+    python scripts/deep_gate.py --search on --opponent deep --seeds 5000:5010   # search vs plain
     python scripts/deep_gate.py --summarize shard*.json
 
 The Phase 1 gate (docs/BOTS.md, "Deep bot"): above 70% against `mcts` with
@@ -27,7 +28,8 @@ def summarize(rows: list[dict]) -> str:
     draws = sum(r["draw"] for r in rows)
     losses = len(rows) - wins - draws
     lo, hi = wilson_interval(wins, losses)
-    lines = [f"deep vs {rows[0]['opponent']}: {wins}-{losses}-{draws} over {len(rows)} games, "
+    me = rows[0].get("deep", "deep")
+    lines = [f"{me} vs {rows[0]['opponent']}: {wins}-{losses}-{draws} over {len(rows)} games, "
              f"win rate {wins / max(1, wins + losses):.1%} [Wilson 95%: {lo:.1%}-{hi:.1%}]"]
     for side in ("US", "USSR"):
         mine = [r for r in rows if r["deep_side"] == side]
@@ -37,7 +39,9 @@ def summarize(rows: list[dict]) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--opponent", default="mcts")
+    ap.add_argument("--opponent", default="mcts",
+                    help="a player kind; 'deep' is the plain network, 'deep:<spec>' the network with that search")
+    ap.add_argument("--search", default="off", help="the deep seat's rollout search: off, on, or k:worlds:horizon:rule")
     ap.add_argument("--sims", type=int, default=16, help="mcts simulations (the browser default)")
     ap.add_argument("--seeds", default="5000:5010", help="start:stop seed range")
     ap.add_argument("--workers", type=int, default=2)
@@ -50,14 +54,22 @@ def main() -> None:
         print(summarize(rows))
         return
     start, stop = (int(x) for x in args.seeds.split(":"))
-    deep = PlayerSpec("deep", "deep", net_path=args.model, player_seed=1)
-    opp = PlayerSpec(args.opponent, args.opponent, sims=args.sims, player_seed=1)
+    me = "deep" if args.search == "off" else f"deep+search({args.search})"
+    deep = PlayerSpec(me, "deep", net_path=args.model, player_seed=1, search=args.search)
+    if args.opponent.split(":")[0] == "deep":
+        opp_search = args.opponent.partition(":")[2] or "off"
+        opp_name = "deep" if opp_search == "off" else f"deep+search({opp_search})"
+        if opp_name == me:
+            opp_name += "-2"
+        opp = PlayerSpec(opp_name, "deep", net_path=args.model, player_seed=2, search=opp_search)
+    else:
+        opp = PlayerSpec(args.opponent, args.opponent, sims=args.sims, player_seed=1)
     began = time.perf_counter()
     results = run_matchup(deep, opp, list(range(start, stop)), workers=args.workers)
     rows = []
     for r in results:
-        side = "US" if r.us == "deep" else "USSR"
-        rows.append({"seed": r.seed, "opponent": args.opponent, "deep_side": side,
+        side = "US" if r.us == me else "USSR"
+        rows.append({"seed": r.seed, "deep": me, "opponent": opp.name, "deep_side": side,
                      "winner": r.winner, "deep_won": r.winner == side, "draw": r.winner is None})
     if args.out:
         Path(args.out).write_text(json.dumps(rows))

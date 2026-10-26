@@ -7,8 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       opponent:
-        description: "opponent kind (mcts, greedy, ...)"
+        description: "opponent kind (mcts, greedy, deep = the plain network, deep:<spec> = with search)"
         default: "mcts"
+      search:
+        description: "the deep seat's rollout search: off, on, or k:worlds:horizon:rule"
+        default: "off"
       shards:
         description: "number of runners"
         default: "20"
@@ -54,7 +57,7 @@ jobs:
         run: |
           n=${{ inputs.seeds_per_shard }}
           start=$((5000 + ${{ matrix.shard }} * n))
-          python scripts/deep_gate.py --opponent "${{ inputs.opponent }}" --seeds "$start:$((start + n))" \
+          python scripts/deep_gate.py --opponent "${{ inputs.opponent }}" --search "${{ inputs.search }}" --seeds "$start:$((start + n))" \
             --workers "$(nproc)" --out shard-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         with:

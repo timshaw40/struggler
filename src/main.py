@@ -117,8 +117,10 @@ def build_player(
         from struggler.bots.deep.player import DeepPlayer
 
         # STRUGGLER_DEEP_MODEL names the ONNX model; the engine comes from
-        # STRUGGLER_DEEP_ENGINE (native) or the WebAssembly build.
-        return DeepPlayer(seed=seed)
+        # STRUGGLER_DEEP_ENGINE (native) or the WebAssembly build;
+        # STRUGGLER_DEEP_SEARCH is the rollout search ("off", "on" or
+        # "k:worlds:horizon:rule").
+        return DeepPlayer(seed=seed, search=os.environ.get("STRUGGLER_DEEP_SEARCH", "off"))
     if kind == "rl":
         from struggler.bots.rl.player import RLPlayer
 

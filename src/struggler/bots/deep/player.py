@@ -35,6 +35,8 @@ from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
 from struggler.bots.deep import boundary, safety
+from struggler.bots.deep.search import RolloutConfig, SearchResult
+from struggler.bots.deep.search import search as run_search
 from struggler.bots.deep.choices import choice_slots
 from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.bots.deep.replay import Desync, Partial, replay
@@ -78,6 +80,16 @@ class OnnxPolicy:
         })
         return out[0][0].tolist()
 
+    def forward(self, obs: Any, masks: Any) -> tuple[Any, Any]:
+        """A batch: logits [n, 220] and `v_win` [n] (the search's playouts and leaves)."""
+        import numpy as np
+
+        logits, v_win = self.session.run(["logits", "v_win"], {
+            "obs": np.ascontiguousarray(obs, dtype=np.float32),
+            "mask": np.ascontiguousarray(masks, dtype=np.uint8),
+        })
+        return logits, np.asarray(v_win, dtype=np.float32).reshape(-1)
+
 
 @dataclass
 class _Boundary:
@@ -87,7 +99,8 @@ class _Boundary:
 
 class DeepPlayer:
     def __init__(self, model_path: str | None = None, *, seed: int = 0,
-                 engine: B.DeepEngine | None = None, policy: OnnxPolicy | None = None) -> None:
+                 engine: B.DeepEngine | None = None, policy: OnnxPolicy | None = None,
+                 search: RolloutConfig | str | None = None) -> None:
         path = model_path or os.environ.get("STRUGGLER_DEEP_MODEL") or _default_model()
         if policy is None and not os.path.exists(path):
             raise ValueError(f"no deep model at {path}: run scripts/install_deep.py --model <file.onnx>, "
@@ -101,6 +114,14 @@ class DeepPlayer:
         self.stats: Counter = Counter()
         #: Take an outright win before asking the network (`safety.py`).
         self.take_forced_wins = True
+        #: The rollout root (`search.py`) over the network's top moves, or None
+        #: for the plain network. Needs an engine build with the rollout calls.
+        self.search = RolloutConfig.parse(search) if isinstance(search, str) else search
+        if self.search is not None and not getattr(self.engine, "supports_rollout", False):
+            raise ValueError("this deep engine build has no rollout search: "
+                             "update it with scripts/install_deep.py --engine")
+        #: The last search's result (for the browser's explanation and tests).
+        self.last_search: SearchResult | None = None
 
     def bind_engine(self, engine: Any) -> None:
         if engine.physical_mode:
@@ -114,6 +135,7 @@ class DeepPlayer:
 
     def choose_action(self, observation: Observation, history: Sequence[Event]) -> Action:
         decision = observation.pending_decision
+        self.last_search = None
         if len(decision.options) == 1:
             return decision.options[0]
         self._note_boundary(observation, history)
@@ -162,9 +184,33 @@ class DeepPlayer:
                 best, best_score = index, score
         if best is None or best_score == -math.inf:
             raise _NoMapping("no_mapped_option")
-        return obs.pending_decision.options[best]
+        searched = self._searched(logits, scores)
+        return obs.pending_decision.options[best if searched is None else searched]
 
     # -- the pieces -----------------------------------------------------------
+
+    def _searched(self, logits: list[float], scores: dict[int, list[int]]) -> int | None:
+        """The option the rollout root picks over the network, or None to keep
+        the network's choice. The search runs on DeepStruggle's own move list,
+        so its pick is a flat slot: it counts only when it overrides the
+        network's own top move (the z2 rule's evidence) and some struggler
+        option stands for it."""
+        if self.search is None or len(scores) < 2:
+            return None
+        result = run_search(self.engine, self.policy, logits, self.rng.getrandbits(64), self.search)
+        self.last_search = result
+        if result is None:
+            self.stats["search:skipped"] += 1
+            return None
+        self.stats["search"] += 1
+        if not result.overrode:
+            return None
+        for index, slots in scores.items():
+            if result.pick in slots:
+                self.stats["search:override"] += 1
+                return index
+        self.stats["search:unmapped"] += 1
+        return None
 
     def _outright_win(self, obs: Observation, player: int, scores: dict[int, list[int]]) -> int | None:
         """An option that wins the game outright (`safety.py`), or None. Checked
