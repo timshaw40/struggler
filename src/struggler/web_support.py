@@ -10,7 +10,9 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import Mapping
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,8 +23,21 @@ from struggler.engine.replay import encode_action, decode_action
 from struggler.engine.types import Decision
 
 
-def encode_history(events: list[Event]) -> list[dict]:
-    return [dict(
+def plain(value):
+    """JSON primitives only: enums by value, mappings as dicts, sequences as
+    lists. The same conversion `serve_ui.Session._json` applies."""
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, Mapping):
+        return {k: plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [plain(v) for v in value]
+    return value
+
+
+def encode_event(e: Event) -> dict:
+    """One history event as JSON primitives, ready for `json.dump`."""
+    return plain(dict(
         actor=e.actor.value,
         decision=dict(id=e.decision.id, actor=e.decision.actor.value,
                       kind=e.decision.kind.value,
@@ -33,7 +48,31 @@ def encode_history(events: list[Event]) -> list[dict]:
         space_race=dict(e.space_race), military_ops=dict(e.military_ops),
         country=e.country, country_influence=dict(e.country_influence),
         country_control=e.country_control,
-    ) for e in events]
+    ))
+
+
+def encode_history(events: list[Event]) -> list[dict]:
+    return [encode_event(e) for e in events]
+
+
+class HistoryEncoder:
+    """`encode_history` with a cache: events are immutable and history only
+    grows between undos, so each save encodes just the events added since the
+    last one. Re-encodes from the first event that differs (undo, load)."""
+
+    def __init__(self) -> None:
+        self._events: list[Event] = []
+        self._rows: list[dict] = []
+
+    def encode(self, events: list[Event]) -> list[dict]:
+        keep = 0
+        for old, new in zip(self._events, events):
+            if old is not new:
+                break
+            keep += 1
+        self._events = self._events[:keep] + list(events[keep:])
+        self._rows = self._rows[:keep] + [encode_event(e) for e in events[keep:]]
+        return self._rows
 
 
 def decode_history(rows: list[dict]) -> list[Event]:
@@ -74,7 +113,9 @@ class GameLibrary:
         fd, temporary = tempfile.mkstemp(dir=self.directory, suffix='.tmp')
         try:
             with os.fdopen(fd, 'w') as f:
-                json.dump(data, f)
+                # json.dumps uses the C encoder; json.dump streams through the
+                # pure-Python one and was ~10x slower on a full game.
+                f.write(json.dumps(data, separators=(',', ':')))
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(temporary, path)

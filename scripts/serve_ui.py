@@ -54,7 +54,7 @@ from struggler.engine.replay import (  # noqa: E402
     encode_action,
     replay_history,
 )
-from struggler.web_support import (GameLibrary, encode_history, decode_history,
+from struggler.web_support import (GameLibrary, HistoryEncoder, encode_history, decode_history,
                                    strategic_overview, action_preview)
 from struggler.engine.types import Action  # noqa: E402
 
@@ -142,21 +142,36 @@ class Session:
     def save_game(self) -> None:
         if not self.library:
             return
+        # Every part is JSON primitives already (the engine's state by mandate
+        # #5, history via `encode_event`), so no recursive conversion pass:
+        # that pass over the whole history was most of each save's cost.
+        encoder = self.__dict__.setdefault('_history_encoder', HistoryEncoder())
         snapshot = dict(
-            engine=self.engine.serialize(), history=encode_history(self.history.history),
+            engine=self.engine.serialize(), history=encoder.encode(self.history.history),
             pending_headline=encode_history(self.history._pending_headline),
             human_side=self.human_side.value, bot_kind=self.bot_kind,
             us=self.us, ussr=self.ussr, events=self.events, watch=self.watch,
-            undo=None if self._undo is None else dict(
-                engine=self._undo['engine'], history=encode_history(self._undo['history']),
-                pending_headline=encode_history(self._undo['pending_headline'])),
+            undo=self._encode_undo(),
         )
         try:
-            self.save_id, self.saved_at = self.library.write(self.save_id, self._json(snapshot))
+            self.save_id, self.saved_at = self.library.write(self.save_id, snapshot)
             self.save_error = None
         except (OSError, ValueError, TypeError) as exc:
             self.save_error = f"Automatic save failed: {exc}"
             print(self.save_error)
+
+    def _encode_undo(self) -> dict | None:
+        """The undo point for a save. History only grows between an undo point
+        and the next save, so its history is a prefix of the live one: store
+        the prefix length, not a second copy of the whole game (which doubled
+        every save). Falls back to the full list if that ever stops holding."""
+        if self._undo is None:
+            return None
+        past, live = self._undo['history'], self.history.history
+        prefix = len(past) <= len(live) and all(a is b for a, b in zip(past, live))
+        return dict(engine=self._undo['engine'],
+                    pending_headline=encode_history(self._undo['pending_headline']),
+                    **({'history_len': len(past)} if prefix else {'history': encode_history(past)}))
 
     def load_game(self, game: str) -> None:
         if not self.library:
@@ -169,7 +184,11 @@ class Session:
         pending = decode_history(snapshot['pending_headline'])
         undo = snapshot.get('undo')
         if undo:
-            undo = dict(engine=undo['engine'], history=decode_history(undo['history']),
+            # `history_len`: the undo point's history is a prefix of this
+            # save's history. Saves written before that field carry the list.
+            undo_history = (history[:undo['history_len']] if 'history_len' in undo
+                            else decode_history(undo['history']))
+            undo = dict(engine=undo['engine'], history=undo_history,
                         pending_headline=decode_history(undo['pending_headline']))
         players = {Side(side): build_player(kind, seed=snapshot['engine']['seed'] + offset)
                    for side, kind, offset in (('US', snapshot['us'], 1), ('USSR', snapshot['ussr'], 2))
@@ -337,7 +356,6 @@ class Session:
         event = self.history.record(decision, action, self.engine)
         if self._log_writer is not None:
             self._log_writer.record_step(event)
-        self.save_game()
         detail = dict(action.payload)
         print(
             f"T{event.turn}/R{event.action_round} {event.actor.value:4s} "
@@ -346,7 +364,12 @@ class Session:
         return event
 
     def step_once(self) -> None:
-        """Resolve exactly one CHANCE roll or bot decision (watch mode)."""
+        """Resolve exactly one CHANCE roll or bot decision (watch mode), then
+        save."""
+        self._step_once()
+        self.save_game()
+
+    def _step_once(self) -> None:
         if self.engine.is_terminal:
             return
         decision = self.engine.pending_decision
@@ -362,12 +385,15 @@ class Session:
             self._step(action)
 
     def advance(self) -> None:
-        """Resolve CHANCE + bot decisions until the human must choose."""
+        """Resolve CHANCE + bot decisions until the human must choose, then
+        save once. Saves happen at request boundaries, not per step: a full
+        snapshot per step made autosave most of a bot game's wall time."""
         while not self.engine.is_terminal:
             decision = self.engine.pending_decision
             if decision is None or decision.actor is self.human_side:
-                return
-            self.step_once()
+                break
+            self._step_once()
+        self.save_game()
 
     def act(self, index: int, game_id: int | None = None,
             decision_id: int | None = None) -> None:
@@ -393,6 +419,7 @@ class Session:
             "pending_headline": list(self.history._pending_headline),
         }
         self._step(decision.options[index])
+        self.save_game()  # the human's own move is durable before bots think
         self.advance()
 
     # -- state projection ---------------------------------------------------

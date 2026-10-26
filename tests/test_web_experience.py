@@ -37,6 +37,7 @@ def test_unpaired_headline_survives_save_without_becoming_public(tmp_path):
     while session.engine.pending_decision.kind is not DecisionKind.HEADLINE_PLAY:
         session._step(session.engine.legal_actions()[0])
     session._step(session.engine.legal_actions()[0])
+    session.save_game()  # requests save at their end; `_step` itself does not
     assert len(session.history._pending_headline) == 1
     pending = session.history._pending_headline[0]
     restored = serve_ui.Session(1, 'human', 'greedy', True, library_dir=tmp_path)
@@ -193,3 +194,55 @@ def test_a_finished_last_game_is_not_restored(tmp_path):
     assert not restored.restored
     assert restored.save_id != finished
     assert restored.seed == 9 and restored.bot_kind == 'random'
+
+def test_saves_happen_per_request_not_per_step(tmp_path, monkeypatch):
+    session = serve_ui.Session(3, 'human', 'greedy', True, library_dir=tmp_path)
+    calls = []
+    monkeypatch.setattr(session, 'save_game', lambda: calls.append(len(session.history.history)))
+    session.advance()  # the bot's setup and CHANCE steps before the human acts
+    assert len(calls) == 1
+    steps_before = len(session.history.history)
+    session.act(0)
+    assert calls[-2] == steps_before + 1  # the human's move is saved before bots reply
+    assert len(calls) == 3
+
+
+def test_undo_point_is_saved_as_a_history_prefix_and_restores(tmp_path):
+    session = serve_ui.Session(3, 'human', 'greedy', True, library_dir=tmp_path)
+    session.advance()
+    before = session.engine.serialize()
+    session.act(0)
+    raw = json.loads((tmp_path / f'{session.save_id}.json').read_text())
+    assert 'history_len' in raw['undo'] and 'history' not in raw['undo']
+    restored = serve_ui.Session(99, 'human', 'greedy', True, library_dir=tmp_path)
+    restored.undo()
+    assert restored.engine.serialize() == before
+    assert len(restored.history.history) == raw['undo']['history_len']
+
+
+def test_a_save_written_with_a_full_undo_history_still_loads(tmp_path):
+    session = serve_ui.Session(3, 'human', 'greedy', True, library_dir=tmp_path)
+    session.advance()
+    before = session.engine.serialize()
+    session.act(0)
+    path = tmp_path / f'{session.save_id}.json'
+    raw = json.loads(path.read_text())
+    n = raw['undo'].pop('history_len')
+    raw['undo']['history'] = raw['history'][:n]  # the format #38 wrote
+    path.write_text(json.dumps(raw))
+    restored = serve_ui.Session(99, 'human', 'greedy', True, library_dir=tmp_path)
+    restored.undo()
+    assert restored.engine.serialize() == before
+
+
+def test_history_encoder_cache_matches_a_full_encode_across_undo():
+    from struggler.web_support import HistoryEncoder, encode_history
+    session = serve_ui.Session(3, 'human', 'greedy', True)
+    encoder = HistoryEncoder()
+    session.advance()
+    assert encoder.encode(session.history.history) == encode_history(session.history.history)
+    session.act(0)
+    assert encoder.encode(session.history.history) == encode_history(session.history.history)
+    session.undo()  # history rewinds; the cache must drop the undone tail
+    assert encoder.encode(session.history.history) == encode_history(session.history.history)
+    assert json.loads(json.dumps(encoder.encode(session.history.history))) == encode_history(session.history.history)
