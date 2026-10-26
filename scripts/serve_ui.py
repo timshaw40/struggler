@@ -288,6 +288,12 @@ class Session:
         self._close_log()  # finalize the outgoing game's log
         self.save_id = None
         self.game_id += 1
+        if "deep" in (self.us, self.ussr):
+            # DeepStruggle models neither the Chinese Civil War option nor any US
+            # setup bonus but its own 2 points: the deep bot plays only that game.
+            self.include_ccw, self.setup_us_extra = False, 2
+            if not self.events:
+                raise SystemExit("the deep bot needs the event layer on (drop --no-events)")
         self.engine = Engine.new_game(
             seed=self.seed, events=self.events, include_ccw=self.include_ccw,
             setup_us_extra=self.setup_us_extra,

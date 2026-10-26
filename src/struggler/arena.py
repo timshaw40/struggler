@@ -38,11 +38,11 @@ class PlayerSpec:
     """A named, reconstructible player, small enough to pickle to a worker."""
 
     name: str
-    kind: str = "greedy"  # greedy | mcts | random | first | rl
+    kind: str = "greedy"  # greedy | mcts | random | first | rl | deep
     weights: Mapping[str, float] | None = None
     sims: int = 16
     player_seed: int = 0
-    net_path: str | None = None  # for kind == "rl"
+    net_path: str | None = None  # for kind == "rl" (policy .pt) and "deep" (ONNX model)
 
     def with_name(self, name: str) -> "PlayerSpec":
         return PlayerSpec(name, self.kind, self.weights, self.sims, self.player_seed, self.net_path)
@@ -60,6 +60,10 @@ def make_player(spec: PlayerSpec):
         from struggler.bots.mcts import MCTSPlayer
 
         return MCTSPlayer(seed=spec.player_seed, sims=spec.sims)
+    if spec.kind == "deep":
+        from struggler.bots.deep.player import DeepPlayer
+
+        return DeepPlayer(spec.net_path, seed=spec.player_seed)
     if spec.kind == "random":
         from struggler.bots.naive import RandomPlayer
 
@@ -80,8 +84,15 @@ class GameResult:
     events: bool = True
 
 
+#: The game options a `deep` seat requires (DeepStruggle has no Chinese Civil
+#: War option and gives the US its 2-point setup bonus); every other matchup
+#: keeps `Engine.new_game`'s defaults so earlier results stay comparable.
+DEEP_GAME_OPTIONS = {"include_ccw": False, "setup_us_extra": 2}
+
+
 def play_one(seed: int, us: PlayerSpec, ussr: PlayerSpec, events: bool = True) -> GameResult:
-    engine = Engine.new_game(seed=seed, events=events)
+    options = DEEP_GAME_OPTIONS if "deep" in (us.kind, ussr.kind) else {}
+    engine = Engine.new_game(seed=seed, events=events, **options)
     players = {Side.US: make_player(us), Side.USSR: make_player(ussr)}
     winner = play_game(engine, players)
     return GameResult(seed, us.name, ussr.name, winner.value if winner else None, events)

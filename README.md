@@ -124,6 +124,21 @@ a result. The sidebar explains regional scoring; action previews show immediate
 consequences. During influence Operations, **Plan influence** lets you stage
 several placements before committing. See [browser behavior](docs/BROWSER.md).
 
+### Play the deep bot
+
+The strongest opponent is DeepStruggle's neural network
+([mihaild/DeepStruggle](https://github.com/mihaild/DeepStruggle)), running
+locally on Windows, macOS or Linux with no compiler:
+
+```sh
+pip install -e ".[deep]"
+python scripts/install_deep.py --engine --model path/to/model.onnx
+python scripts/serve_ui.py --us human --ussr deep
+```
+
+It plays with the Chinese Civil War option off and the standard +2 US setup
+bonus. See [docs/BOTS.md](docs/BOTS.md), "Deep bot".
+
 ### Watch the bots play each other
 
 ```sh

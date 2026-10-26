@@ -113,6 +113,12 @@ def build_player(
             uct_c=float(os.environ.get("STRUGGLER_MCTS_UCT_C", "1.4")),
             value=value,
         )
+    if kind == "deep":
+        from struggler.bots.deep.player import DeepPlayer
+
+        # STRUGGLER_DEEP_MODEL names the ONNX model; the engine comes from
+        # STRUGGLER_DEEP_ENGINE (native) or the WebAssembly build.
+        return DeepPlayer(seed=seed)
     if kind == "rl":
         from struggler.bots.rl.player import RLPlayer
 

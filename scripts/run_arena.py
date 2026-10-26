@@ -41,6 +41,9 @@ def main() -> None:
     ap.add_argument("--weights", default=None, help="greedy weights JSON to add as 'tuned'")
     ap.add_argument("--include-mcts", action="store_true")
     ap.add_argument("--mcts-sims", type=int, default=4)
+    ap.add_argument("--include-deep", metavar="MODEL", default=None,
+                    help="add the deep bot playing this DeepStruggle ONNX model; games with it use "
+                         "include_ccw=False and setup_us_extra=2")
     ap.add_argument(
         "--events", action=argparse.BooleanOptionalAction, default=True,
         help="Pass events= to Engine.new_game (default: on).",
@@ -56,6 +59,8 @@ def main() -> None:
         specs.append(PlayerSpec("tuned", "greedy", weights_to_dict(load_weights(args.weights))))
     if args.include_mcts:
         specs.append(PlayerSpec("mcts", "mcts", sims=args.mcts_sims, player_seed=1))
+    if args.include_deep:
+        specs.append(PlayerSpec("deep", "deep", net_path=args.include_deep, player_seed=1))
 
     seeds = [args.seed_base + i for i in range(args.seeds)]
     print(f"round-robin: {len(specs)} bots, {args.seeds} seeds (side-swapped), "

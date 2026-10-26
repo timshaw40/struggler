@@ -824,9 +824,9 @@ meaningful policy is an hours-to-days run, not minutes; the value is only as
 good as the signal until many games accumulate; and a batched engine is the
 main remaining throughput lever.
 
-## Deep bot (in progress: Phase 0)
+## Deep bot
 
-The `deep` bot will play DeepStruggle's network
+The `deep` bot plays DeepStruggle's network
 ([mihaild/DeepStruggle](https://github.com/mihaild/DeepStruggle), MIT, pinned
 as the `third_party/deepstruggle` submodule) through the ordinary `Player`
 contract. Struggler stays the referee: to decide, the player rebuilds the
@@ -867,8 +867,40 @@ branches, `CHOOSE_BRANCH`), random draws, and end-of-game bookkeeping (VP
 clamped at 20 in DeepStruggle). The deep bot needs the event layer on, the
 Chinese Civil War option off, and `setup_us_extra=2` (DeepStruggle's setup).
 
-Next (Phase 1): the player itself, with ONNX inference over struggler's legal
-options and a greedy fallback on any `Desync`, gated in the arena.
+### The player (`bots/deep/player.py`)
+
+`DeepPlayer` keeps the observation from each of its own headline picks and
+action-round starts (its boundary), plus the history length then. To decide,
+it determinizes the unknown cards (any card the opponent has since played from
+hand goes in that hand), rebuilds and replays through every event since,
+checks that DeepStruggle is asking this seat and its board matches the
+observation, then runs the ONNX policy (`OnnxPolicy`, `onnxruntime`, CPU). Each
+struggler option is scored by the flat slots it stands for; an option made of
+several (struggler's "ops" before the Ops type is chosen, which also covers the
+event-first order on an opponent's card) scores their combined probability.
+Unmapped options are never chosen. Any failure falls back to `GreedyPlayer`,
+counted in `stats` by reason. Setup placements always fall back (DeepStruggle's
+setup bonus differs), as does a fresh instance until its first boundary, for
+example after a server restart.
+
+With a random stand-in model (`tests/deep_fixtures.py`) over 8 games the
+network made 89% of the decisions; the rest were setup and unmapped event
+choices. Strength is measured only with a real model, in the arena:
+
+```sh
+python scripts/install_deep.py --engine --model path/to/model.onnx
+python scripts/run_arena.py --include-mcts --include-deep data/deep/model.onnx --seeds 100 --workers 8
+python scripts/serve_ui.py --us human --ussr deep
+```
+
+`build_player("deep")` reads `STRUGGLER_DEEP_MODEL` (default
+`data/deep/model.onnx`); the engine is `STRUGGLER_DEEP_ENGINE` (native),
+`STRUGGLER_DEEP_SHARED_LIB`, or the WebAssembly build (`STRUGGLER_DEEP_WASM`,
+default `data/deep/ts_engine.wasm`). Games with a `deep` seat, in the arena and
+in `serve_ui.py`, use `include_ccw=False` and `setup_us_extra=2`; other arena
+matchups keep `new_game`'s defaults so earlier results stay comparable. CI
+publishes the engine as this repo's `deep-engine` release, which
+`install_deep.py --engine` downloads.
 
 ## Server authority, undo, and durable games (serve_ui)
 
