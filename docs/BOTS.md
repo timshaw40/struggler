@@ -861,10 +861,16 @@ How a position is rebuilt (`src/struggler/bots/deep/`):
 
 `scripts/deep_sync_census.py` measures how often the two engines agree: it
 plays greedy self-play, rebuilds every round in DeepStruggle, replays it and
-compares the result. At the pinned commit, over 20 games: **93.6%** of rounds
-agree. The rest is mostly event-internal choices not mapped yet (`EVENT_CHOICE`
-branches, `CHOOSE_BRANCH`), random draws, and end-of-game bookkeeping (VP
-clamped at 20 in DeepStruggle). The deep bot needs the event layer on, the
+compares the result. At the pinned commit, over 20 games: **96.5%** of rounds
+agree. `choices.py` maps struggler's `EVENT_CHOICE` answers to DeepStruggle's
+slots (branches read from its card handlers, countries, cards, regions,
+DEFCON values, "done", and "yes, coup" answers whose target struggler asks
+next); a random draw that differs is swapped into DeepStruggle's staged slot;
+two-die contests take both logged dice; an event struggler closes without a
+"done" gets one. Most of what remains is Space Race box 6's held-card discard
+(DeepStruggle offers it at a different moment), Our Man in Tehran (struggler
+never names the peeked card), Grain Sales' take/return, and a few rule
+differences (Voice of America, Independent Reds into Yugoslavia). The deep bot needs the event layer on, the
 Chinese Civil War option off, and `setup_us_extra=2` (DeepStruggle's setup).
 
 ### The player (`bots/deep/player.py`)
@@ -884,8 +890,7 @@ setup bonus differs), as does a fresh instance until its first boundary, for
 example after a server restart.
 
 With a random stand-in model (`tests/deep_fixtures.py`) over 8 games the
-network made 89% of the decisions; the rest were setup and unmapped event
-choices. Strength is measured only with a real model, in the arena:
+network made 90% of the decisions; every fallback was a setup placement. Strength is measured only with a real model, in the arena:
 
 ```sh
 python scripts/install_deep.py --engine --model path/to/model.onnx

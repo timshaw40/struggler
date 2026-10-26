@@ -35,6 +35,7 @@ from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
 from struggler.bots.deep import boundary
+from struggler.bots.deep.choices import choice_slots
 from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.bots.deep.replay import Desync, Partial, replay
 from struggler.bots.greedy import GreedyPlayer
@@ -230,6 +231,9 @@ class DeepPlayer:
                obs: Observation) -> list[int]:
         assert self.ids is not None
         kind, payload = decision.kind, dict(option.payload)
+        if kind is K.EVENT_CHOICE:
+            return choice_slots(str(decision.context.get("event", "")), str(payload.get("choice")),
+                                dtype, self.engine.mask(), self.ids)
         if kind in (K.HEADLINE_PLAY, K.ACTION_ROUND_PLAY) and dtype == B.SELECT_CARD:
             card = payload.get("card")
             return [B.CARD_OFFSET + self.ids.card_to_ds[card] - 1] if card else []
@@ -257,11 +261,9 @@ class DeepPlayer:
                 return [B.OP_MODE_OFFSET + _OPS_TYPE_OPMODE[t]]
             return []
         if dtype == B.POINT_NODE:
-            if payload.get("stop") or payload.get("choice") in ("stop", "done"):
+            if payload.get("stop"):
                 return [B.CONFIRM_DONE_INDEX]
             country = payload.get("country") if kind in _COUNTRY_KINDS else None
-            if kind is K.EVENT_CHOICE and payload.get("choice") in self.ids.country_to_ds:
-                country = payload["choice"]
             if country in self.ids.country_to_ds:
                 return [B.NODE_OFFSET + self.ids.country_to_ds[country]]
         return []

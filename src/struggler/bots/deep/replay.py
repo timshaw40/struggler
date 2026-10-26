@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
+from struggler.bots.deep.choices import AFFIRM_TARGET, choice_slots
 from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.engine.types import DecisionKind as K
 
@@ -94,14 +95,33 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             _check_random_card(engine, take(), ids)
             continue
 
+        if _kind(queue[i]) is K.EVENT_CHOICE and dtype != B.ROLL_DIE:
+            event = take()
+            event_name = event.decision.context.get("event", "")
+            choice = str(_payload(event).get("choice"))
+            if dtype == B.POINT_NODE and choice in AFFIRM_TARGET:
+                # "Yes, coup": struggler asks the target next; DeepStruggle's node
+                # decision is that target. Step it when the target event comes.
+                if i >= len(queue):
+                    return ReplayResult(steps, Partial(dtype, [event]))
+                continue
+            slots = choice_slots(event_name, choice, dtype, engine.mask(), ids)
+            if len(slots) != 1:
+                raise Desync(f"unmapped_choice:{event_name}", f"{choice} at ds decision {dtype}")
+            _step(engine, slots[0], "choice", event)
+            steps += 1
+            continue
+
         if dtype == B.ROLL_DIE:
-            if _kind(queue[i]) not in _ROLL_KINDS | {K.REALIGNMENT_ACTOR_ROLL}:
+            if _kind(queue[i]) not in _ROLL_KINDS | {K.REALIGNMENT_ACTOR_ROLL, K.CONTEST_ROLL}:
                 # A DeepStruggle chance node struggler does not log (turn cleanup).
                 _cleanup_or_fail(engine, queue[i])
                 steps += 1
                 continue
             event = take()
-            if _kind(event) is K.REALIGNMENT_ACTOR_ROLL:
+            if _kind(event) is K.CONTEST_ROLL:
+                ok = engine.roll(*_contest_dice(event))
+            elif _kind(event) is K.REALIGNMENT_ACTOR_ROLL:
                 if i >= len(queue):
                     return ReplayResult(steps, Partial(dtype, [event]))
                 opp = take()
@@ -112,6 +132,14 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
                 ok = engine.roll(_payload(event)["value"])
             if not ok:
                 raise Desync("roll_refused", f"{_kind(event).value}")
+            steps += 1
+            continue
+
+        if dtype in (B.SELECT_CARD, B.POINT_NODE) and _event_waits_for_done(engine, queue[i], dtype):
+            # struggler finished the event on its own (nothing left to choose);
+            # DeepStruggle still waits for "done".
+            if not engine.step_flat(B.CONFIRM_DONE_INDEX):
+                raise Desync("implicit_done_refused", _kind(queue[i]).value)
             steps += 1
             continue
 
@@ -182,13 +210,47 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
 
 
 def _check_random_card(engine: B.DeepEngine, event: Any, ids: IdMap) -> None:
-    """struggler logged a random draw; DeepStruggle made its own. The card it
-    is now resolving must be the same one."""
+    """struggler logged a random draw; DeepStruggle drew its own, from its RNG,
+    inside the step that led here, and staged it as the frame's
+    `pending_op_card`. If the two differ, swap struggler's card into that slot
+    (and their locations), so the round goes on with the card struggler drew."""
     save = engine.save()
     frame = save["ctx_stack"][save["ctx_stack_depth"]]
     want = ids.card_to_ds[_payload(event)["card"]]
-    if want not in (frame.get("pending_op_card"), frame.get("resolving_card")):
-        raise Desync("random_card", f"struggler drew {_payload(event)['card']}")
+    got = frame.get("pending_op_card")
+    if want == got or want == frame.get("resolving_card"):
+        return
+    if not got:
+        raise Desync("random_card", f"struggler drew {_payload(event)['card']}, nothing staged")
+    locs = save["card_locations"]
+    locs[got], locs[want] = locs[want], locs[got]
+    frame["pending_op_card"] = want
+    engine.load_save(save)
+
+
+def _contest_dice(event: Any) -> tuple[int, int]:
+    """A struggler two-die contest as DeepStruggle's (primary, secondary) dice:
+    Olympic Games takes the sponsor's die first, Summit the US's."""
+    payload, ctx = _payload(event), event.decision.context
+    sponsor, defender = payload["sponsor_roll"], payload["defender_roll"]
+    if str(ctx.get("event", "")).startswith("Summit") and ctx.get("sponsor") == "USSR":
+        return defender, sponsor
+    return sponsor, defender
+
+
+def _event_waits_for_done(engine: B.DeepEngine, next_event: Any, dtype: int) -> bool:
+    """DeepStruggle sits inside an event's open-ended choice that struggler
+    closed without logging a "done": the next struggler event is something
+    else, and DONE is legal."""
+    if not engine.mask()[B.CONFIRM_DONE_INDEX]:
+        return False
+    save = engine.save()
+    if not save["ctx_stack"][save["ctx_stack_depth"]].get("resolving_card"):
+        return False
+    kind = _kind(next_event)
+    if dtype == B.SELECT_CARD:
+        return kind not in _CARD_KINDS and kind is not K.EVENT_CHOICE
+    return kind not in _COUNTRY_KINDS and kind is not K.EVENT_CHOICE
 
 
 def _play_mode_index(group: list[Any]) -> int | None:
