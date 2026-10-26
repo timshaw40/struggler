@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
-from struggler.bots.deep.ids import IdMap
+from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.engine.types import DecisionKind as K
 
 
@@ -116,6 +116,14 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             continue
 
         if dtype == B.SELECT_CARD:
+            # Headline picks are simultaneous: struggler's player-facing history
+            # appends both once the second is in, in its own order, so take the
+            # pick of the side DeepStruggle is asking.
+            if _kind(queue[i]) is K.HEADLINE_PLAY:
+                for j in range(i, min(i + 2, len(queue))):
+                    if _kind(queue[j]) is K.HEADLINE_PLAY and ds_side(queue[j].decision.actor) == player:
+                        queue.insert(i, queue.pop(j))
+                        break
             event = take()
             card = _payload(event).get("card")
             if card is None:

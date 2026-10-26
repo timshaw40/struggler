@@ -9,6 +9,8 @@ on:
       - "src/struggler/bots/deep/**"
       - "scripts/build_deep_wasm.sh"
       - "scripts/deep_sync_census.py"
+      - "src/main.py"
+      - "src/struggler/arena.py"
       - "tests/test_deep_*.py"
       - "third_party/deepstruggle"
       - ".gitmodules"
@@ -58,14 +60,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e ".[test,deep]"
+      - run: pip install -e ".[test,deep]" onnx
       - name: Deep engine tests
         shell: bash
         # On failure, the tail of pytest's report becomes a check annotation,
         # readable through the API without the (blob-hosted) job log.
         run: |
           set +e
-          python -m pytest -q -rfE --tb=short tests/test_deep_boundary.py tests/test_deep_backend.py > pytest.txt 2>&1
+          python -m pytest -q -rfE --tb=short tests/test_deep_boundary.py tests/test_deep_backend.py tests/test_deep_player.py > pytest.txt 2>&1
           status=$?
           cat pytest.txt
           if [ $status -ne 0 ]; then
@@ -75,3 +77,26 @@ jobs:
         env:
           STRUGGLER_DEEP_WASM: data/deep/ts_engine.wasm
           STRUGGLER_DEEP_SHARED_LIB: ${{ matrix.os == 'ubuntu-latest' && 'data/deep/libdeep.so' || '' }}
+
+  # Publish the engine for `scripts/install_deep.py --engine`: one rolling
+  # release, replaced whenever main's engine build changes.
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: deep-engine
+          path: data/deep
+      - name: Upload ts_engine.wasm to the deep-engine release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view deep-engine >/dev/null 2>&1 || \
+            gh release create deep-engine --title "Deep bot engine" \
+              --notes "DeepStruggle's rules as WebAssembly, built by CI from third_party/deepstruggle. Installed by scripts/install_deep.py --engine."
+          gh release upload deep-engine data/deep/ts_engine.wasm --clobber

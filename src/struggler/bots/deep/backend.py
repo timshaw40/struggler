@@ -253,8 +253,12 @@ def _default_wasm() -> str:
 
 
 def load_backend() -> DeepEngine:
-    """The best backend available: `STRUGGLER_DEEP_ENGINE` (native module dir)
-    if set, else the WebAssembly build."""
+    """The backend the environment names: `STRUGGLER_DEEP_ENGINE` (native
+    module dir), `STRUGGLER_DEEP_SHARED_LIB` (the shim as a native library), or
+    by default the WebAssembly build (`STRUGGLER_DEEP_WASM`, else
+    data/deep/ts_engine.wasm)."""
     if os.environ.get("STRUGGLER_DEEP_ENGINE"):
         return NativeBackend()
+    if os.environ.get("STRUGGLER_DEEP_SHARED_LIB"):
+        return SharedLibBackend(os.environ["STRUGGLER_DEEP_SHARED_LIB"])
     return WasmBackend()
