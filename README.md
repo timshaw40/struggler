@@ -110,11 +110,13 @@ thinks and answers.
 ```sh
 pip install -e ".[ui]"    # Pillow, used only for the board conversion
 python scripts/install_vassal_ui_assets.py --fetch-board
-python scripts/serve_ui.py --us human --ussr mcts --seed 1
+python scripts/serve_ui.py
 ```
 
-Open http://localhost:8000 (it opens itself). Seat flags mirror
-`src/main.py` — `--us`/`--ussr` take `human/first/random/greedy/mcts/llm`,
+Open http://localhost:8000 (it opens itself). With no seat flags you play the
+US against the strongest bot installed: the deep bot when its model and engine
+are installed (see "Play the deep bot" below), otherwise `mcts`. Seat flags
+mirror `src/main.py` — `--us`/`--ussr` take `human/first/random/greedy/mcts/llm/deep`,
 and at most one seat may be `human`. The server resolves dice and bot
 moves itself; the browser only ever posts an index into the pending
 decision's options, so it is exactly as powerful as the engine allows.

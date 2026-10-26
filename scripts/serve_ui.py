@@ -717,6 +717,18 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
 GAME_DEFAULTS = {"us": "human", "ussr": "mcts", "seed": 1, "events": True}
 
 
+def default_opponent() -> str:
+    """`deep` when it can run here (packages, model and engine installed),
+    else `mcts`. The deep bot beat mcts 199-1 over 200 side-swapped games."""
+    from struggler.bots.deep import missing
+
+    reason = missing()
+    if reason:
+        print(f"Opponent: mcts (deep bot unavailable: {reason})")
+        return "mcts"
+    return "deep"
+
+
 def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, bool]:
     """Parse the command line and decide whether to restore the last save.
 
@@ -728,7 +740,8 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, bool]
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--us", default=None, help="seat kind (default: human)")
-    parser.add_argument("--ussr", default=None, help="seat kind (default: mcts)")
+    parser.add_argument("--ussr", default=None,
+                        help="seat kind (default: deep when installed, else mcts)")
     parser.add_argument("--seed", type=int, default=None, help="deal seed (default: 1)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
@@ -746,7 +759,10 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, bool]
                         help='automatic saves and game library (default: data/games)')
     args = parser.parse_args(argv)
     explicit = any(getattr(args, k) is not None for k in GAME_DEFAULTS)
-    for key, value in GAME_DEFAULTS.items():
+    defaults = dict(GAME_DEFAULTS)
+    if args.ussr is None and args.us in (None, "human"):
+        defaults["ussr"] = default_opponent()
+    for key, value in defaults.items():
         if getattr(args, key) is None:
             setattr(args, key, value)
     return args, not (explicit or args.fresh)
