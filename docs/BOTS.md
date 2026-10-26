@@ -162,7 +162,8 @@ would have nowhere left to reveal an answer into.
 
 Two placement details matter for a physical hand. Missile Envy's picked
 card stays visible in the giver's hand (`_reveal_in_hand`, not an immediate
-removal) until `missile_envy_use` resolves it one or two decisions later —
+removal) until `missile_envy_use` resolves it right after the pick (Card 49
+leaves the taker no Ops-or-Event choice) —
 mirroring the non-physical path, and, like Grain Sales' revealed-but-
 undecided card, avoiding a window where the card is tracked nowhere at all.
 And `missile_envy_use`'s `_file_card` call passes
