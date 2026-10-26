@@ -823,6 +823,52 @@ meaningful policy is an hours-to-days run, not minutes; the value is only as
 good as the signal until many games accumulate; and a batched engine is the
 main remaining throughput lever.
 
+## Deep bot (in progress: Phase 0)
+
+The `deep` bot will play DeepStruggle's network
+([mihaild/DeepStruggle](https://github.com/mihaild/DeepStruggle), MIT, pinned
+as the `third_party/deepstruggle` submodule) through the ordinary `Player`
+contract. Struggler stays the referee: to decide, the player rebuilds the
+position in DeepStruggle's own engine, asks the network, and answers with one
+of struggler's legal options. It sees only `observe(side)` and `history`
+(mandate #4, ADR-0005); unknown cards are determinized as `MCTSPlayer` does.
+
+How a position is rebuilt (`src/struggler/bots/deep/`):
+
+- `boundary.py` writes the position at the last *clean boundary* (the start of
+  the headline or of the action round, when DeepStruggle's decision stack is a
+  single "pick a card" frame) as a DeepStruggle `ts_save_v2` dict: board,
+  tracks, card locations, China Card, and every `turn_effects`/`game_effects`
+  key mapped to DeepStruggle's effect bits. An effect it cannot express raises
+  `UnmappedEffect` rather than being dropped.
+- `replay.py` steps the round's struggler events on DeepStruggle, driven by
+  DeepStruggle's pending decision, with every die forced to struggler's logged
+  value. DeepStruggle folds `PLAY_MODE`, `EVENT_OPS_ORDER` and `OPS_TYPE` into
+  one decision, so those are grouped; a scoring card resolves on selection
+  there; a random draw must match struggler's or the round is abandoned.
+  Anything unmapped raises `Desync` with a stable reason.
+- `backend.py` is the engine interface. `NativeBackend` wraps DeepStruggle's
+  nanobind module (Linux, fastest). `WasmBackend` runs `wasm/shim.cpp` plus
+  DeepStruggle's engine sources compiled to one WebAssembly module
+  (`scripts/build_deep_wasm.sh`) through `wasmtime`, so Windows and macOS need
+  no compiler (`pip install -e '.[deep]'`). `SharedLibBackend` is the same shim
+  as a native library, for tests. The shim, unlike DeepStruggle's browser API,
+  never rolls a die itself and loads partial saves, matching `NativeBackend`
+  call for call; `tests/test_deep_backend.py` holds them to identical masks,
+  observations and saves. `.github/workflows/deep-engine.yml` builds the
+  module and runs those tests on all three OSes.
+
+`scripts/deep_sync_census.py` measures how often the two engines agree: it
+plays greedy self-play, rebuilds every round in DeepStruggle, replays it and
+compares the result. At the pinned commit, over 20 games: **93.6%** of rounds
+agree. The rest is mostly event-internal choices not mapped yet (`EVENT_CHOICE`
+branches, `CHOOSE_BRANCH`), random draws, and end-of-game bookkeeping (VP
+clamped at 20 in DeepStruggle). The deep bot needs the event layer on, the
+Chinese Civil War option off, and `setup_us_extra=2` (DeepStruggle's setup).
+
+Next (Phase 1): the player itself, with ONNX inference over struggler's legal
+options and a greedy fallback on any `Desync`, gated in the arena.
+
 ## Server authority, undo, and durable games (serve_ui)
 
 - `POST /action` now carries `{game_id, decision_id, index}` and the session

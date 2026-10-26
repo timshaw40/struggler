@@ -17,6 +17,8 @@ llm-anthropic = ["anthropic>=0.68"]
 llm-openai = ["openai>=1.0"]
 llm = ["anthropic>=0.68", "openai>=1.0"]
 rl = ["numpy>=1.26", "torch>=2.2"]
+# The deep bot: DeepStruggle's engine as WebAssembly, its network as ONNX.
+deep = ["wasmtime>=30", "onnxruntime>=1.20", "numpy>=1.26"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -24,3 +26,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 struggler = ["data/*.json"]
 "struggler.bots.llm" = ["*.json"]
+
+[tool.pytest.ini_options]
+# third_party/deepstruggle carries its own suite, which needs its own build.
+testpaths = ["tests"]

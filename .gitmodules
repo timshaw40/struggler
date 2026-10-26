@@ -1,0 +1,3 @@
+[submodule "third_party/deepstruggle"]
+	path = third_party/deepstruggle
+	url = https://github.com/mihaild/DeepStruggle
