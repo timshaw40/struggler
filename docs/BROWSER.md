@@ -1,10 +1,18 @@
 # Browser experience
 
-The local server saves every resolved action atomically under `data/games/`.
+The local server saves atomically under `data/games/` at the end of each
+request: the human's move is saved before the bots reply, the bots' replies
+once they finish, and each watch-mode step as it resolves. A save encodes only
+the history added since the last one, and the undo point is stored as a
+history prefix length rather than a second copy of the game.
 Override this with `--library-dir`. Saves contain private hands and engine RNG;
 keep that directory private. The browser library receives metadata only.
 Starting a new game preserves the previous game. A server restart restores the
-most recently saved game, including its pending decisions, history, and undo.
+most recently saved game, including its pending decisions, history, and undo,
+but only while that game is unfinished and only when the command line names no
+game: `--us`, `--ussr`, `--seed`, `--events`/`--no-events` or `--fresh` start
+the game they describe instead (`serve_ui.parse_args`). Older saves stay in the
+library either way.
 Bot instances are reconstructed: their private search RNG or conversation
 memory is not preserved. Save errors appear in the status bar.
 
