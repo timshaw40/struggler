@@ -182,6 +182,16 @@ class WasmBackend(_ShimBackend):
         linker.define_wasi()
         self._store.set_wasi(wasmtime.WasiConfig())
         module = wasmtime.Module.from_file(engine, path)
+        # Emscripten's standalone output still imports a few `env` hooks
+        # (`emscripten_notify_memory_growth`); none matters outside a browser,
+        # so each becomes a no-op returning zeros.
+        for imp in module.imports:
+            if imp.module != "env" or not isinstance(imp.type, wasmtime.FuncType):
+                continue
+            results = list(imp.type.results)
+            stub = (lambda *args, _r=results: None if not _r else
+                    (0 if len(_r) == 1 else tuple(0 for _ in _r)))
+            linker.define(self._store, "env", imp.name, wasmtime.Func(self._store, imp.type, stub))
         instance = linker.instantiate(self._store, module)
         self._exports = instance.exports(self._store)
         self._memory = self._exports["memory"]
