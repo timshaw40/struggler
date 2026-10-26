@@ -115,7 +115,10 @@ class DeepPlayer:
         #: Take an outright win before asking the network (`safety.py`).
         self.take_forced_wins = True
         #: The rollout root (`search.py`) over the network's top moves, or None
-        #: for the plain network. Needs an engine build with the rollout calls.
+        #: for the plain network. Needs an engine build with the rollout calls;
+        #: `"auto"` turns it on only where the build has them.
+        if search == "auto":  # on where the engine build has it (an older build: the plain network)
+            search = "on" if getattr(self.engine, "supports_rollout", False) else None
         self.search = RolloutConfig.parse(search) if isinstance(search, str) else search
         if self.search is not None and not getattr(self.engine, "supports_rollout", False):
             raise ValueError("this deep engine build has no rollout search: "

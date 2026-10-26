@@ -900,22 +900,29 @@ dice that win on every face; a step that draws on DeepStruggle's RNG (a hidden
 card) disqualifies the line. The search is bounded at 400 positions. Over 16
 games against greedy it fired 12 times and added no visible latency.
 
-**Rollout search, optional** (`bots/deep/search.py`). DeepStruggle's own
-search player (`ai/search/rollout_root.py`, `rollout:<ckpt>:4:16:4:z2`) can run
-on top of the network: its 4 most probable moves are each played out in 16
-sampled worlds (the mover's unseen cards and the dice redrawn, every candidate
-on the same draws), the network playing both sides through 4 action-round
-boundaries, and the critic (`v_win`) reading where each playout stops. Rule
-`z2` keeps the network's move unless another candidate's paired lead is at
-least 2 standard errors. Everything but the network calls is DeepStruggle's
-C++ (`bindings/rollout_batch.cpp`), compiled into the same engine build through
+**Rollout search** (`bots/deep/search.py`). DeepStruggle's own search player
+(`ai/search/rollout_root.py`, `rollout:<ckpt>:4:16:4:z2`) runs on top of the
+network: its 4 most probable moves are each played out in 16 sampled worlds
+(the mover's unseen cards and the dice redrawn, every candidate on the same
+draws), the network playing both sides through 4 action-round boundaries, and
+the critic (`v_win`) reading where each playout stops. Rule `z2` keeps the
+network's move unless another candidate's paired lead is at least 2 standard
+errors. Everything but the network calls is DeepStruggle's C++
+(`bindings/rollout_batch.cpp`), compiled into the same engine build through
 `ds_rollout_*` calls in `wasm/shim.cpp`; the Python side only feeds it logits
 and values. The player uses the search's pick only when it overrides the
 network's own top move and some struggler option stands for it; otherwise it
-keeps its usual choice. `DeepPlayer(search="on")`, or `"k:worlds:horizon:rule"`,
-or `STRUGGLER_DEEP_SEARCH` for `build_player`; an engine build without the
-rollout calls refuses it. A search costs about 1,000 network rows, about 55 ms
-per decision with the native library on 2 cores.
+keeps its usual choice.
+
+Measured against the plain network (`deep-arena`, 200 side-swapped games):
+**147-52-1, 73.9%** [Wilson 95%: 67.4%-79.5%], 73 of 100 as the US and 74 of
+100 as the USSR. A search costs about 1,000 network rows: about 55 ms per
+decision with the native library and 67 ms with WebAssembly on 2 cores, so a
+whole game adds a few seconds. `build_player("deep")` therefore searches by
+default (`STRUGGLER_DEEP_SEARCH=auto`: on when the engine build has the rollout
+calls, the plain network with an older `ts_engine.wasm`); `off`, `on` or
+`k:worlds:horizon:rule` override it. `DeepPlayer` itself and `PlayerSpec`
+default to no search, so earlier arena numbers keep their meaning.
 
 With a random stand-in model (`tests/deep_fixtures.py`) over 8 games the
 network made 90% of the decisions; every fallback was a setup placement. Strength is measured only with a real model, in the arena:

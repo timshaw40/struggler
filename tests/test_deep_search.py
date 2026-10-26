@@ -153,6 +153,8 @@ def test_player_refuses_search_on_an_engine_without_it():
     with pytest.raises(ValueError, match="install_deep"):
         DeepPlayer(policy=object(), engine=Old(), search="on")
     assert DeepPlayer(policy=object(), engine=Old(), search="off").search is None
+    assert DeepPlayer(policy=object(), engine=Old(), search="auto").search is None  # an older build plays on
+    assert DeepPlayer(policy=object(), engine=_StubEngine(), search="auto").search == RolloutConfig()
 
 
 def test_deep_player_with_search_finishes_a_game(policy):
