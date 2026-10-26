@@ -60,7 +60,18 @@ jobs:
           python-version: "3.12"
       - run: pip install -e ".[test,deep]"
       - name: Deep engine tests
-        run: python -m pytest -q tests/test_deep_boundary.py tests/test_deep_backend.py
+        shell: bash
+        # On failure, the tail of pytest's report becomes a check annotation,
+        # readable through the API without the (blob-hosted) job log.
+        run: |
+          set +e
+          python -m pytest -q -rfE --tb=short tests/test_deep_boundary.py tests/test_deep_backend.py > pytest.txt 2>&1
+          status=$?
+          cat pytest.txt
+          if [ $status -ne 0 ]; then
+            python -c "import sys; t=open('pytest.txt',encoding='utf-8',errors='replace').read()[-3500:]; print('::error title=deep tests::' + t.replace('%','%25').replace('\r','').replace('\n','%0A'))"
+          fi
+          exit $status
         env:
           STRUGGLER_DEEP_WASM: data/deep/ts_engine.wasm
           STRUGGLER_DEEP_SHARED_LIB: ${{ matrix.os == 'ubuntu-latest' && 'data/deep/libdeep.so' || '' }}
