@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
-from struggler.bots.deep import boundary
+from struggler.bots.deep import boundary, safety
 from struggler.bots.deep.choices import choice_slots
 from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.bots.deep.replay import Desync, Partial, replay
@@ -99,6 +99,8 @@ class DeepPlayer:
         self.rng = random.Random(seed)
         self._boundary: _Boundary | None = None
         self.stats: Counter = Counter()
+        #: Take an outright win before asking the network (`safety.py`).
+        self.take_forced_wins = True
 
     def bind_engine(self, engine: Any) -> None:
         if engine.physical_mode:
@@ -144,6 +146,10 @@ class DeepPlayer:
         self._check_sync(obs)
         player = ds_side(obs.side)
         scores = self._option_slots(obs, result.partial)
+        win = self._outright_win(obs, player, scores)
+        if win is not None:
+            self.stats["forced_win"] += 1
+            return obs.pending_decision.options[win]
         mask = list(self.engine.mask())
         for slots in scores.values():
             for s in slots:
@@ -159,6 +165,19 @@ class DeepPlayer:
         return obs.pending_decision.options[best]
 
     # -- the pieces -----------------------------------------------------------
+
+    def _outright_win(self, obs: Observation, player: int, scores: dict[int, list[int]]) -> int | None:
+        """An option that wins the game outright (`safety.py`), or None. Checked
+        before the network, which is known to decline some decisive wins."""
+        if not self.take_forced_wins:
+            return None
+        _, dtype = self.engine.decision()
+        if dtype not in safety.SEARCHED or not safety.worth_searching(obs.vp, obs.defcon, obs.turn, player):
+            return None
+        for index, slots in scores.items():
+            if safety.winning_slots(self.engine, slots, player):
+                return index
+        return None
 
     def _facts(self, obs: Observation) -> boundary.PositionFacts:
         me = obs.side.value
