@@ -104,7 +104,7 @@ class Session:
 
     def __init__(self, seed: int, us: str, ussr: str, events: bool,
                  include_ccw: bool = True, log_dir: str | None = None,
-                 library_dir: str | Path | None = None) -> None:
+                 library_dir: str | Path | None = None, restore: bool = True) -> None:
         humans = (us == "human") + (ussr == "human")
         if humans > 1:
             raise SystemExit("at most one human seat (no per-client identity)")
@@ -125,8 +125,13 @@ class Session:
         self.game_id = time.time_ns() // 1_000_000 if self.library else 0
         self._log_writer: GameLogWriter | None = None
         self.lock = threading.Lock()
-        entries = self.library.entries() if self.library else []
-        if entries:
+        # Restore only the most recent save, and only while it is unfinished:
+        # a finished game, or explicit seats/seed on the command line
+        # (`restore=False`, decided by `parse_args`), start a fresh game. The
+        # earlier saves stay in the library either way.
+        entries = self.library.entries() if (self.library and restore) else []
+        self.restored = bool(entries) and not entries[0]['finished']
+        if self.restored:
             try:
                 self.load_game(entries[0]['id'])
             except (OSError, ValueError, KeyError, TypeError) as exc:
@@ -230,6 +235,7 @@ class Session:
         session.log_dir = log_dir
         session.library = None
         session.save_id = session.saved_at = session.save_error = None
+        session.restored = False
         session.game_id = 0
         session._log_writer = None
         session.lock = threading.Lock()
@@ -673,16 +679,31 @@ def make_handler(session: Session, cards_meta: dict) -> type[BaseHTTPRequestHand
     return Handler
 
 
-def main() -> None:
+#: Flags that describe a new game. Passing any of them means "this game",
+#: so the last save is not restored over them.
+GAME_DEFAULTS = {"us": "human", "ussr": "mcts", "seed": 1, "events": True}
+
+
+def parse_args(argv: list[str] | None = None) -> tuple[argparse.Namespace, bool]:
+    """Parse the command line and decide whether to restore the last save.
+
+    Returns `(args, restore)`. `restore` is False when `--fresh` is given or
+    when any game-describing flag (`--us`, `--ussr`, `--seed`, `--events` /
+    `--no-events`) is passed explicitly, so a command such as the README's
+    watch-mode line starts the game it names instead of reopening the last
+    one.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--us", default="human")
-    parser.add_argument("--ussr", default="mcts")
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--us", default=None, help="seat kind (default: human)")
+    parser.add_argument("--ussr", default=None, help="seat kind (default: mcts)")
+    parser.add_argument("--seed", type=int, default=None, help="deal seed (default: 1)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument(
-        "--events", action=argparse.BooleanOptionalAction, default=True,
+        "--events", action=argparse.BooleanOptionalAction, default=None,
         help="Pass events= to Engine.new_game (default: on).",
     )
+    parser.add_argument("--fresh", action="store_true",
+                        help="start a new game instead of restoring the last unfinished save")
     parser.add_argument("--no-open", action="store_true", help="don't auto-open the browser")
     parser.add_argument("--log-dir", default=None,
                         help="write each game's replay log here (default: none)")
@@ -690,7 +711,16 @@ def main() -> None:
                         help="continue the game saved in this replay log instead of dealing fresh")
     parser.add_argument('--library-dir', default=str(ROOT / 'data' / 'games'),
                         help='automatic saves and game library (default: data/games)')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    explicit = any(getattr(args, k) is not None for k in GAME_DEFAULTS)
+    for key, value in GAME_DEFAULTS.items():
+        if getattr(args, key) is None:
+            setattr(args, key, value)
+    return args, not (explicit or args.fresh)
+
+
+def main() -> None:
+    args, restore = parse_args()
 
     if args.resume_log:
         session = Session.resume(
@@ -700,7 +730,8 @@ def main() -> None:
         session.save_game()
     else:
         session = Session(seed=args.seed, us=args.us, ussr=args.ussr,
-                          events=args.events, log_dir=args.log_dir, library_dir=args.library_dir)
+                          events=args.events, log_dir=args.log_dir, library_dir=args.library_dir,
+                          restore=restore)
     cards_meta = {
         cid: {
             "number": card.number,
@@ -717,7 +748,9 @@ def main() -> None:
     handler = make_handler(session, cards_meta)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://localhost:{args.port}"
-    print(f"Struggler UI on {url}  (US={args.us}, USSR={args.ussr}, seed={args.seed})")
+    print(f"Struggler UI on {url}  (US={session.us}, USSR={session.ussr}, seed={session.seed})")
+    if session.restored:
+        print("Restored the last unfinished game; pass --fresh (or --us/--ussr/--seed) for a new one.")
     if not args.no_open:
         try:
             webbrowser.open(url)

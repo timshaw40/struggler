@@ -157,3 +157,39 @@ def test_plan_is_read_only_validates_whole_batch_and_commits_with_one_undo(tmp_p
     session.undo()
     assert session.engine.serialize() == before
     assert GameLibrary(tmp_path).read(session.save_id)['engine']['vp'] == before['vp']
+
+
+def test_explicit_game_flags_start_a_fresh_game_instead_of_restoring():
+    for argv, restore in (
+        ([], True),
+        (["--port", "9000"], True),
+        (["--us", "mcts", "--ussr", "mcts"], False),
+        (["--seed", "7"], False),
+        (["--no-events"], False),
+        (["--fresh"], False),
+    ):
+        args, got = serve_ui.parse_args(argv)
+        assert got is restore, argv
+    args, _ = serve_ui.parse_args(["--seed", "7"])
+    assert (args.us, args.ussr, args.seed, args.events) == ("human", "mcts", 7, True)
+
+
+def test_fresh_session_keeps_the_library_and_uses_its_own_seats(tmp_path):
+    first = serve_ui.Session(5, 'human', 'greedy', True, library_dir=tmp_path)
+    old_id = first.save_id
+    fresh = serve_ui.Session(77, 'random', 'human', False, library_dir=tmp_path, restore=False)
+    assert not fresh.restored
+    assert (fresh.us, fresh.ussr, fresh.seed, fresh.events) == ('random', 'human', 77, False)
+    assert fresh.save_id != old_id
+    assert {e['id'] for e in fresh.library.entries()} >= {old_id, fresh.save_id}
+
+
+def test_a_finished_last_game_is_not_restored(tmp_path):
+    session = serve_ui.Session(4, 'human', 'greedy', True, library_dir=tmp_path)
+    session.engine._win(Side.USSR, "forfeit")
+    session.save_game()
+    finished = session.save_id
+    restored = serve_ui.Session(9, 'human', 'random', True, library_dir=tmp_path)
+    assert not restored.restored
+    assert restored.save_id != finished
+    assert restored.seed == 9 and restored.bot_kind == 'random'
