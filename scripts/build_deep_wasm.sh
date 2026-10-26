@@ -31,18 +31,22 @@ SOURCES=(
     "$DS"/engine/src/action_mask.cpp "$DS"/engine/src/state_machine.cpp
     "$DS"/engine/src/observation.cpp "$DS"/engine/src/serialization.cpp
     "$DS"/engine/src/invariant.cpp "$DS"/engine/src/engine.cpp "$DS"/engine/src/cached_state.cpp
-    "$DS"/bindings/state_json.cpp
+    "$DS"/bindings/state_json.cpp "$DS"/bindings/rollout_batch.cpp
     "$ROOT"/src/struggler/bots/deep/wasm/shim.cpp
 )
 INCLUDES=(-I"$DS/engine/include" -I"$DS/bindings")
 COMMON=(-std=c++20 -O3 "${INCLUDES[@]}")
 
 if [[ -n "${DEEP_CXX:-}" ]]; then
-    "$DEEP_CXX" "${COMMON[@]}" -fPIC -shared -o "$OUT" "${SOURCES[@]}"
+    "$DEEP_CXX" "${COMMON[@]}" -fPIC -shared -o "$OUT" "${SOURCES[@]}" \
+        "$ROOT"/src/struggler/bots/deep/wasm/serial_omp.cpp
 else
     EXPORTS=_ds_alloc,_ds_free,_ds_last_error,_ds_new_game,_ds_country_name,_ds_load_save_json
     EXPORTS+=,_ds_save_json,_ds_decision_player,_ds_decision_type,_ds_is_terminal,_ds_mask
     EXPORTS+=,_ds_step_flat,_ds_roll,_ds_obs_size_for,_ds_observation
+    EXPORTS+=,_ds_rollout_candidates,_ds_rollout_start,_ds_rollout_all_done,_ds_rollout_refused
+    EXPORTS+=,_ds_rollout_obs_width,_ds_rollout_buf_obs,_ds_rollout_buf_masks,_ds_rollout_fill_live
+    EXPORTS+=,_ds_rollout_step,_ds_rollout_fill_leaves,_ds_rollout_set_leaf_values,_ds_rollout_decide
     em++ "${COMMON[@]}" -sSTANDALONE_WASM=1 --no-entry -sALLOW_MEMORY_GROWTH=1 \
         -sDISABLE_EXCEPTION_CATCHING=1 -sEXPORTED_FUNCTIONS="$EXPORTS" \
         -o "$OUT" "${SOURCES[@]}"

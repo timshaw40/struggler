@@ -139,7 +139,11 @@ python scripts/serve_ui.py --us human --ussr deep
 ```
 
 It plays with the Chinese Civil War option off and the standard +2 US setup
-bonus. See [docs/BOTS.md](docs/BOTS.md), "Deep bot".
+bonus, and searches a few moves ahead before each decision (DeepStruggle's
+rollout search; `STRUGGLER_DEEP_SEARCH=off` for the plain network). An engine
+downloaded before the search existed plays the plain network: rerun
+`install_deep.py --engine` to update it. See [docs/BOTS.md](docs/BOTS.md),
+"Deep bot".
 
 ### Watch the bots play each other
 

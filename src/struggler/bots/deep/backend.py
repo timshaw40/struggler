@@ -2,8 +2,9 @@
 
 Two builds implement it. `NativeBackend` wraps the nanobind module
 `ts_engine` (Linux; fastest, used by the arena and the sync census).
-`WasmBackend` (Phase 0 spike, next) wraps the WebAssembly build through
-`wasmtime`, so Windows and macOS need no compiler. DeepStruggle holds the two
+`WasmBackend` wraps the WebAssembly build of `wasm/shim.cpp` through
+`wasmtime`, so Windows and macOS need no compiler (`SharedLibBackend` runs the
+same shim as a native library, for tests). DeepStruggle holds the two
 builds to bit-identical games (its `tests/web/test_wasm_engine.py`), so the
 bot behaves the same on either.
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from typing import Protocol, Sequence
+from typing import Any, Protocol, Sequence
 
 #: `ts::DecisionType`.
 NONE, SELECT_CARD, SELECT_PLAY_MODE, CHOOSE_TIMING_BRANCH, SELECT_OP_MODE, POINT_NODE, \
@@ -49,6 +50,25 @@ class DeepEngine(Protocol):
     def roll(self, actor_die: int, opponent_die: int = 0) -> bool: ...
     def observation(self, player: int, features: int) -> Sequence[float]: ...
     def is_terminal(self) -> bool: ...
+
+
+class RolloutEngine(DeepEngine, Protocol):
+    """A backend that also runs DeepStruggle's rollout root
+    (`bindings/rollout_batch.hpp`) over the position it holds: one batch at a
+    time, driven by `search.py` with the network's outputs. Arrays are numpy:
+    observations [rows, width] float32, masks [rows, 220] uint8."""
+
+    supports_rollout: bool
+
+    def rollout_candidates(self, logits: Any, k: int) -> list[int]: ...
+    def rollout_start(self, horizon: int, features: int, seed: int, candidates: list[int], worlds: int) -> int: ...
+    def rollout_all_done(self) -> bool: ...
+    def rollout_refused(self) -> int: ...
+    def rollout_fill_live(self) -> tuple[Any, Any]: ...
+    def rollout_step(self, logits: Any) -> None: ...
+    def rollout_fill_leaves(self) -> tuple[Any, Any]: ...
+    def rollout_set_leaf_values(self, values: Any) -> None: ...
+    def rollout_decide(self, candidates: list[int], logits: Any, rule: str) -> dict: ...
 
 
 class NativeBackend:
@@ -97,6 +117,52 @@ class NativeBackend:
 
     def is_terminal(self) -> bool:
         return bool(self.ts.Engine.is_terminal(self.state))
+
+    # -- the rollout root -----------------------------------------------------
+
+    supports_rollout = True
+    _batch: Any = None
+
+    def rollout_candidates(self, logits: Any, k: int) -> list[int]:
+        import numpy as np
+
+        mask = np.asarray(self.mask(), dtype=np.uint8)
+        return [int(a) for a in self.ts.rollout_candidates(np.asarray(logits, dtype=np.float32), mask, int(k))]
+
+    def rollout_start(self, horizon: int, features: int, seed: int, candidates: list[int], worlds: int) -> int:
+        self._batch = self.ts.RolloutBatch(horizon=int(horizon), shared_dice=True, guard=True,
+                                           features=int(features), seed=int(seed))
+        return int(self._batch.add(self.state, list(candidates), int(worlds)))
+
+    def rollout_all_done(self) -> bool:
+        return self._batch is None or bool(self._batch.all_done())
+
+    def rollout_refused(self) -> int:
+        return 0 if self._batch is None else int(self._batch.refused())
+
+    def rollout_fill_live(self) -> tuple[Any, Any]:
+        return self._batch.fill_live()
+
+    def rollout_step(self, logits: Any) -> None:
+        import numpy as np
+
+        self._batch.step(np.ascontiguousarray(logits, dtype=np.float32))
+
+    def rollout_fill_leaves(self) -> tuple[Any, Any]:
+        return self._batch.fill_leaves()
+
+    def rollout_set_leaf_values(self, values: Any) -> None:
+        import numpy as np
+
+        self._batch.set_leaf_values(np.ascontiguousarray(values, dtype=np.float32))
+
+    def rollout_decide(self, candidates: list[int], logits: Any, rule: str) -> dict:
+        import numpy as np
+
+        mask = np.asarray(self.mask(), dtype=np.uint8)
+        d = self.ts.rollout_decide(self._batch, 0, list(candidates), np.asarray(logits, dtype=np.float32), mask, rule)
+        return {"pick": int(d["pick"]), "worlds": int(d["worlds"]), "q": list(d["q"]),
+                "lead": list(d["lead"]), "lead_se": list(d["lead_se"])}
 
 
 class _ShimBackend:
@@ -167,6 +233,98 @@ class _ShimBackend:
     def is_terminal(self) -> bool:
         return bool(self._call("ds_is_terminal"))
 
+    # -- the rollout root -----------------------------------------------------
+
+    def _has(self, name: str) -> bool: ...
+
+    @property
+    def supports_rollout(self) -> bool:
+        """False for an engine built before the rollout entry points (an older
+        data/deep/ts_engine.wasm): the bot then plays the plain network."""
+        return self._has("ds_rollout_start")
+
+    def _floats(self, ptr: int, n: int) -> Any:
+        import numpy as np
+
+        return np.frombuffer(self._read(ptr, 4 * n), dtype=np.float32).copy()
+
+    def _with(self, data: bytes, fn: Any) -> Any:
+        ptr = self._write(data if data else b"\0")
+        try:
+            return fn(ptr)
+        finally:
+            self._call("ds_free", ptr)
+
+    def rollout_candidates(self, logits: Any, k: int) -> list[int]:
+        import numpy as np
+
+        lg = np.ascontiguousarray(logits, dtype=np.float32).tobytes()
+        out = self._write(bytes(4 * k))
+        try:
+            n = self._with(lg, lambda p: self._call("ds_rollout_candidates", p, int(k), out))
+            return [int(a) for a in np.frombuffer(self._read(out, 4 * n), dtype=np.int32)]
+        finally:
+            self._call("ds_free", out)
+
+    def rollout_start(self, horizon: int, features: int, seed: int, candidates: list[int], worlds: int) -> int:
+        import numpy as np
+
+        cands = np.asarray(candidates, dtype=np.int32).tobytes()
+        seed &= (1 << 64) - 1
+        n = self._with(cands, lambda p: self._call("ds_rollout_start", int(horizon), int(features),
+                                                     seed & 0xFFFFFFFF, seed >> 32, p, len(candidates), int(worlds)))
+        return n  # 0: no world kept every candidate (ds_last_error says why)
+
+    def rollout_all_done(self) -> bool:
+        return bool(self._call("ds_rollout_all_done"))
+
+    def rollout_refused(self) -> int:
+        return self._call("ds_rollout_refused")
+
+    def _buffers(self, n: int) -> tuple[Any, Any]:
+        import numpy as np
+
+        width = self._call("ds_rollout_obs_width")
+        obs = self._floats(self._call("ds_rollout_buf_obs"), n * width).reshape(n, width)
+        masks = np.frombuffer(self._read(self._call("ds_rollout_buf_masks"), n * FLAT_ACTION_SIZE),
+                              dtype=np.uint8).reshape(n, FLAT_ACTION_SIZE).copy()
+        return obs, masks
+
+    def rollout_fill_live(self) -> tuple[Any, Any]:
+        return self._buffers(self._call("ds_rollout_fill_live"))
+
+    def rollout_step(self, logits: Any) -> None:
+        import numpy as np
+
+        self._with(np.ascontiguousarray(logits, dtype=np.float32).tobytes(),
+                   lambda p: self._call("ds_rollout_step", p))
+
+    def rollout_fill_leaves(self) -> tuple[Any, Any]:
+        return self._buffers(self._call("ds_rollout_fill_leaves"))
+
+    def rollout_set_leaf_values(self, values: Any) -> None:
+        import numpy as np
+
+        self._with(np.ascontiguousarray(values, dtype=np.float32).tobytes(),
+                   lambda p: self._call("ds_rollout_set_leaf_values", p))
+
+    def rollout_decide(self, candidates: list[int], logits: Any, rule: str) -> dict:
+        import json
+
+        import numpy as np
+
+        cands = self._write(np.asarray(candidates, dtype=np.int32).tobytes() or b"\0")
+        lg = self._write(np.ascontiguousarray(logits, dtype=np.float32).tobytes())
+        text = self._write(rule.encode() + b"\0")
+        try:
+            out = self._string(self._call("ds_rollout_decide", cands, len(candidates), lg, text))
+        finally:
+            for p in (cands, lg, text):
+                self._call("ds_free", p)
+        if not out:
+            raise ValueError(self._string(self._call("ds_last_error")))
+        return json.loads(out)
+
 
 class WasmBackend(_ShimBackend):
     """The shim compiled to WebAssembly (`scripts/build_deep_wasm.sh`), run by
@@ -203,6 +361,9 @@ class WasmBackend(_ShimBackend):
         result = self._exports[name](self._store, *args)
         return 0 if result is None else result
 
+    def _has(self, name: str) -> bool:
+        return name in self._exports
+
     def _read(self, ptr: int, n: int) -> bytes:
         size = self._memory.data_len(self._store)
         return bytes(self._memory.read(self._store, ptr, min(ptr + n, size)))
@@ -228,11 +389,23 @@ class SharedLibBackend(_ShimBackend):
             getattr(self._lib, name).restype = ctypes.c_void_p
         self._lib.ds_free.argtypes = [ctypes.c_void_p]
         self._lib.ds_load_save_json.argtypes = [ctypes.c_void_p]
+        if self._has("ds_rollout_start"):
+            vp, i32, u32 = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint32
+            for name in ("ds_rollout_buf_obs", "ds_rollout_buf_masks", "ds_rollout_decide"):
+                getattr(self._lib, name).restype = vp
+            self._lib.ds_rollout_candidates.argtypes = [vp, i32, vp]
+            self._lib.ds_rollout_start.argtypes = [i32, u32, u32, u32, vp, i32, i32]
+            self._lib.ds_rollout_step.argtypes = [vp]
+            self._lib.ds_rollout_set_leaf_values.argtypes = [vp]
+            self._lib.ds_rollout_decide.argtypes = [vp, i32, vp, vp]
         self._call("ds_new_game", 1, 0)
 
     def _call(self, name: str, *args: int) -> int:
         result = getattr(self._lib, name)(*args)
         return 0 if result is None else result
+
+    def _has(self, name: str) -> bool:
+        return hasattr(self._lib, name)
 
     def _read(self, ptr: int, n: int) -> bytes:
         return self._ct.string_at(ptr, n)

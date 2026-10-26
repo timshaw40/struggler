@@ -43,9 +43,10 @@ class PlayerSpec:
     sims: int = 16
     player_seed: int = 0
     net_path: str | None = None  # for kind == "rl" (policy .pt) and "deep" (ONNX model)
+    search: str | None = None  # for kind == "deep": the rollout spec (search.RolloutConfig.parse)
 
     def with_name(self, name: str) -> "PlayerSpec":
-        return PlayerSpec(name, self.kind, self.weights, self.sims, self.player_seed, self.net_path)
+        return PlayerSpec(name, self.kind, self.weights, self.sims, self.player_seed, self.net_path, self.search)
 
 
 def make_player(spec: PlayerSpec):
@@ -63,7 +64,7 @@ def make_player(spec: PlayerSpec):
     if spec.kind == "deep":
         from struggler.bots.deep.player import DeepPlayer
 
-        return DeepPlayer(spec.net_path, seed=spec.player_seed)
+        return DeepPlayer(spec.net_path, seed=spec.player_seed, search=spec.search)
     if spec.kind == "random":
         from struggler.bots.naive import RandomPlayer
 
