@@ -13,6 +13,9 @@ but only while that game is unfinished and only when the command line names no
 game: `--us`, `--ussr`, `--seed`, `--events`/`--no-events` or `--fresh` start
 the game they describe instead (`serve_ui.parse_args`). Older saves stay in the
 library either way.
+With no seat flags the opponent is `deep` when `struggler.bots.deep.missing()`
+finds its packages, model and engine installed, and `mcts` otherwise; the
+server says which, and why, at start-up.
 Bot instances are reconstructed: their private search RNG or conversation
 memory is not preserved. Save errors appear in the status bar.
 

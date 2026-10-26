@@ -160,7 +160,8 @@ def test_plan_is_read_only_validates_whole_batch_and_commits_with_one_undo(tmp_p
     assert GameLibrary(tmp_path).read(session.save_id)['engine']['vp'] == before['vp']
 
 
-def test_explicit_game_flags_start_a_fresh_game_instead_of_restoring():
+def test_explicit_game_flags_start_a_fresh_game_instead_of_restoring(monkeypatch):
+    monkeypatch.setattr(serve_ui, "default_opponent", lambda: "mcts")
     for argv, restore in (
         ([], True),
         (["--port", "9000"], True),
@@ -246,3 +247,14 @@ def test_history_encoder_cache_matches_a_full_encode_across_undo():
     session.undo()  # history rewinds; the cache must drop the undone tail
     assert encoder.encode(session.history.history) == encode_history(session.history.history)
     assert json.loads(json.dumps(encoder.encode(session.history.history))) == encode_history(session.history.history)
+
+
+def test_the_default_opponent_is_deep_only_when_it_can_run(monkeypatch):
+    import struggler.bots.deep as deep
+
+    monkeypatch.setattr(deep, "missing", lambda: None)
+    assert serve_ui.parse_args([])[0].ussr == "deep"
+    assert serve_ui.parse_args(["--ussr", "greedy"])[0].ussr == "greedy"   # an explicit seat wins
+    assert serve_ui.parse_args(["--us", "mcts"])[0].ussr == "mcts"          # watch mode keeps mcts
+    monkeypatch.setattr(deep, "missing", lambda: "no model")
+    assert serve_ui.parse_args([])[0].ussr == "mcts"
