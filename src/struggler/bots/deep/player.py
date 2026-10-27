@@ -39,7 +39,7 @@ from struggler.bots.deep.search import RolloutConfig, SearchResult
 from struggler.bots.deep.search import search as run_search
 from struggler.bots.deep.choices import GRAIN_SALES, OUR_MAN, choice_slots, grain_sales_slots, our_man_slots, peek
 from struggler.bots.deep.ids import IdMap, ds_side
-from struggler.bots.deep.replay import Desync, Partial, finish_open_event, replay
+from struggler.bots.deep.replay import Desync, Partial, finish_open_event, held_card_slot, replay
 from struggler.bots.greedy import GreedyPlayer
 from struggler.bots.mcts import _entered_ids
 from struggler.engine import Action, Observation, Side
@@ -319,6 +319,9 @@ class DeepPlayer:
                 return our_man_slots(self.engine, str(payload.get("choice")), card, kept)
             return choice_slots(str(decision.context.get("event", "")), str(payload.get("choice")),
                                 dtype, self.engine.mask(), self.ids)
+        if kind is K.HELD_CARD_DISCARD and dtype == B.SELECT_CARD:
+            card = payload.get("card")
+            return [held_card_slot(card, self.ids)] if card == "none" or card in self.ids.card_to_ds else []
         if kind in (K.HEADLINE_PLAY, K.ACTION_ROUND_PLAY) and dtype == B.SELECT_CARD:
             card = payload.get("card")
             return [B.CARD_OFFSET + self.ids.card_to_ds[card] - 1] if card else []

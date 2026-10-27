@@ -95,3 +95,10 @@ def test_our_man_peek_swaps_struggler_cards_in_and_keeps_counts():
         pass
     else:
         raise AssertionError("four cards cannot fit a three-card peek")
+
+
+def test_box_six_held_card_discard_is_a_card_slot_or_done():
+    from struggler.bots.deep.replay import held_card_slot
+
+    assert held_card_slot("none", IDS) == B.CONFIRM_DONE_INDEX
+    assert held_card_slot("Fidel", IDS) == B.CARD_OFFSET + IDS.card_to_ds["Fidel"] - 1

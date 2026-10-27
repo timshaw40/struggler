@@ -861,8 +861,9 @@ How a position is rebuilt (`src/struggler/bots/deep/`):
 
 `scripts/deep_sync_census.py` measures how often the two engines agree: it
 plays greedy self-play, rebuilds every round in DeepStruggle, replays it and
-compares the result. At the pinned commit, over 60 games: **97.3%** of rounds
-agree (7,781 of 8,001). `choices.py` maps struggler's `EVENT_CHOICE` answers to DeepStruggle's
+compares the result (for a finished game, only the result: DeepStruggle caps
+VP at ±20 and skips the end of a decided turn). At the pinned commit, over 60
+games: **99.0%** of rounds agree (7,938 of 8,021). `choices.py` maps struggler's `EVENT_CHOICE` answers to DeepStruggle's
 slots (branches read from its card handlers, countries, cards, regions,
 DEFCON values, "done", and "yes, coup" answers whose target struggler asks
 next); two-die contests take both logged dice; an event struggler closes
@@ -874,13 +875,14 @@ if that fails is the card swapped into DeepStruggle's staged slot. Grain
 Sales' take/return maps onto DeepStruggle's single "take and play it this
 way, or done" decision. For Our Man in Tehran, the cards struggler shows the
 US are swapped into DeepStruggle's five-card peek; "remove" is that card's
-discard slot, and "keep" is "done" or discarding a card not yet shown. Most
-of what remains is Space Race box 6's held-card discard (DeepStruggle offers
-it at a different moment), rounds that replay but end with a different
-board (influence, VP, military ops; not yet diagnosed), the Summit DEFCON choice, UN Intervention, and
-a few rule differences (Voice of America, Independent Reds into Yugoslavia,
-and Grain Sales taken while the USSR still owes Ops, which DeepStruggle
-appears to drop).
+discard slot, and "keep" is "done" or discarding a card not yet shown. Space
+Race box 6's held-card discard is DeepStruggle's end-of-turn card choice
+("done" keeps the card). Most of what remains: Che's free coups, which
+DeepStruggle counts toward military operations and struggler does not (an
+open rules question); the Summit DEFCON choice; UN Intervention; and a few
+rule differences (Voice of America, Independent Reds into Yugoslavia, and
+Grain Sales taken while the USSR still owes Ops, which DeepStruggle appears
+to drop).
 The deep bot needs the event layer on, the
 Chinese Civil War option off, and `setup_us_extra=2` (DeepStruggle's setup).
 
