@@ -47,6 +47,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from main import build_player  # noqa: E402  (repo CLI module, needs src/ on sys.path)
 from struggler.engine import DecisionKind, Engine, Side  # noqa: E402
+from struggler.engine.core import redact_decision_for  # noqa: E402
 from struggler.engine.player import Event  # noqa: E402
 from struggler.engine.replay import (  # noqa: E402
     GameLogWriter,
@@ -440,13 +441,20 @@ class Session:
             return [Session._json(v) for v in value]
         return value
 
+    def _history_viewer(self) -> Side | None:
+        return None if self.watch else self.human_side
+
     @staticmethod
-    def _event_view(event: Event) -> dict:
+    def _event_view(event: Event, viewer: Side | None = None) -> dict:
+        # A seated human sees history as their side may (`redact_decision_for`:
+        # no engine-private keys, no opponent-only context such as Our Man in
+        # Tehran's peeked card). Watch mode, with no human, sees it all.
+        decision = event.decision if viewer is None else redact_decision_for(event.decision, viewer)
         return {
             "actor": event.actor.value,
             "kind": event.decision.kind.value,
             "payload": Session._json(event.action.payload),
-            "context": Session._json(event.decision.context),
+            "context": Session._json(decision.context),
             "defcon": event.defcon,
             "vp": event.vp,
             "turn": event.turn,
@@ -517,7 +525,7 @@ class Session:
             # monotonic total, which the client uses to know how many new
             # events a poll carried (otherwise all animation stops at 60).
             "history_len": len(self.history.history),
-            "history": [self._event_view(e) for e in self.history.history[-60:]],
+            "history": [self._event_view(e, self._history_viewer()) for e in self.history.history[-60:]],
             # Only the human's own decisions reach the browser; bot/CHANCE
             # decisions are resolved server-side before state is sent. In
             # watch mode NO decision is surfaced — a spectator post must not

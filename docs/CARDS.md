@@ -265,13 +265,14 @@ to keep it, or the US takes it face down and unusable this turn).
 
 **A hidden peek at the draw pile.** Our Man in Tehran. The examined cards
 live in `Engine._our_man_queue`/`_our_man_kept` — plain serialized state
-(mandate #5) deliberately excluded from `observe()` — while the
-`EVENT_CHOICE` decision offered to the US only ever contains
-`"keep"`/`"remove"`, never the card identity, so the opponent's observation
-cannot infer which card is under consideration even though
-`pending_decision` is otherwise shared (mandate #4). Kept cards return to
-the draw pile, which is reshuffled through the seeded RNG once all (up to
-5) cards are decided.
+(mandate #5) excluded from `observe()`. The US decides them one at a time:
+each `EVENT_CHOICE` offers `"keep"`/`"remove"` and names the card under
+consideration in `context["card"]`, listed in `context["_actor_only"]`, so
+`redact_decision_for` shows it to the US and strips it from the USSR's
+`observe()` and history (mandate #4). The cards still to come stay hidden
+from both. (Earlier the US decided blind, which the printed card does not
+allow.) Kept cards return to the draw pile, which is reshuffled through the
+seeded RNG once all (up to 5) cards are decided.
 
 **A headline-cancellation interaction plus a separate action-round
 trigger.** Defectors has no `EVENTS` entry — neither of its two printed

@@ -861,16 +861,27 @@ How a position is rebuilt (`src/struggler/bots/deep/`):
 
 `scripts/deep_sync_census.py` measures how often the two engines agree: it
 plays greedy self-play, rebuilds every round in DeepStruggle, replays it and
-compares the result. At the pinned commit, over 20 games: **96.5%** of rounds
-agree. `choices.py` maps struggler's `EVENT_CHOICE` answers to DeepStruggle's
+compares the result. At the pinned commit, over 60 games: **97.3%** of rounds
+agree (7,781 of 8,001). `choices.py` maps struggler's `EVENT_CHOICE` answers to DeepStruggle's
 slots (branches read from its card handlers, countries, cards, regions,
 DEFCON values, "done", and "yes, coup" answers whose target struggler asks
-next); a random draw that differs is swapped into DeepStruggle's staged slot;
-two-die contests take both logged dice; an event struggler closes without a
-"done" gets one. Most of what remains is Space Race box 6's held-card discard
-(DeepStruggle offers it at a different moment), Our Man in Tehran (struggler
-never names the peeked card), Grain Sales' take/return, and a few rule
-differences (Voice of America, Independent Reds into Yugoslavia). The deep bot needs the event layer on, the
+next); two-die contests take both logged dice; an event struggler closes
+without a "done" gets one, also at the end of the log before the player's own
+decision. A random draw that differs from struggler's is redrawn: the step is
+taken again under other RNG states until DeepStruggle draws struggler's card,
+so an event it fires (Five Year Plan drawing a US event) fires in both; only
+if that fails is the card swapped into DeepStruggle's staged slot. Grain
+Sales' take/return maps onto DeepStruggle's single "take and play it this
+way, or done" decision. For Our Man in Tehran, the cards struggler shows the
+US are swapped into DeepStruggle's five-card peek; "remove" is that card's
+discard slot, and "keep" is "done" or discarding a card not yet shown. Most
+of what remains is Space Race box 6's held-card discard (DeepStruggle offers
+it at a different moment), rounds that replay but end with a different
+board (influence, VP, military ops; not yet diagnosed), the Summit DEFCON choice, UN Intervention, and
+a few rule differences (Voice of America, Independent Reds into Yugoslavia,
+and Grain Sales taken while the USSR still owes Ops, which DeepStruggle
+appears to drop).
+The deep bot needs the event layer on, the
 Chinese Civil War option off, and `setup_us_extra=2` (DeepStruggle's setup).
 
 ### The player (`bots/deep/player.py`)

@@ -1611,11 +1611,10 @@ def _us_controls_a_middle_east_country(engine: "Engine") -> bool:
 def _our_man_in_tehran(engine: "Engine", side: Side) -> None:
     # The US (regardless of who phases this) looks at the top 5 cards of the
     # draw pile one at a time, removing or keeping each; kept cards return to
-    # the draw pile, which is then reshuffled. The cards examined are held in
-    # engine state deliberately excluded from observe() (mandate #4): the
-    # EVENT_CHOICE decision itself only ever offers "keep"/"remove", never the
-    # card identity, so the opponent's observation never sees which card is
-    # under consideration.
+    # the draw pile, which is then reshuffled. The cards still to come are
+    # held in engine state excluded from observe() (mandate #4); the card
+    # under consideration is named in the EVENT_CHOICE's context for the US
+    # only (`_actor_only`), so the USSR never sees which card it is.
     # Physical mode, not yet wired (see docs/LIMITATIONS.md's "Physical mode"
     # limitation): the draw pile's real contents are unknown to the engine
     # itself in physical mode (not just hidden from a player) — there is no
@@ -1636,7 +1635,8 @@ def _push_our_man_step(engine: "Engine") -> None:
         engine._our_man_kept = []
         engine._rng.shuffle(engine.draw_pile)
         return
-    engine.push_event_choice("Our_Man_In_Tehran", Side.US, ("keep", "remove"))
+    engine.push_event_choice("Our_Man_In_Tehran", Side.US, ("keep", "remove"),
+                             extra={"card": engine._our_man_queue[0], "_actor_only": ["card"]})
 
 
 def _our_man_in_tehran_choice(engine: "Engine", side: Side, choice: str, context: dict) -> None:

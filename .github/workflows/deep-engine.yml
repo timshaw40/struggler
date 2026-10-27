@@ -67,7 +67,7 @@ jobs:
         # readable through the API without the (blob-hosted) job log.
         run: |
           set +e
-          python -m pytest -q -rfE --tb=short tests/test_deep_boundary.py tests/test_deep_backend.py tests/test_deep_player.py tests/test_deep_search.py tests/test_deep_safety.py > pytest.txt 2>&1
+          python -m pytest -q -rfE --tb=short tests/test_deep_boundary.py tests/test_deep_backend.py tests/test_deep_player.py tests/test_deep_search.py tests/test_deep_safety.py tests/test_deep_replay_draws.py tests/test_deep_choices.py > pytest.txt 2>&1
           status=$?
           cat pytest.txt
           if [ $status -ne 0 ]; then
