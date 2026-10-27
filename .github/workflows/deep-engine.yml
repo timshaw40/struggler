@@ -84,6 +84,11 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
+    # Merges in quick succession start parallel runs; without this an older
+    # commit's build could finish last and overwrite the newest engine.
+    concurrency:
+      group: deep-engine-release
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -99,4 +104,9 @@ jobs:
           gh release view deep-engine >/dev/null 2>&1 || \
             gh release create deep-engine --title "Deep bot engine" \
               --notes "DeepStruggle's rules as WebAssembly, built by CI from third_party/deepstruggle. Installed by scripts/install_deep.py --engine."
+          # Only the newest commit on main publishes (a queued older run skips).
+          git fetch -q origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "main has moved past $GITHUB_SHA; its own run publishes"; exit 0
+          fi
           gh release upload deep-engine data/deep/ts_engine.wasm --clobber
