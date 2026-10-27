@@ -2059,6 +2059,33 @@ def test_our_man_in_tehran_never_leaks_the_examined_card_via_observe():
         assert {a.payload["choice"] for a in opts} == {"keep", "remove"}
 
 
+def test_our_man_in_tehran_shows_the_us_the_card_it_decides_and_the_ussr_nothing():
+    # The card says the US looks at each card; deciding keep/remove blind was
+    # a defect. The card under consideration is the US's to see, one at a time.
+    from struggler.engine.replay import HistoryBuilder
+
+    engine = _bare()
+    engine.board.influence["Iran"] = {"US": 4, "USSR": 0}
+    engine.draw_pile = ["Fidel", "Nasser", "Allende"]
+    engine._fire_event(Side.US, "Our_Man_In_Tehran")
+    seen = []
+    builder = HistoryBuilder()
+    while engine.pending_decision is not None:
+        us_view = engine.observe(Side.US).pending_decision.context
+        ussr_view = engine.observe(Side.USSR).pending_decision.context
+        assert "card" not in ussr_view and "_actor_only" not in ussr_view
+        assert us_view["card"] == engine._our_man_queue[0] and "_actor_only" not in us_view
+        seen.append(us_view["card"])
+        decision = engine.pending_decision
+        action = Action(DecisionKind.EVENT_CHOICE, {"choice": "keep"})
+        engine.step(action)
+        builder.record(decision, action, engine)
+    assert seen == ["Allende", "Nasser", "Fidel"]  # the top of the pile first, one at a time
+    # The history keeps the same split: the US's view names each card, the USSR's none.
+    assert [e.decision.context.get("card") for e in builder.for_player(Side.US)] == seen
+    assert all("card" not in e.decision.context for e in builder.for_player(Side.USSR))
+
+
 def test_our_man_in_tehran_no_op_with_an_empty_draw_pile():
     engine = _bare()
     engine.board.influence["Iran"] = {"US": 4, "USSR": 0}

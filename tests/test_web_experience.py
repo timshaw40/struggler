@@ -258,3 +258,26 @@ def test_the_default_opponent_is_deep_only_when_it_can_run(monkeypatch):
     assert serve_ui.parse_args(["--us", "mcts"])[0].ussr == "mcts"          # watch mode keeps mcts
     monkeypatch.setattr(deep, "missing", lambda: "no model")
     assert serve_ui.parse_args([])[0].ussr == "mcts"
+
+
+def test_browser_history_hides_the_opponents_private_context():
+    # Our Man in Tehran names the peeked card for the US only; the browser's
+    # history must not hand it to a USSR player (watch mode sees everything).
+    from struggler.engine.replay import HistoryBuilder
+    from struggler.engine.types import Action
+
+    engine = Engine.new_game(seed=3, include_ccw=False)
+    engine.board.influence['Iran'] = {'US': 4, 'USSR': 0}
+    engine.draw_pile = ['Fidel', 'Nasser']
+    engine._decision_stack.clear()
+    engine._fire_event(Side.US, 'Our_Man_In_Tehran')
+    decision = engine.pending_decision
+    action = Action(DecisionKind.EVENT_CHOICE, {'choice': 'keep'})
+    engine.step(action)
+    event = HistoryBuilder().record(decision, action, engine)
+    assert serve_ui.Session._event_view(event, Side.US)['context']['card'] == 'Nasser'
+    assert 'card' not in serve_ui.Session._event_view(event, Side.USSR)['context']
+    assert serve_ui.Session._event_view(event)['context']['card'] == 'Nasser'
+    session = serve_ui.Session(3, 'greedy', 'human', True)
+    assert session._history_viewer() is Side.USSR
+    assert serve_ui.Session(3, 'greedy', 'greedy', True)._history_viewer() is None

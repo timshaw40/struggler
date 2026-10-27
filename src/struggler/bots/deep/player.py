@@ -37,9 +37,9 @@ from struggler.bots.deep import backend as B
 from struggler.bots.deep import boundary, safety
 from struggler.bots.deep.search import RolloutConfig, SearchResult
 from struggler.bots.deep.search import search as run_search
-from struggler.bots.deep.choices import choice_slots
+from struggler.bots.deep.choices import GRAIN_SALES, OUR_MAN, choice_slots, grain_sales_slots, our_man_slots, peek
 from struggler.bots.deep.ids import IdMap, ds_side
-from struggler.bots.deep.replay import Desync, Partial, replay
+from struggler.bots.deep.replay import Desync, Partial, finish_open_event, replay
 from struggler.bots.greedy import GreedyPlayer
 from struggler.bots.mcts import _entered_ids
 from struggler.engine import Action, Observation, Side
@@ -111,6 +111,7 @@ class DeepPlayer:
         self.fallback = GreedyPlayer()
         self.rng = random.Random(seed)
         self._boundary: _Boundary | None = None
+        self._our_man: tuple[int, list[int]] | None = None
         self.stats: Counter = Counter()
         #: Take an outright win before asking the network (`safety.py`).
         self.take_forced_wins = True
@@ -168,6 +169,16 @@ class DeepPlayer:
         facts = self._determinized(self._boundary.facts, obs.side, events)
         self.engine.load_save(boundary.to_save(facts, self.ids, rng_state=self.rng.getrandbits(63)))
         result = replay(self.engine, events, self.ids)
+        decision = obs.pending_decision
+        self._our_man = None
+        if decision.kind is K.EVENT_CHOICE and decision.context.get("event") == OUR_MAN:
+            card = self.ids.card_to_ds.get(str(decision.context.get("card")))
+            if card is None:
+                raise _NoMapping("our_man_card_unseen")
+            peek(self.engine, [*result.our_man_kept, card])  # the card shown now, in DeepStruggle's peek
+            self._our_man = (card, list(result.our_man_kept))
+        elif result.partial is None:
+            finish_open_event(self.engine, decision)
         self._check_sync(obs)
         player = ds_side(obs.side)
         scores = self._option_slots(obs, result.partial)
@@ -300,6 +311,12 @@ class DeepPlayer:
         assert self.ids is not None
         kind, payload = decision.kind, dict(option.payload)
         if kind is K.EVENT_CHOICE:
+            event = str(decision.context.get("event", ""))
+            if event == GRAIN_SALES and dtype == B.SELECT_PLAY_MODE:
+                return grain_sales_slots(str(payload.get("choice")), self.engine.mask())
+            if event == OUR_MAN and self._our_man is not None and dtype == B.SELECT_CARD:
+                card, kept = self._our_man
+                return our_man_slots(self.engine, str(payload.get("choice")), card, kept)
             return choice_slots(str(decision.context.get("event", "")), str(payload.get("choice")),
                                 dtype, self.engine.mask(), self.ids)
         if kind in (K.HEADLINE_PLAY, K.ACTION_ROUND_PLAY) and dtype == B.SELECT_CARD:

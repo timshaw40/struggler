@@ -32,6 +32,69 @@ DECLINE = {"none", "refuse", "done", "stop", "skip", "decline"}
 AFFIRM_TARGET = {"coup", "realign", "and_adjacent"}
 _OP_MODE = {"influence": 0, "coup": 1, "realign": 2, "realignment": 2}
 
+#: `ts::CardLocation::PEEKED_TEMP`: a card someone is looking at (Our Man in Tehran).
+PEEKED_TEMP = 9
+
+GRAIN_SALES = "Grain_Sales_to_Soviets"
+OUR_MAN = "Our_Man_In_Tehran"
+
+
+class PeekMismatch(ValueError):
+    """Our Man in Tehran: DeepStruggle is not peeking at enough cards to hold
+    the ones struggler showed."""
+
+
+def peeked(engine: B.DeepEngine) -> list[int]:
+    """The DeepStruggle card ids at PEEKED_TEMP."""
+    locs = engine.save()["card_locations"]
+    return [c for c in range(1, len(locs)) if locs[c] == PEEKED_TEMP]
+
+
+def peek(engine: B.DeepEngine, cards: Sequence[int]) -> None:
+    """Make DeepStruggle's Our Man in Tehran peek hold `cards` (DeepStruggle
+    ids): it drew its own five from its RNG, struggler showed the US others.
+    Each missing card swaps locations with a peeked card that is not one of
+    `cards`, so every count stays as it was."""
+    save = engine.save()
+    locs = save["card_locations"]
+    spare = [c for c in range(1, len(locs)) if locs[c] == PEEKED_TEMP and c not in cards]
+    changed = False
+    for card in cards:
+        if locs[card] == PEEKED_TEMP:
+            continue
+        if not spare:
+            raise PeekMismatch(f"card {card} has no peeked slot to take")
+        other = spare.pop()
+        locs[other], locs[card] = locs[card], locs[other]
+        changed = True
+    if changed:
+        engine.load_save(save)
+
+
+def our_man_slots(engine: B.DeepEngine, choice: str, card: int, kept: Sequence[int]) -> list[int]:
+    """struggler asks keep/remove card by card; DeepStruggle asks which peeked
+    card to discard next, or "done". Removing `card` is its slot; keeping it
+    is anything else that keeps it: "done", or discarding a card struggler has
+    not shown yet (the ones already `kept` are settled)."""
+    if choice == "remove":
+        return [B.CARD_OFFSET + card - 1]
+    if choice == "keep":
+        mask = engine.mask()
+        rest = [B.CARD_OFFSET + c - 1 for c in peeked(engine) if c != card and c not in kept]
+        return [s for s in [B.CONFIRM_DONE_INDEX, *rest] if mask[s]]
+    return []
+
+
+def grain_sales_slots(choice: str, mask: Sequence[int]) -> list[int]:
+    """Grain Sales: DeepStruggle asks take-and-how in one decision (any play
+    mode for the drawn card) or "done" to hand it back; struggler asks
+    take/return, then the play mode."""
+    if choice == "return":
+        return [B.CONFIRM_DONE_INDEX]
+    if choice == "take":
+        return [B.PLAY_MODE_OFFSET + r for r in range(5) if mask[B.PLAY_MODE_OFFSET + r]]
+    return []
+
 
 def choice_slots(event: str, choice: str, dtype: int, mask: Sequence[int], ids: IdMap) -> list[int]:
     """The flat slots `choice` stands for at the open DeepStruggle decision."""

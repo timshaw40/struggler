@@ -19,10 +19,12 @@ group still allows.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Sequence
 
 from struggler.bots.deep import backend as B
-from struggler.bots.deep.choices import AFFIRM_TARGET, choice_slots
+from struggler.bots.deep.choices import (AFFIRM_TARGET, GRAIN_SALES, OUR_MAN, PeekMismatch, choice_slots,
+                                         peek, peeked)
 from struggler.bots.deep.ids import IdMap, ds_side
 from struggler.engine.types import DecisionKind as K
 
@@ -62,6 +64,9 @@ class Partial:
 class ReplayResult:
     steps: int
     partial: Partial | None
+    #: Our Man in Tehran cards the US has kept so far this round (DeepStruggle
+    #: ids), when it saw them: the player's next keep/remove needs them.
+    our_man_kept: list[int] = field(default_factory=list)
 
 
 def _kind(event: Any) -> K:
@@ -75,8 +80,11 @@ def _payload(event: Any) -> dict:
 def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayResult:
     """Step `engine` through `events` (struggler `Event`s, oldest first)."""
     queue = [e for e in events if _kind(e) not in _SKIP_KINDS]
+    if any(_kind(e) is K.RANDOM_DISCARD for e in queue):
+        engine = _Rewindable(engine)  # so a random draw can be redrawn (_check_random_card)
     i = 0
     steps = 0
+    kept: list[int] = []
 
     def take() -> Any:
         nonlocal i
@@ -99,11 +107,25 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             event = take()
             event_name = event.decision.context.get("event", "")
             choice = str(_payload(event).get("choice"))
+            if event_name == GRAIN_SALES and dtype == B.SELECT_PLAY_MODE:
+                if choice == "take":
+                    # DeepStruggle's one decision is "take, and play it this way";
+                    # struggler asks the play mode next, which steps it.
+                    if i >= len(queue):
+                        return ReplayResult(steps, Partial(dtype, [event]), kept)
+                    continue
+                if choice == "return":
+                    _step(engine, B.CONFIRM_DONE_INDEX, "choice", event)
+                    steps += 1
+                    continue
+            if event_name == OUR_MAN and dtype == B.SELECT_CARD:
+                steps += _our_man_step(engine, event, choice, kept, ids)
+                continue
             if dtype == B.POINT_NODE and choice in AFFIRM_TARGET:
                 # "Yes, coup": struggler asks the target next; DeepStruggle's node
                 # decision is that target. Step it when the target event comes.
                 if i >= len(queue):
-                    return ReplayResult(steps, Partial(dtype, [event]))
+                    return ReplayResult(steps, Partial(dtype, [event]), kept)
                 continue
             slots = choice_slots(event_name, choice, dtype, engine.mask(), ids)
             if len(slots) != 1:
@@ -123,7 +145,7 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
                 ok = engine.roll(*_contest_dice(event))
             elif _kind(event) is K.REALIGNMENT_ACTOR_ROLL:
                 if i >= len(queue):
-                    return ReplayResult(steps, Partial(dtype, [event]))
+                    return ReplayResult(steps, Partial(dtype, [event]), kept)
                 opp = take()
                 if _kind(opp) is not K.REALIGNMENT_OPPONENT_ROLL:
                     raise Desync("realign_dice", str(_kind(opp)))
@@ -171,7 +193,7 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             index = None
             while index is None:
                 if i >= len(queue):
-                    return ReplayResult(steps, Partial(dtype, group))
+                    return ReplayResult(steps, Partial(dtype, group), kept)
                 event = take()
                 group.append(event)
                 index = _play_mode_index(group)
@@ -206,20 +228,135 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             continue
 
         raise Desync(f"unmapped_ds_decision_{dtype}", _kind(queue[i]).value)
-    return ReplayResult(steps, None)
+    return ReplayResult(steps, None, kept)
+
+
+def finish_open_event(engine: B.DeepEngine, decision: Any) -> bool:
+    """At the end of the log: if DeepStruggle still waits for "done" inside an
+    event struggler has closed (the player's `decision` is something else),
+    step it, as the replay does mid-log. True if it stepped."""
+    player, dtype = engine.decision()
+    probe = SimpleNamespace(decision=decision)
+    if dtype in (B.SELECT_CARD, B.POINT_NODE) and _event_waits_for_done(engine, probe, dtype):
+        return bool(engine.step_flat(B.CONFIRM_DONE_INDEX))
+    return False
+
+
+def _our_man_step(engine: B.DeepEngine, event: Any, choice: str, kept: list[int], ids: IdMap) -> int:
+    """One of struggler's Our Man in Tehran keep/remove answers. The US's own
+    history names the card; the USSR's does not, and then any peeked card not
+    yet kept stands in (the discard pile at the next boundary says which)."""
+    name = event.decision.context.get("card")
+    card = ids.card_to_ds.get(name) if name else None
+    if card is not None:
+        try:
+            peek(engine, [*kept, card])
+        except PeekMismatch as exc:
+            raise Desync("our_man_peek", str(exc)) from exc
+    if choice == "keep":
+        if card is not None:
+            kept.append(card)
+        return 0
+    if choice != "remove":
+        raise Desync(f"unmapped_choice:{OUR_MAN}", choice)
+    if card is None:
+        candidates = [c for c in peeked(engine) if c not in kept]
+        if not candidates:
+            raise Desync("our_man_peek", "nothing peeked to remove")
+        card = candidates[0]
+    _step(engine, B.CARD_OFFSET + card - 1, "choice", event)
+    return 1
+
+
+class _Rewindable:
+    """A backend that remembers the position before its last step and how to
+    take that step again, so a random draw DeepStruggle made inside the step
+    can be made again with another RNG state."""
+
+    def __init__(self, inner: B.DeepEngine) -> None:
+        self._inner = inner
+        self.before: dict | None = None
+        self.redo: Any = None
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def step_flat(self, index: int) -> bool:
+        self.before, self.redo = self._inner.save(), lambda: self._inner.step_flat(index)
+        return self._inner.step_flat(index)
+
+    def roll(self, actor_die: int, opponent_die: int = 0) -> bool:
+        self.before, self.redo = self._inner.save(), lambda: self._inner.roll(actor_die, opponent_die)
+        return self._inner.roll(actor_die, opponent_die)
+
+
+#: RNG states tried when redrawing (each draw picks one of at most ~9 cards).
+_REDRAWS = 64
+
+
+def _holder(loc: int) -> int:
+    """Whose hand a `ts::CardLocation` is: 1 US, -1 USSR, 0 neither (known and
+    unknown copies of a hand are the same hand)."""
+    return 1 if loc in (2, 3) else (-1 if loc in (4, 5) else 0)
+
+
+def _redraw(engine: Any, want: int) -> bool:
+    """Make DeepStruggle's random draw in the last step be `want`, the card
+    struggler drew. A swapped-in card would not fire its event (Five Year
+    Plan drawing a US event fires it), so the step is taken again under other
+    RNG states until the draw is `want`. If DeepStruggle's world put `want`
+    outside the hand the draw came from, it first trades places with the card
+    DeepStruggle drew. True when DeepStruggle has now drawn `want`."""
+    before, redo = getattr(engine, "before", None), getattr(engine, "redo", None)
+    if before is None or redo is None:
+        return False
+    after = engine.save()
+    b_locs, a_locs = before["card_locations"], after["card_locations"]
+
+    def left_hand(locs_before: list[int], locs_after: list[int], card: int) -> bool:
+        held = _holder(locs_before[card])
+        return held != 0 and _holder(locs_after[card]) != held
+
+    if left_hand(b_locs, a_locs, want):
+        return True  # already drawn (an event that fired and finished)
+    drawn = [c for c in range(1, len(b_locs)) if left_hand(b_locs, a_locs, c)]
+    locs = list(b_locs)
+    if drawn and _holder(locs[want]) != _holder(locs[drawn[0]]):
+        locs[want], locs[drawn[0]] = locs[drawn[0]], locs[want]
+    if not _holder(locs[want]):
+        return False
+    seed = int(before["rng_state"])
+    for k in range(1, _REDRAWS + 1):
+        trial = {**before, "card_locations": locs,
+                 "rng_state": (seed + k * 0x9E3779B97F4A7C15) & ((1 << 64) - 1)}
+        engine.load_save(trial)
+        if redo() and left_hand(locs, engine.save()["card_locations"], want):
+            return True
+    engine.load_save(after)
+    return False
 
 
 def _check_random_card(engine: B.DeepEngine, event: Any, ids: IdMap) -> None:
     """struggler logged a random draw; DeepStruggle drew its own, from its RNG,
     inside the step that led here, and staged it as the frame's
-    `pending_op_card`. If the two differ, swap struggler's card into that slot
-    (and their locations), so the round goes on with the card struggler drew."""
+    `pending_op_card`. If the two differ, take the step again with other RNG
+    states until DeepStruggle draws struggler's card (`_redraw`); failing
+    that, swap struggler's card into that slot (and their locations), so the
+    round goes on with the card struggler drew."""
     save = engine.save()
     frame = save["ctx_stack"][save["ctx_stack_depth"]]
     want = ids.card_to_ds[_payload(event)["card"]]
     got = frame.get("pending_op_card")
     if want == got or want == frame.get("resolving_card"):
         return
+    redrawn = _redraw(engine, want)
+    if isinstance(engine, _Rewindable):
+        engine.before = None  # a second draw in the same step must not redo the first
+    if redrawn:
+        return
+    save = engine.save()
+    frame = save["ctx_stack"][save["ctx_stack_depth"]]
+    got = frame.get("pending_op_card")
     if not got:
         raise Desync("random_card", f"struggler drew {_payload(event)['card']}, nothing staged")
     locs = save["card_locations"]

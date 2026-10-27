@@ -89,16 +89,20 @@ def redact_decision_for(decision: Decision | None, viewer: Side) -> Decision | N
     """A `decision` safe to show `viewer`.
 
     Drops the hidden-hand options from a decision the viewer is not the actor
-    of (same rule as `observe`), and strips engine-private context keys
-    (`_`-prefixed, e.g. the `_private` marker on a hand-derived EVENT_CHOICE).
-    Authoritative records (the game log, the engine's own stack) keep the
-    originals; only player-facing projections pass through here.
+    of (same rule as `observe`), drops the context keys the decision lists in
+    `_actor_only` when the viewer is not the actor (Our Man in Tehran's peeked
+    card: the US sees it, the USSR does not), and strips engine-private
+    context keys (`_`-prefixed, e.g. the `_private` marker on a hand-derived
+    EVENT_CHOICE). Authoritative records (the game log, the engine's own
+    stack) keep the originals; only player-facing projections pass through
+    here.
     """
     if decision is None:
         return None
+    actor_only = set(decision.context.get("_actor_only", ())) if decision.actor is not viewer else set()
     context = {
         k: v for k, v in decision.context.items()
-        if not (isinstance(k, str) and k.startswith("_"))
+        if not (isinstance(k, str) and k.startswith("_")) and k not in actor_only
     }
     hidden = decision.actor is not viewer and (
         decision.kind in _SECRET_HAND_KINDS or bool(decision.context.get("_private"))
@@ -182,9 +186,10 @@ class Engine:
         self.turn_effects: dict[str, object] = {}
         # Our Man in Tehran reveals the top few draw-pile cards to the US one at
         # a time; the not-yet-decided cards wait here (serialized state, mandate
-        # #5) but are deliberately *not* surfaced by observe(), so only the card
-        # currently being decided is exposed — the rest of the draw order stays
-        # hidden (mandate #4).
+        # #5) but are deliberately *not* surfaced by observe(). Only the card
+        # currently being decided is exposed, and only to the US (the
+        # decision's `_actor_only` context key) — the rest of the draw order
+        # stays hidden (mandate #4).
         self._our_man_queue: list[str] = []
         self._our_man_kept: list[str] = []
         # Persistent effects that last for the rest of the *game* (not just the
