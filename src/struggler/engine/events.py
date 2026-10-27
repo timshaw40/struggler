@@ -640,8 +640,9 @@ def _marine_barracks(engine: "Engine", side: Side) -> None:
         if info.region is Region.MIDDLE_EAST and cid != "Lebanon"
     ]
     engine.push_event_influence(
+        # "...and 2 additional US Influence": two points, not two whole stacks.
         event="Marine_Barracks_Bombing", op="remove", choose_side=Side.USSR,
-        inf_side=Side.US, remaining=2, candidates=middle_east, whole=True,
+        inf_side=Side.US, remaining=2, candidates=middle_east,
     )
 
 

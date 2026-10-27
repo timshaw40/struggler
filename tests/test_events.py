@@ -2741,3 +2741,19 @@ def test_china_card_and_vietnam_revolts_ops_stack():
     engine.step(Action(DecisionKind.COUP_TARGET, {"country": "Burma"}))
     dec = engine.pending_decision  # COUP_ROLL
     assert dec.context["ops"] == 6  # 4 + 1 + 1
+
+
+def test_marine_barracks_bombing_removes_two_influence_not_two_whole_stacks():
+    # "Remove all US Influence in Lebanon and 2 additional US Influence from
+    # anywhere in the Middle East": two points, possibly from one country.
+    engine = _bare()
+    engine.board.influence["Lebanon"] = {"US": 3, "USSR": 0}
+    engine.board.influence["Israel"] = {"US": 4, "USSR": 0}
+    engine.board.influence["Egypt"] = {"US": 2, "USSR": 0}
+    engine._fire_event(Side.USSR, "Marine_Barracks_Bombing")
+    assert engine.board.influence["Lebanon"]["US"] == 0
+    engine.step(Action(DecisionKind.EVENT_INFLUENCE, {"country": "Israel"}))
+    engine.step(Action(DecisionKind.EVENT_INFLUENCE, {"country": "Egypt"}))
+    assert engine.board.influence["Israel"]["US"] == 3
+    assert engine.board.influence["Egypt"]["US"] == 1
+    assert engine.pending_decision is None

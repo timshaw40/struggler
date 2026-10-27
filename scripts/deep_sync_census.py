@@ -61,7 +61,16 @@ def compare(ds_save: dict, engine: Engine, ids: IdMap, same_turn: bool) -> list[
             diffs.append(f"influence {cid}: struggler {s['US']}/{s['USSR']} ds {d[0]}/{d[1]}")
     checks = [("space US", engine.space_race["US"], ds_save["us_space_track"]),
               ("space USSR", engine.space_race["USSR"], ds_save["ussr_space_track"])]
-    if same_turn:
+    if engine.is_terminal:
+        # A decided game: DeepStruggle caps VP at +/-20 and skips the turn's
+        # end (DEFCON recovery, military-ops penalty) once the game is over,
+        # so only the result is compared.
+        winner = engine.winner.value if engine.winner else None
+        ds_vp = ds_save["victory_points"]
+        ds_winner = "US" if ds_vp > 0 else ("USSR" if ds_vp < 0 else None)
+        if winner != ds_winner:
+            diffs.append(f"winner: struggler {winner} ds {ds_winner} (vp {ds_vp})")
+    elif same_turn:
         checks += [("vp", engine.vp, ds_save["victory_points"]),
                    ("defcon", engine.defcon, ds_save["defcon"]),
                    ("milops US", engine.military_ops["US"], ds_save["us_mil_ops"]),
@@ -86,6 +95,13 @@ def run_game(seed: int, events: bool, ids: IdMap, backend: NativeBackend,
         try:
             backend.load_save(boundary.to_save(facts, ids))
             replay(backend, round_events, ids)
+            if engine.is_terminal and not backend.is_terminal():
+                # struggler's log ends with the game; DeepStruggle still owes the
+                # last turn's cleanup (where its final scoring happens).
+                for _ in range(3):
+                    _, dtype = backend.decision()
+                    if dtype != 7 or not backend.roll(0):  # ts::DecisionType::ROLL_DIE
+                        break
             diffs = compare(backend.save(), engine, ids, same_turn=engine.turn == start_turn)
             if diffs:
                 field = diffs[0].split(":")[0].split(" ")[0]

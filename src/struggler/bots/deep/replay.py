@@ -157,6 +157,14 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
             steps += 1
             continue
 
+        if _kind(queue[i]) is K.HELD_CARD_DISCARD and dtype == B.SELECT_CARD:
+            # Space Race box 6 at the turn's end: DeepStruggle asks it as a card
+            # choice with "done" to keep the card.
+            event = take()
+            _step(engine, held_card_slot(_payload(event).get("card"), ids), "held_card", event)
+            steps += 1
+            continue
+
         if dtype in (B.SELECT_CARD, B.POINT_NODE) and _event_waits_for_done(engine, queue[i], dtype):
             # struggler finished the event on its own (nothing left to choose);
             # DeepStruggle still waits for "done".
@@ -231,15 +239,31 @@ def replay(engine: B.DeepEngine, events: Sequence[Any], ids: IdMap) -> ReplayRes
     return ReplayResult(steps, None, kept)
 
 
+def held_card_slot(card: Any, ids: IdMap) -> int:
+    """struggler's box-6 answer (a card, or "none") as DeepStruggle's slot."""
+    if not card or card == "none":
+        return B.CONFIRM_DONE_INDEX
+    return B.CARD_OFFSET + ids.card_to_ds[card] - 1
+
+
 def finish_open_event(engine: B.DeepEngine, decision: Any) -> bool:
-    """At the end of the log: if DeepStruggle still waits for "done" inside an
-    event struggler has closed (the player's `decision` is something else),
-    step it, as the replay does mid-log. True if it stepped."""
+    """At the end of the log, bring DeepStruggle to the player's `decision`:
+    step the turn-cleanup chance node when struggler has moved past the
+    turn's action rounds (box 6's held-card discard), and step "done" when
+    DeepStruggle still waits for it inside an event struggler has closed, as
+    the replay does mid-log. True if it stepped."""
+    stepped = False
+    save = engine.save()
+    if save["ctx_stack"][save["ctx_stack_depth"]].get("pending_roll") == _TURN_CLEANUP \
+            and engine.decision()[1] == B.ROLL_DIE and decision.kind is K.HELD_CARD_DISCARD:
+        stepped = bool(engine.roll(0))
     player, dtype = engine.decision()
+    if decision.kind is K.HELD_CARD_DISCARD:
+        return stepped
     probe = SimpleNamespace(decision=decision)
     if dtype in (B.SELECT_CARD, B.POINT_NODE) and _event_waits_for_done(engine, probe, dtype):
-        return bool(engine.step_flat(B.CONFIRM_DONE_INDEX))
-    return False
+        return bool(engine.step_flat(B.CONFIRM_DONE_INDEX)) or stepped
+    return stepped
 
 
 def _our_man_step(engine: B.DeepEngine, event: Any, choice: str, kept: list[int], ids: IdMap) -> int:
