@@ -944,14 +944,27 @@ python scripts/run_arena.py --include-mcts --include-deep data/deep/model.onnx -
 python scripts/serve_ui.py --us human --ussr deep
 ```
 
+To compare a candidate checkpoint with the incumbent directly, name both
+models. `deep_gate.py` plays every seed twice with the seats swapped and
+reports the candidate's win rate with a Wilson interval:
+
+```sh
+python scripts/deep_gate.py \
+  --model data/deep/candidate.onnx \
+  --opponent deep \
+  --opponent-model data/deep/incumbent.onnx \
+  --seeds 5000:5100 --workers 8
+```
+
 The `mcts` half of the gate is slow (about 25 minutes a game on 2 cores), so
 `scripts/deep_gate.py` plays one shard of seeds as JSON and summarizes shards,
 and `.github/workflows/deep-arena.yml` (Actions → deep-arena → Run workflow)
 splits the seeds across runners, building the engine and downloading the
-model itself, and reports the combined result as a notice on the run. Its
+models themselves, and reports the combined result as a notice on the run. Its
 `search` input sets the deep seat's rollout search, and the opponent `deep`
 (the plain network) or `deep:<spec>` measures one deep configuration against
-another (`deep_gate.py --search on --opponent deep`).
+another (`deep_gate.py --search on --opponent deep`). Set
+`opponent_model_url` to use a different checkpoint for the opponent.
 
 `build_player("deep")` reads `STRUGGLER_DEEP_MODEL` (default
 `data/deep/model.onnx`); the engine is `STRUGGLER_DEEP_ENGINE` (native),
