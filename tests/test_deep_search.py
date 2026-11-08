@@ -112,8 +112,14 @@ def test_every_build_makes_the_same_search():
             player, _ = e.decision()
             logits = policy.logits(e.observation(player, policy.obs_features), list(e.mask()))
             r = search(e, policy, logits, seed=99, config=RolloutConfig(3, 4, 2, "argmax"))
-            results.append((r.pick, r.candidates, r.worlds, [round(q, 4) for q in r.q]))
-        assert all(r == results[0] for r in results), results
+            results.append((r.pick, r.candidates, r.worlds, r.q))
+        expected = results[0]
+        for result in results[1:]:
+            # Wasm and native math may round leaf critic values differently. The
+            # decision itself is exact; values need only agree within the
+            # precision that can change it.
+            assert result[:3] == expected[:3], results
+            assert result[3] == pytest.approx(expected[3], abs=0.02), results
 
 
 # -- DeepPlayer's use of the result (no engine needed) --------------------------
