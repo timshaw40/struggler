@@ -2,6 +2,8 @@
 
     python scripts/deep_gate.py --opponent mcts --seeds 5000:5010 --workers 4 --out shard.json
     python scripts/deep_gate.py --search on --opponent deep --seeds 5000:5010   # search vs plain
+    python scripts/deep_gate.py --model candidate.onnx --opponent deep \
+        --opponent-model incumbent.onnx --seeds 5000:5010
     python scripts/deep_gate.py --summarize shard*.json
 
 The Phase 1 gate (docs/BOTS.md, "Deep bot"): above 70% against `mcts` with
@@ -46,6 +48,8 @@ def main() -> None:
     ap.add_argument("--seeds", default="5000:5010", help="start:stop seed range")
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--model", default=str(ROOT / "data" / "deep" / "model.onnx"))
+    ap.add_argument("--opponent-model", default=None,
+                    help="ONNX model for a 'deep' opponent; defaults to --model")
     ap.add_argument("--out", default=None)
     ap.add_argument("--summarize", nargs="*", default=None, help="shard JSON files to combine")
     args = ap.parse_args()
@@ -61,7 +65,8 @@ def main() -> None:
         opp_name = "deep" if opp_search == "off" else f"deep+search({opp_search})"
         if opp_name == me:
             opp_name += "-2"
-        opp = PlayerSpec(opp_name, "deep", net_path=args.model, player_seed=2, search=opp_search)
+        opp = PlayerSpec(opp_name, "deep", net_path=args.opponent_model or args.model,
+                         player_seed=2, search=opp_search)
     else:
         opp = PlayerSpec(args.opponent, args.opponent, sims=args.sims, player_seed=1)
     began = time.perf_counter()

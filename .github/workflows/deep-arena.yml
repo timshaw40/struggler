@@ -21,6 +21,9 @@ on:
       model_url:
         description: "DeepStruggle ONNX model"
         default: "https://huggingface.co/mihaild/deepstruggle/resolve/main/_models/E7-A8-R1-S44%406400M%2B%28R34%2CR34-S45%2CR34-S46%29%407120..7200M.onnx"
+      opponent_model_url:
+        description: "ONNX model for a deep opponent; empty uses model_url"
+        default: ""
 
 jobs:
   plan:
@@ -47,18 +50,30 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[deep]"
-      - name: Engine (the shim, built natively) and model
+      - name: Engine (the shim, built natively) and models
         run: |
           DEEP_CXX=clang++ scripts/build_deep_wasm.sh data/deep/libdeep.so
           mkdir -p data/deep && curl -sSfL -o data/deep/model.onnx "${{ inputs.model_url }}"
+          if [[ -n "${{ inputs.opponent_model_url }}" ]]; then
+            curl -sSfL -o data/deep/opponent.onnx "${{ inputs.opponent_model_url }}"
+          fi
       - name: Play the shard
         env:
           STRUGGLER_DEEP_SHARED_LIB: data/deep/libdeep.so
         run: |
           n=${{ inputs.seeds_per_shard }}
           start=$((5000 + ${{ matrix.shard }} * n))
-          python scripts/deep_gate.py --opponent "${{ inputs.opponent }}" --search "${{ inputs.search }}" --seeds "$start:$((start + n))" \
-            --workers "$(nproc)" --out shard-${{ matrix.shard }}.json
+          args=(
+            --opponent "${{ inputs.opponent }}"
+            --search "${{ inputs.search }}"
+            --seeds "$start:$((start + n))"
+            --workers "$(nproc)"
+            --out "shard-${{ matrix.shard }}.json"
+          )
+          if [[ -n "${{ inputs.opponent_model_url }}" ]]; then
+            args+=(--opponent-model data/deep/opponent.onnx)
+          fi
+          python scripts/deep_gate.py "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: shard-${{ matrix.shard }}
